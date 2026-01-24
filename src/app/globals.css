@@ -329,6 +329,15 @@ textarea:focus-visible {
   animation: slideUp 0.3s ease-out;
 }
 
+@keyframes slideRight {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-slide-right {
+  animation: slideRight 0.2s ease-out;
+}
+
 /* Progress bar glow effect */
 .progress-glow {
   box-shadow: 0 0 10px var(--accent-glow), 0 0 20px var(--accent-muted);

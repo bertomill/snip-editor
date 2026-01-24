@@ -6,11 +6,7 @@ import { captionTemplates, CaptionTemplate } from "@/lib/caption-templates";
 import {
   OverlayProvider,
   useOverlay,
-  OverlayToolbar,
   ActiveOverlayList,
-  TextOverlayDrawer,
-  StickerDrawer,
-  FilterDrawer,
 } from "@/components/overlays";
 import { getFilterById } from "@/lib/templates/filter-presets";
 import { TextOverlay, StickerOverlay } from "@/types/overlays";
@@ -71,10 +67,6 @@ function HomeContent() {
   const [projectName, setProjectName] = useState("Untitled Project");
   const [isEditingName, setIsEditingName] = useState(false);
 
-  // Overlay drawer states (lifted from EditStep for Sidebar access)
-  const [textDrawerOpen, setTextDrawerOpen] = useState(false);
-  const [stickerDrawerOpen, setStickerDrawerOpen] = useState(false);
-  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
   const { createProject, updateProject, projects } = useProjects();
 
@@ -317,9 +309,6 @@ function HomeContent() {
             onOpenUploads={() => setShowUploads(true)}
             onNavigateHome={() => setView("feed")}
             onCreateProject={handleCreateProject}
-            onOpenTextDrawer={() => setTextDrawerOpen(true)}
-            onOpenStickerDrawer={() => setStickerDrawerOpen(true)}
-            onOpenFilterDrawer={() => setFilterDrawerOpen(true)}
           />
           <MediaLibraryPanel
             isOpen={showUploads}
@@ -354,9 +343,6 @@ function HomeContent() {
           onOpenUploads={() => setShowUploads(true)}
           onNavigateHome={handleBackToFeed}
           onCreateProject={handleCreateProject}
-          onOpenTextDrawer={() => setTextDrawerOpen(true)}
-          onOpenStickerDrawer={() => setStickerDrawerOpen(true)}
-          onOpenFilterDrawer={() => setFilterDrawerOpen(true)}
         />
         <MediaLibraryPanel
           isOpen={showUploads}
@@ -459,12 +445,6 @@ function HomeContent() {
               deletedWordIds={deletedWordIds}
               setDeletedWordIds={setDeletedWordIds}
               allWords={allWords}
-              textDrawerOpen={textDrawerOpen}
-              setTextDrawerOpen={setTextDrawerOpen}
-              stickerDrawerOpen={stickerDrawerOpen}
-              setStickerDrawerOpen={setStickerDrawerOpen}
-              filterDrawerOpen={filterDrawerOpen}
-              setFilterDrawerOpen={setFilterDrawerOpen}
             />
           )}
           {step === "export" && (
@@ -574,12 +554,6 @@ function EditStep({
   deletedWordIds,
   setDeletedWordIds,
   allWords,
-  textDrawerOpen,
-  setTextDrawerOpen,
-  stickerDrawerOpen,
-  setStickerDrawerOpen,
-  filterDrawerOpen,
-  setFilterDrawerOpen,
 }: {
   clips: VideoClip[];
   setClips: React.Dispatch<React.SetStateAction<VideoClip[]>>;
@@ -588,12 +562,6 @@ function EditStep({
   deletedWordIds: Set<string>;
   setDeletedWordIds: React.Dispatch<React.SetStateAction<Set<string>>>;
   allWords: TranscriptWord[];
-  textDrawerOpen: boolean;
-  setTextDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  stickerDrawerOpen: boolean;
-  setStickerDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  filterDrawerOpen: boolean;
-  setFilterDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const [activeClipIndex, setActiveClipIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1276,23 +1244,7 @@ function EditStep({
         </div>
       </div>
 
-      {/* Overlay Drawers */}
-      <TextOverlayDrawer
-        isOpen={textDrawerOpen}
-        onClose={() => setTextDrawerOpen(false)}
-        totalDurationMs={totalDuration * 1000}
-        currentTimeMs={currentTime * 1000}
-      />
-      <StickerDrawer
-        isOpen={stickerDrawerOpen}
-        onClose={() => setStickerDrawerOpen(false)}
-        totalDurationMs={totalDuration * 1000}
-        currentTimeMs={currentTime * 1000}
-      />
-      <FilterDrawer
-        isOpen={filterDrawerOpen}
-        onClose={() => setFilterDrawerOpen(false)}
-      />
+      {/* Overlay panels are now in the Sidebar */}
     </div>
   );
 }

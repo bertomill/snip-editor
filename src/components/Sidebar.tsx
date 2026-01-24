@@ -5,31 +5,41 @@ import { useUser, useSignOut } from '@/lib/supabase'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useOverlay } from '@/components/overlays/OverlayContext'
+import { textStyleTemplates } from '@/lib/templates/text-templates'
+import { animationTemplates } from '@/lib/templates/animation-templates'
+import { stickerCategories, getStickersByCategory } from '@/lib/templates/sticker-templates'
+import { filterPresets } from '@/lib/templates/filter-presets'
+import { TextOverlay, StickerOverlay } from '@/types/overlays'
+
+type PanelType = 'text' | 'stickers' | 'filters' | null;
 
 interface SidebarProps {
   onOpenUploads?: () => void;
   onNavigateHome?: () => void;
   onCreateProject?: () => void;
-  // Overlay drawer callbacks
-  onOpenTextDrawer?: () => void;
-  onOpenStickerDrawer?: () => void;
-  onOpenFilterDrawer?: () => void;
+  // For overlay panels that need timing info
+  totalDurationMs?: number;
+  currentTimeMs?: number;
 }
 
 export function Sidebar({
   onOpenUploads,
   onNavigateHome,
   onCreateProject,
-  onOpenTextDrawer,
-  onOpenStickerDrawer,
-  onOpenFilterDrawer,
+  totalDurationMs = 10000,
+  currentTimeMs = 0,
 }: SidebarProps) {
   const { user, loading } = useUser()
   const signOut = useSignOut()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [activePanel, setActivePanel] = useState<PanelType>(null)
 
-  // Get overlay context for captions (safe to use since Sidebar is always inside OverlayProvider)
-  const { state: overlayState, toggleCaptionPreview } = useOverlay()
+  // Get overlay context for captions and overlays
+  const { state: overlayState, toggleCaptionPreview, addTextOverlay, addSticker, setFilter } = useOverlay()
+
+  const togglePanel = (panel: PanelType) => {
+    setActivePanel(activePanel === panel ? null : panel)
+  }
 
   return (
     <>
@@ -80,19 +90,22 @@ export function Sidebar({
           <NavButton
             icon={<TextIcon />}
             label="Text"
-            onClick={() => onOpenTextDrawer?.()}
+            onClick={() => togglePanel('text')}
+            active={activePanel === 'text'}
           />
 
           <NavButton
             icon={<StickerIcon />}
             label="Stickers"
-            onClick={() => onOpenStickerDrawer?.()}
+            onClick={() => togglePanel('stickers')}
+            active={activePanel === 'stickers'}
           />
 
           <NavButton
             icon={<FilterIcon />}
             label="Filters"
-            onClick={() => onOpenFilterDrawer?.()}
+            onClick={() => togglePanel('filters')}
+            active={activePanel === 'filters'}
           />
 
           <NavButton
@@ -176,13 +189,25 @@ export function Sidebar({
         </div>
       </aside>
 
+      {/* Secondary Panel - Canva style slide-out */}
+      <SidebarPanel
+        activePanel={activePanel}
+        onClose={() => setActivePanel(null)}
+        totalDurationMs={totalDurationMs}
+        currentTimeMs={currentTimeMs}
+        addTextOverlay={addTextOverlay}
+        addSticker={addSticker}
+        setFilter={setFilter}
+        overlayState={overlayState}
+      />
+
       {/* Mobile Bottom Toolbar - CapCut style */}
       <MobileBottomToolbar
         onNavigateHome={onNavigateHome}
         onCreateProject={onCreateProject}
-        onOpenTextDrawer={onOpenTextDrawer}
-        onOpenStickerDrawer={onOpenStickerDrawer}
-        onOpenFilterDrawer={onOpenFilterDrawer}
+        onOpenTextDrawer={() => togglePanel('text')}
+        onOpenStickerDrawer={() => togglePanel('stickers')}
+        onOpenFilterDrawer={() => togglePanel('filters')}
         onToggleCaptions={toggleCaptionPreview}
         captionsEnabled={overlayState.showCaptionPreview}
       />
@@ -274,6 +299,376 @@ function ToolbarButton({
       <div className="w-6 h-6 mb-1">{icon}</div>
       <span className="text-[10px] font-medium">{label}</span>
     </button>
+  )
+}
+
+// Canva-style secondary panel that slides out from the sidebar
+function SidebarPanel({
+  activePanel,
+  onClose,
+  totalDurationMs,
+  currentTimeMs,
+  addTextOverlay,
+  addSticker,
+  setFilter,
+  overlayState,
+}: {
+  activePanel: PanelType
+  onClose: () => void
+  totalDurationMs: number
+  currentTimeMs: number
+  addTextOverlay: (overlay: TextOverlay) => void
+  addSticker: (sticker: StickerOverlay) => void
+  setFilter: (filterId: string | null) => void
+  overlayState: { textOverlays: TextOverlay[]; stickers: StickerOverlay[]; filterId: string | null }
+}) {
+  if (!activePanel) return null
+
+  return (
+    <div className="hidden md:block fixed left-[72px] top-0 bottom-0 w-[300px] bg-[#1C1C1E] border-r border-[var(--border-subtle)] z-40 animate-slide-right overflow-hidden">
+      {/* Panel Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)]">
+        <h3 className="text-sm font-semibold text-white capitalize">{activePanel}</h3>
+        <button
+          onClick={onClose}
+          className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+        >
+          <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Panel Content */}
+      <div className="p-4 overflow-y-auto h-[calc(100%-52px)]">
+        {activePanel === 'text' && (
+          <TextPanelContent
+            totalDurationMs={totalDurationMs}
+            currentTimeMs={currentTimeMs}
+            addTextOverlay={addTextOverlay}
+            textOverlayCount={overlayState.textOverlays.length}
+          />
+        )}
+        {activePanel === 'stickers' && (
+          <StickerPanelContent
+            totalDurationMs={totalDurationMs}
+            currentTimeMs={currentTimeMs}
+            addSticker={addSticker}
+            stickerCount={overlayState.stickers.length}
+          />
+        )}
+        {activePanel === 'filters' && (
+          <FilterPanelContent
+            setFilter={setFilter}
+            currentFilterId={overlayState.filterId}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Text Panel Content
+function TextPanelContent({
+  totalDurationMs,
+  currentTimeMs,
+  addTextOverlay,
+  textOverlayCount,
+}: {
+  totalDurationMs: number
+  currentTimeMs: number
+  addTextOverlay: (overlay: TextOverlay) => void
+  textOverlayCount: number
+}) {
+  const [content, setContent] = useState('')
+  const [templateId, setTemplateId] = useState(textStyleTemplates[0].id)
+  const [animationId, setAnimationId] = useState('fade')
+  const [position, setPosition] = useState<'top' | 'center' | 'bottom'>('center')
+  const [durationMs, setDurationMs] = useState(3000)
+
+  const canAdd = textOverlayCount < 5
+
+  const handleAdd = () => {
+    if (!content.trim() || !canAdd) return
+
+    const newOverlay: TextOverlay = {
+      id: `text-${Date.now()}`,
+      content: content.trim(),
+      templateId,
+      animationId,
+      position,
+      startMs: currentTimeMs,
+      durationMs,
+    }
+
+    addTextOverlay(newOverlay)
+    setContent('')
+  }
+
+  return (
+    <div className="space-y-4">
+      {!canAdd && (
+        <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-400 text-xs">
+          Maximum 5 text overlays reached
+        </div>
+      )}
+
+      {/* Text Input */}
+      <div>
+        <label className="block text-xs text-[#8E8E93] mb-2">Text Content</label>
+        <input
+          type="text"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="Enter your text..."
+          maxLength={100}
+          className="w-full bg-[#2C2C2E] border border-[#3C3C3E] rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#636366] focus:outline-none focus:border-[#4A8FE7] transition-colors"
+        />
+        <p className="text-[10px] text-[#636366] mt-1">{content.length}/100</p>
+      </div>
+
+      {/* Style Picker */}
+      <div>
+        <label className="block text-xs text-[#8E8E93] mb-2">Style</label>
+        <div className="grid grid-cols-4 gap-1.5">
+          {textStyleTemplates.map((style) => (
+            <button
+              key={style.id}
+              onClick={() => setTemplateId(style.id)}
+              className={`p-1.5 rounded-lg border transition-all ${
+                templateId === style.id
+                  ? 'border-[#4A8FE7] bg-[#4A8FE7]/10'
+                  : 'border-[#3C3C3E] hover:border-[#4A8FE7]/50'
+              }`}
+            >
+              <div
+                className="h-6 rounded flex items-center justify-center text-[10px] font-medium"
+                style={{
+                  fontFamily: style.fontFamily,
+                  color: style.color,
+                  backgroundColor: style.backgroundColor,
+                }}
+              >
+                Aa
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Animation Picker */}
+      <div>
+        <label className="block text-xs text-[#8E8E93] mb-2">Animation</label>
+        <div className="flex flex-wrap gap-1.5">
+          {animationTemplates.map((anim) => (
+            <button
+              key={anim.id}
+              onClick={() => setAnimationId(anim.id)}
+              className={`px-2.5 py-1 rounded-full text-[10px] transition-all ${
+                animationId === anim.id
+                  ? 'bg-[#4A8FE7] text-white'
+                  : 'bg-[#2C2C2E] text-[#8E8E93] hover:bg-[#3C3C3E]'
+              }`}
+            >
+              {anim.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Position Picker */}
+      <div>
+        <label className="block text-xs text-[#8E8E93] mb-2">Position</label>
+        <div className="flex gap-1.5">
+          {(['top', 'center', 'bottom'] as const).map((pos) => (
+            <button
+              key={pos}
+              onClick={() => setPosition(pos)}
+              className={`flex-1 py-1.5 rounded-lg text-[10px] capitalize transition-all ${
+                position === pos
+                  ? 'bg-[#4A8FE7] text-white'
+                  : 'bg-[#2C2C2E] text-[#8E8E93] hover:bg-[#3C3C3E]'
+              }`}
+            >
+              {pos}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Duration Slider */}
+      <div>
+        <label className="block text-xs text-[#8E8E93] mb-2">
+          Duration: {(durationMs / 1000).toFixed(1)}s
+        </label>
+        <input
+          type="range"
+          min={500}
+          max={Math.min(10000, totalDurationMs - currentTimeMs)}
+          step={100}
+          value={durationMs}
+          onChange={(e) => setDurationMs(Number(e.target.value))}
+          className="w-full accent-[#4A8FE7]"
+        />
+      </div>
+
+      {/* Add Button */}
+      <button
+        onClick={handleAdd}
+        disabled={!content.trim() || !canAdd}
+        className="w-full py-2.5 rounded-lg bg-[#4A8FE7] text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#3A7FD7] transition-colors"
+      >
+        Add Text
+      </button>
+    </div>
+  )
+}
+
+// Sticker Panel Content
+function StickerPanelContent({
+  totalDurationMs,
+  currentTimeMs,
+  addSticker,
+  stickerCount,
+}: {
+  totalDurationMs: number
+  currentTimeMs: number
+  addSticker: (sticker: StickerOverlay) => void
+  stickerCount: number
+}) {
+  const [activeCategory, setActiveCategory] = useState<'reactions' | 'emotions' | 'objects' | 'shapes'>('reactions')
+  const canAdd = stickerCount < 10
+
+  const handleAddSticker = (stickerId: string) => {
+    if (!canAdd) return
+
+    const newSticker: StickerOverlay = {
+      id: `sticker-${Date.now()}`,
+      stickerId,
+      position: {
+        x: 20 + Math.random() * 60,
+        y: 20 + Math.random() * 40,
+      },
+      startMs: currentTimeMs,
+      durationMs: Math.min(3000, totalDurationMs - currentTimeMs),
+      scale: 1,
+    }
+
+    addSticker(newSticker)
+  }
+
+  const currentStickers = getStickersByCategory(activeCategory)
+
+  return (
+    <div className="space-y-4">
+      {!canAdd && (
+        <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-400 text-xs">
+          Maximum 10 stickers reached
+        </div>
+      )}
+
+      {/* Category Tabs */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+        {stickerCategories.map((category) => (
+          <button
+            key={category.id}
+            onClick={() => setActiveCategory(category.id)}
+            className={`px-3 py-1.5 rounded-full text-[10px] whitespace-nowrap transition-all ${
+              activeCategory === category.id
+                ? 'bg-[#4A8FE7] text-white'
+                : 'bg-[#2C2C2E] text-[#8E8E93] hover:bg-[#3C3C3E]'
+            }`}
+          >
+            {category.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Sticker Grid */}
+      <div className="grid grid-cols-4 gap-2">
+        {currentStickers.map((sticker) => (
+          <button
+            key={sticker.id}
+            onClick={() => handleAddSticker(sticker.id)}
+            disabled={!canAdd}
+            className="aspect-square flex items-center justify-center text-2xl bg-[#2C2C2E] rounded-lg hover:bg-[#3C3C3E] hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            title={sticker.name}
+          >
+            {sticker.emoji}
+          </button>
+        ))}
+      </div>
+
+      <p className="text-[10px] text-[#636366] text-center">
+        {stickerCount}/10 stickers
+      </p>
+    </div>
+  )
+}
+
+// Filter Panel Content
+function FilterPanelContent({
+  setFilter,
+  currentFilterId,
+}: {
+  setFilter: (filterId: string | null) => void
+  currentFilterId: string | null
+}) {
+  const handleSelectFilter = (filterId: string) => {
+    setFilter(filterId === 'none' ? null : filterId)
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Filter Grid */}
+      <div className="grid grid-cols-3 gap-2">
+        {filterPresets.map((filter) => {
+          const isSelected =
+            (filter.id === 'none' && !currentFilterId) ||
+            currentFilterId === filter.id
+
+          return (
+            <button
+              key={filter.id}
+              onClick={() => handleSelectFilter(filter.id)}
+              className={`relative rounded-lg overflow-hidden transition-all ${
+                isSelected
+                  ? 'ring-2 ring-[#4A8FE7] ring-offset-1 ring-offset-[#1C1C1E]'
+                  : 'hover:scale-[1.02]'
+              }`}
+            >
+              <div
+                className="aspect-square"
+                style={{
+                  background: filter.thumbnail || '#333',
+                  filter: filter.filter !== 'none' ? filter.filter : undefined,
+                }}
+              />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-1.5">
+                <p className="text-[9px] text-white font-medium text-center">
+                  {filter.name}
+                </p>
+              </div>
+              {isSelected && (
+                <div className="absolute top-1 right-1 w-4 h-4 bg-[#4A8FE7] rounded-full flex items-center justify-center">
+                  <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="pt-3 border-t border-[#2C2C2E]">
+        <p className="text-[10px] text-[#8E8E93] text-center">
+          Active: <span className="text-white font-medium">
+            {filterPresets.find(f => f.id === (currentFilterId || 'none'))?.name || 'None'}
+          </span>
+        </p>
+      </div>
+    </div>
   )
 }
 
