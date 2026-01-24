@@ -2249,6 +2249,13 @@ function EditStep({
           body: formData,
         });
 
+        // Handle 413 (file too large) specifically
+        if (response.status === 413) {
+          const fileSizeMB = clip.file ? (clip.file.size / (1024 * 1024)).toFixed(1) : 'unknown';
+          alert(`Clip ${i + 1} is too large (${fileSizeMB}MB). Maximum file size is ~4.5MB. Try compressing the video or using shorter clips.`);
+          continue;
+        }
+
         const data = await response.json();
         if (response.ok) {
           updatedClips[i] = {
@@ -2272,6 +2279,8 @@ function EditStep({
           // Safari-specific pattern matching error
           if (error.message.includes('did not match the expected pattern')) {
             errorMsg = 'Video format not supported. Try converting to MP4.';
+          } else if (error.message.includes('Unexpected token') || error.message.includes('not valid JSON')) {
+            errorMsg = 'Video file too large. Try compressing or using shorter clips.';
           } else {
             errorMsg = error.message;
           }
