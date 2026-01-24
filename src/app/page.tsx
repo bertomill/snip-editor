@@ -22,6 +22,7 @@ import { TranscriptWord } from "@/lib/types/composition";
 import { MediaLibraryPanel } from "@/components/media-library";
 import { MediaLibraryProvider } from "@/contexts/MediaLibraryContext";
 import { MediaFile } from "@/types/media";
+import { CaptionPreview } from "@/components/CaptionPreview";
 
 type EditorStep = "upload" | "edit" | "export";
 
@@ -741,16 +742,25 @@ function EditStep({
           <div className="card-glow overflow-hidden">
             <div className="aspect-[9/16] bg-[#0A0A0A] relative">
               {activeClip && (
-                <video
-                  ref={videoRef}
-                  src={activeClip.url}
-                  className="w-full h-full object-cover"
-                  style={{ filter: filterStyle && filterStyle !== 'none' ? filterStyle : undefined }}
-                  onTimeUpdate={handleTimeUpdate}
-                  onEnded={handleVideoEnded}
-                  onError={handleVideoError}
-                  playsInline
-                />
+                <>
+                  <video
+                    ref={videoRef}
+                    src={activeClip.url}
+                    className="w-full h-full object-cover"
+                    style={{ filter: filterStyle && filterStyle !== 'none' ? filterStyle : undefined }}
+                    onTimeUpdate={handleTimeUpdate}
+                    onEnded={handleVideoEnded}
+                    onError={handleVideoError}
+                    playsInline
+                  />
+                  {/* Real-time caption preview */}
+                  <CaptionPreview
+                    words={allWords}
+                    deletedWordIds={deletedWordIds}
+                    currentTime={currentTime}
+                    showCaptions={overlayState.showCaptionPreview}
+                  />
+                </>
               )}
               {videoError && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 p-4 text-center">

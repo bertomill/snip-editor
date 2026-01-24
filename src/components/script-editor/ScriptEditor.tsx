@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useMemo } from 'react';
+import { useCallback, useRef, useMemo, useEffect } from 'react';
 import { TranscriptWord } from '@/lib/types/composition';
 import { WordSpan } from './WordSpan';
 import { useScriptEditor } from './useScriptEditor';
@@ -47,7 +47,7 @@ export function ScriptEditor({
   });
 
   // Notify parent of deleted word changes
-  useMemo(() => {
+  useEffect(() => {
     if (onDeletedWordsChange) {
       onDeletedWordsChange(deletedWordIds);
     }

@@ -99,6 +99,28 @@ Next.js 14 | TypeScript | Tailwind | Groq Whisper | Supabase | Remotion
   - Visual feedback for current word during playback
 - [x] **Sidebar Updates** - Uploads button opens media library panel
 
+### Phase 7: Supabase Video Storage for Rendering (Jan 24, 2025)
+- [x] **Server-side storage helpers** - Created `storage-server.ts` with server-only Supabase functions
+  - `uploadTempVideo()` - Uploads source clips to `videos/{userId}/temp/{renderId}/` with signed URLs
+  - `deleteTempVideos()` - Cleans up temp folder after render completes
+  - `uploadRenderedVideo()` - Uploads final MP4 to `videos/{userId}/renders/{renderId}.mp4`
+- [x] **Render API updates** - `/api/render` now:
+  - Accepts `userId` for Supabase storage (falls back to local for unauthenticated)
+  - Generates `renderId` upfront for consistent temp folder paths
+  - Converts MOV/HEVC to MP4 via FFmpeg before upload (optional, `convertIfNeeded` flag)
+  - Uploads source clips to Supabase, passes signed URLs to Remotion
+- [x] **Remotion renderer updates** - `remotion-renderer.ts`:
+  - Accepts optional `renderId` parameter for Supabase path consistency
+  - Uploads completed render to Supabase storage
+  - Cleans up temp videos (Supabase or local) after render
+  - Returns `supabaseUrl` in render state for direct download
+- [x] **Render state** - Added `supabaseUrl` field for cloud-hosted video URLs
+- [x] **Video cutting** - Integrated `video-cutter.ts` for removing deleted word segments:
+  - Calculates deleted time ranges from word timestamps
+  - Uses FFmpeg to cut and concatenate kept segments
+  - Adjusts clip durations and caption timestamps accordingly
+- [x] **Vercel compatibility** - Full flow works on serverless (no local filesystem dependency in production)
+
 ## Todo
 - [ ] Real-time caption preview with @remotion/player
 - [ ] Trim clips (in-timeline trimming)
