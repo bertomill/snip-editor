@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const videoFile = formData.get("video") as File;
+    const audioFile = formData.get("audio") as File;
 
     // Parse audio enhancement options
     const enhanceAudio = formData.get("enhanceAudio") === "true";
@@ -48,46 +49,67 @@ export async function POST(request: NextRequest) {
     const noiseReductionStrength = (formData.get("noiseReductionStrength") as 'light' | 'medium' | 'strong') || "medium";
     const loudnessNormalization = formData.get("loudnessNormalization") !== "false"; // Default true
 
-    if (!videoFile) {
-      console.log("No video file in request");
+    // Check if we received pre-extracted audio (from client-side FFmpeg)
+    const hasPreExtractedAudio = audioFile && audioFile.size > 0;
+
+    if (!videoFile && !audioFile) {
+      console.log("No video or audio file in request");
       return NextResponse.json(
-        { error: "No video file provided" },
+        { error: "No video or audio file provided" },
         { status: 400 }
       );
     }
 
-    console.log(`Processing video: ${videoFile.name}, size: ${videoFile.size} bytes, type: ${videoFile.type}`);
-    console.log(`Audio enhancement: ${enhanceAudio ? "enabled" : "disabled"}`);
+    if (hasPreExtractedAudio) {
+      // Client already extracted audio - use it directly
+      console.log(`Using pre-extracted audio: ${audioFile.name}, size: ${audioFile.size} bytes, type: ${audioFile.type}`);
 
-    // Convert File to buffer
-    const bytes = await videoFile.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+      const bytes = await audioFile.arrayBuffer();
+      const buffer = Buffer.from(bytes);
 
-    // Write to temp file
-    const tempFileName = `video-${Date.now()}-${videoFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-    tempFilePath = join(tmpdir(), tempFileName);
-    await writeFile(tempFilePath, buffer);
-    console.log(`Wrote temp file: ${tempFilePath}`);
+      audioFilePath = join(tmpdir(), `audio-${Date.now()}.mp3`);
+      await writeFile(audioFilePath, buffer);
+      console.log(`Wrote audio file: ${audioFilePath}`);
+    } else if (videoFile) {
+      // Need to extract audio from video server-side
+      console.log(`Processing video: ${videoFile.name}, size: ${videoFile.size} bytes, type: ${videoFile.type}`);
+      console.log(`Audio enhancement: ${enhanceAudio ? "enabled" : "disabled"}`);
 
-    // Extract audio from video using FFmpeg
-    // Use mp3 format for good compatibility and reasonable file size
-    audioFilePath = join(tmpdir(), `audio-${Date.now()}.mp3`);
-    console.log("Extracting audio from video...");
+      // Convert File to buffer
+      const bytes = await videoFile.arrayBuffer();
+      const buffer = Buffer.from(bytes);
 
-    try {
-      // Extract audio: -vn removes video, -acodec mp3 converts to mp3
-      // -ar 16000 downsamples to 16kHz (optimal for speech recognition)
-      // -ac 1 converts to mono
-      await execAsync(`ffmpeg -i "${tempFilePath}" -vn -acodec libmp3lame -ar 16000 -ac 1 -q:a 2 -y "${audioFilePath}"`);
-      console.log(`Extracted audio to: ${audioFilePath}`);
-    } catch (ffmpegError) {
-      console.error("FFmpeg audio extraction failed:", ffmpegError);
-      throw new Error("Failed to extract audio from video");
+      // Write to temp file
+      const tempFileName = `video-${Date.now()}-${videoFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      tempFilePath = join(tmpdir(), tempFileName);
+      await writeFile(tempFilePath, buffer);
+      console.log(`Wrote temp file: ${tempFilePath}`);
+
+      // Extract audio from video using FFmpeg
+      // Use mp3 format for good compatibility and reasonable file size
+      audioFilePath = join(tmpdir(), `audio-${Date.now()}.mp3`);
+      console.log("Extracting audio from video...");
+
+      try {
+        // Extract audio: -vn removes video, -acodec mp3 converts to mp3
+        // -ar 16000 downsamples to 16kHz (optimal for speech recognition)
+        // -ac 1 converts to mono
+        await execAsync(`ffmpeg -i "${tempFilePath}" -vn -acodec libmp3lame -ar 16000 -ac 1 -q:a 2 -y "${audioFilePath}"`);
+        console.log(`Extracted audio to: ${audioFilePath}`);
+      } catch (ffmpegError) {
+        console.error("FFmpeg audio extraction failed:", ffmpegError);
+        throw new Error("Failed to extract audio from video");
+      }
     }
 
-    // Apply voice cleanup if enabled
-    let finalAudioPath = audioFilePath;
-    if (enhanceAudio) {
+    // Ensure we have an audio file path at this point
+    if (!audioFilePath) {
+      throw new Error("No audio file available for transcription");
+    }
+
+    // Apply voice cleanup if enabled (only for server-extracted audio, not pre-extracted)
+    let finalAudioPath: string = audioFilePath;
+    if (enhanceAudio && !hasPreExtractedAudio) {
       console.log("Applying voice cleanup...");
       const cleanupOptions: VoiceCleanupOptions = {
         noiseReduction,
@@ -109,14 +131,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Create a File object for Groq API
-    const audioFile = new File([audioBuffer], "audio.mp3", { type: "audio/mpeg" });
+    const groqAudioFile = new File([audioBuffer], "audio.mp3", { type: "audio/mpeg" });
 
     console.log("Sending audio to Groq Whisper...");
     const startTime = Date.now();
 
     // Use Groq Whisper with word-level timestamps
     const transcription = await groq.audio.transcriptions.create({
-      file: audioFile,
+      file: groqAudioFile,
       model: "whisper-large-v3-turbo",
       response_format: "verbose_json",
       timestamp_granularities: ["word", "segment"],

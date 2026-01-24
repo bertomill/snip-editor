@@ -28,6 +28,7 @@ import { ProjectsProvider, useProjects } from "@/contexts/ProjectsContext";
 import { ProjectFeed } from "@/components/projects";
 import { ProjectData } from "@/types/project";
 import { ResizableBottomPanel } from "@/components/ResizableBottomPanel";
+import { extractAudioFromVideo, isFFmpegSupported } from "@/lib/audio/extract-audio";
 
 type AppView = "feed" | "editor";
 type EditorStep = "upload" | "edit" | "export";
@@ -2206,10 +2207,12 @@ function EditStep({
 
     const updatedClips = [...clips];
     const { audioSettings } = overlayState;
+    const useClientExtraction = isFFmpegSupported();
 
     for (let i = 0; i < clips.length; i++) {
       const clip = clips[i];
-      setTranscribeProgress(((i) / clips.length) * 100);
+      const baseProgress = (i / clips.length) * 100;
+      setTranscribeProgress(baseProgress);
 
       // Skip clips that don't have blobs downloaded yet
       if (!clip.file) {
@@ -2218,31 +2221,53 @@ function EditStep({
       }
 
       try {
-        // Re-create File with guaranteed valid MIME type for iOS Safari compatibility
-        let fileToUpload = clip.file;
-        if (!clip.file.type || clip.file.type === 'application/octet-stream') {
-          const ext = clip.file.name.split('.').pop()?.toLowerCase();
-          const mimeMap: Record<string, string> = {
-            'mp4': 'video/mp4',
-            'mov': 'video/quicktime',
-            'webm': 'video/webm',
-            'm4v': 'video/x-m4v',
-            'hevc': 'video/mp4',
-          };
-          const mimeType = mimeMap[ext || ''] || 'video/mp4';
-          fileToUpload = new File([clip.file], clip.file.name, { type: mimeType });
+        let fileToUpload: File;
+
+        // Extract audio client-side if supported (much smaller file size)
+        if (useClientExtraction) {
+          console.log(`[Transcribe] Extracting audio from clip ${i + 1} client-side...`);
+          try {
+            fileToUpload = await extractAudioFromVideo(clip.file, (progress) => {
+              // Progress for extraction (first half of clip progress)
+              setTranscribeProgress(baseProgress + (progress / clips.length) * 0.5);
+            });
+            console.log(`[Transcribe] Audio extracted: ${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB`);
+          } catch (extractError) {
+            console.warn(`[Transcribe] Client-side extraction failed, falling back to server:`, extractError);
+            // Fall back to sending full video
+            fileToUpload = clip.file;
+          }
+        } else {
+          // Re-create File with guaranteed valid MIME type for iOS Safari compatibility
+          fileToUpload = clip.file;
+          if (!clip.file.type || clip.file.type === 'application/octet-stream') {
+            const ext = clip.file.name.split('.').pop()?.toLowerCase();
+            const mimeMap: Record<string, string> = {
+              'mp4': 'video/mp4',
+              'mov': 'video/quicktime',
+              'webm': 'video/webm',
+              'm4v': 'video/x-m4v',
+              'hevc': 'video/mp4',
+            };
+            const mimeType = mimeMap[ext || ''] || 'video/mp4';
+            fileToUpload = new File([clip.file], clip.file.name, { type: mimeType });
+          }
         }
 
         const formData = new FormData();
-        formData.append("video", fileToUpload);
+        // Use "audio" key if we extracted audio, "video" if sending full video
+        const fileKey = fileToUpload.type.startsWith('audio/') ? 'audio' : 'video';
+        formData.append(fileKey, fileToUpload);
 
-        // Add audio enhancement settings
-        if (audioSettings.enhanceAudio) {
+        // Add audio enhancement settings (only if sending video - audio is already clean)
+        if (fileKey === 'video' && audioSettings.enhanceAudio) {
           formData.append("enhanceAudio", "true");
           formData.append("noiseReduction", String(audioSettings.noiseReduction));
           formData.append("noiseReductionStrength", audioSettings.noiseReductionStrength);
           formData.append("loudnessNormalization", String(audioSettings.loudnessNormalization));
         }
+
+        setTranscribeProgress(baseProgress + (100 / clips.length) * 0.6);
 
         const response = await fetch("/api/transcribe", {
           method: "POST",
@@ -2251,8 +2276,8 @@ function EditStep({
 
         // Handle 413 (file too large) specifically
         if (response.status === 413) {
-          const fileSizeMB = clip.file ? (clip.file.size / (1024 * 1024)).toFixed(1) : 'unknown';
-          alert(`Clip ${i + 1} is too large (${fileSizeMB}MB). Maximum file size is ~4.5MB. Try compressing the video or using shorter clips.`);
+          const fileSizeMB = fileToUpload.size / (1024 * 1024);
+          alert(`Clip ${i + 1} is too large (${fileSizeMB.toFixed(1)}MB). Try using a shorter clip.`);
           continue;
         }
 

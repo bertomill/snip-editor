@@ -10,6 +10,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@google/genai": "^1.38.0",
     "@google/generative-ai": "^0.24.1",
     "@remotion/bundler": "4.0.380",
