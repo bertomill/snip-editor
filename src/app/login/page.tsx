@@ -94,7 +94,14 @@ export default function LoginPage() {
       <div className="w-full lg:w-1/2 bg-[var(--background)] flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-white mb-2">Snip</h1>
+            <Image
+              src="/branding/snip-logo-gradient.svg"
+              alt="Snip"
+              width={140}
+              height={50}
+              className="h-12 w-auto mx-auto mb-2"
+              priority
+            />
             <p className="text-gray-400">AI-powered video editor</p>
           </div>
 

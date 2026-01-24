@@ -95,6 +95,7 @@ export interface OverlayState {
   filterId: string | null;
   showCaptionPreview: boolean;
   captionPositionY: number; // Percentage from top (0-100), default ~75 (bottom area)
+  captionTemplateId: string; // References caption-templates
   audioSettings: AudioSettings;
   clipTransitions: ClipTransition[];
 }
@@ -110,6 +111,7 @@ export type OverlayAction =
   | { type: 'SET_FILTER'; payload: string | null }
   | { type: 'TOGGLE_CAPTION_PREVIEW' }
   | { type: 'SET_CAPTION_POSITION'; payload: number }
+  | { type: 'SET_CAPTION_TEMPLATE'; payload: string }
   | { type: 'SET_AUDIO_SETTINGS'; payload: Partial<AudioSettings> }
   | { type: 'ADD_TRANSITION'; payload: ClipTransition }
   | { type: 'UPDATE_TRANSITION'; payload: { id: string; updates: Partial<ClipTransition> } }

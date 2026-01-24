@@ -216,3 +216,41 @@ export async function deleteProjectClips(
   console.log(`🧹 Cleaned up ${filePaths.length} source clips from Supabase`)
   return true
 }
+
+/**
+ * Upload a project thumbnail to Supabase storage
+ * Returns a public URL for the thumbnail
+ */
+export async function uploadProjectThumbnail(
+  userId: string,
+  projectId: string,
+  buffer: Buffer
+): Promise<{ path: string; signedUrl: string } | null> {
+  const supabase = await createClient()
+
+  const storagePath = `${userId}/thumbnails/${projectId}/thumbnail.jpg`
+
+  const { error: uploadError } = await supabase.storage
+    .from('videos')
+    .upload(storagePath, buffer, {
+      contentType: 'image/jpeg',
+      upsert: true
+    })
+
+  if (uploadError) {
+    console.error('Supabase thumbnail upload error:', uploadError)
+    return null
+  }
+
+  // Create a signed URL (24 hour expiry for thumbnails)
+  const { data: signedData, error: signedError } = await supabase.storage
+    .from('videos')
+    .createSignedUrl(storagePath, 86400)
+
+  if (signedError || !signedData?.signedUrl) {
+    console.error('Thumbnail signed URL error:', signedError)
+    return null
+  }
+
+  return { path: storagePath, signedUrl: signedData.signedUrl }
+}

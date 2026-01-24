@@ -119,22 +119,26 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
         cancelAnimationFrame(scrubRafRef.current);
       }
 
+      // Get fresh rect to avoid stale closure issues
+      const freshRect = container.getBoundingClientRect();
+      const clientX = moveEvent.clientX;
+
       // Throttle frame changes to animation frame rate
       scrubRafRef.current = requestAnimationFrame(() => {
-        // Update position during drag
-        const x = moveEvent.clientX - rect.left;
-        const dragPercentage = Math.max(0, Math.min(1, x / rect.width));
+        // Update position during drag with fresh measurements
+        const x = clientX - freshRect.left;
+        const dragPercentage = Math.max(0, Math.min(1, x / freshRect.width));
         const dragTime = dragPercentage * viewportDuration;
         const dragFrame = Math.round(dragTime * fps);
         onFrameChange(dragFrame);
       });
 
-      // Auto-scroll near edges (keep outside RAF for responsiveness)
-      const x = moveEvent.clientX - rect.left;
+      // Auto-scroll near edges
+      const x = moveEvent.clientX - freshRect.left;
       const edgeThreshold = 50;
       if (x < edgeThreshold) {
         startAutoScroll('left');
-      } else if (x > rect.width - edgeThreshold) {
+      } else if (x > freshRect.width - edgeThreshold) {
         startAutoScroll('right');
       } else {
         stopAutoScroll();
@@ -193,23 +197,25 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
         cancelAnimationFrame(scrubRafRef.current);
       }
 
-      const touchX = moveTouch.clientX;
+      // Get fresh rect to avoid stale closure issues
+      const freshRect = container.getBoundingClientRect();
+      const touchClientX = moveTouch.clientX;
 
       // Throttle frame changes to animation frame rate
       scrubRafRef.current = requestAnimationFrame(() => {
-        const x = touchX - rect.left;
-        const dragPercentage = Math.max(0, Math.min(1, x / rect.width));
+        const x = touchClientX - freshRect.left;
+        const dragPercentage = Math.max(0, Math.min(1, x / freshRect.width));
         const dragTime = dragPercentage * viewportDuration;
         const dragFrame = Math.round(dragTime * fps);
         onFrameChange(dragFrame);
       });
 
-      // Auto-scroll near edges (keep outside RAF for responsiveness)
-      const x = moveTouch.clientX - rect.left;
+      // Auto-scroll near edges
+      const x = moveTouch.clientX - freshRect.left;
       const edgeThreshold = 50;
       if (x < edgeThreshold) {
         startAutoScroll('left');
-      } else if (x > rect.width - edgeThreshold) {
+      } else if (x > freshRect.width - edgeThreshold) {
         startAutoScroll('right');
       } else {
         stopAutoScroll();

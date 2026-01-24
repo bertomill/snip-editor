@@ -2,6 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { Project } from '@/types/project';
 
+// Helper to generate signed URL for thumbnail
+async function getThumbnailSignedUrl(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  thumbnailPath: string | null
+): Promise<string | undefined> {
+  if (!thumbnailPath) return undefined;
+
+  // If it's already a full URL (legacy), return as-is
+  if (thumbnailPath.startsWith('http')) return thumbnailPath;
+
+  const { data, error } = await supabase.storage
+    .from('videos')
+    .createSignedUrl(thumbnailPath, 3600); // 1 hour expiry
+
+  if (error || !data?.signedUrl) return undefined;
+  return data.signedUrl;
+}
+
 // GET /api/projects - List all projects for the current user
 export async function GET() {
   try {
@@ -32,17 +50,19 @@ export async function GET() {
       );
     }
 
-    // Transform to match our interface
-    const formattedProjects: Project[] = (projects || []).map(p => ({
-      id: p.id,
-      name: p.name,
-      userId: p.user_id,
-      createdAt: p.created_at,
-      updatedAt: p.updated_at,
-      thumbnailUrl: p.thumbnail_url,
-      clipCount: p.clip_count || 0,
-      latestRenderStatus: p.latest_render_status,
-    }));
+    // Transform to match our interface and generate signed URLs for thumbnails
+    const formattedProjects: Project[] = await Promise.all(
+      (projects || []).map(async (p) => ({
+        id: p.id,
+        name: p.name,
+        userId: p.user_id,
+        createdAt: p.created_at,
+        updatedAt: p.updated_at,
+        thumbnailUrl: await getThumbnailSignedUrl(supabase, p.thumbnail_url),
+        clipCount: p.clip_count || 0,
+        latestRenderStatus: p.latest_render_status,
+      }))
+    );
 
     return NextResponse.json({ projects: formattedProjects });
 

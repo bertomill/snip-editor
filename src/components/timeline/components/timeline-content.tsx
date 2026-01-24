@@ -117,19 +117,22 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
         cancelAnimationFrame(scrubRafRef.current);
       }
 
+      // Get fresh measurements to avoid stale closure issues
+      const freshRect = container.getBoundingClientRect();
+      const freshTotalWidth = container.scrollWidth;
       const clientX = moveEvent.clientX;
 
       // Throttle frame changes to animation frame rate
       scrubRafRef.current = requestAnimationFrame(() => {
         const currentScrollLeft = scrollContainer?.scrollLeft || 0;
-        const x = clientX - rect.left + currentScrollLeft;
-        const dragPercentage = Math.max(0, Math.min(1, x / totalWidth));
+        const x = clientX - freshRect.left + currentScrollLeft;
+        const dragPercentage = Math.max(0, Math.min(1, x / freshTotalWidth));
         const dragTime = dragPercentage * viewportDuration;
         const dragFrame = Math.round(dragTime * fps);
         onFrameChange(dragFrame);
       });
 
-      // Auto-scroll near edges (keep outside RAF for responsiveness)
+      // Auto-scroll near edges
       const edgeThreshold = 50;
       const containerRect = scrollContainer?.getBoundingClientRect();
       if (containerRect) {

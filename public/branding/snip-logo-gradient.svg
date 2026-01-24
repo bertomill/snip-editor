@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="200" height="60">
+  <defs>
+    <!-- Twilight gradient: deep navy to peachy-gold -->
+    <linearGradient id="twilightGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a3e"/>
+      <stop offset="45%" style="stop-color:#4a3f6b"/>
+      <stop offset="100%" style="stop-color:#f4a574"/>
+    </linearGradient>
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a3e"/>
+      <stop offset="100%" style="stop-color:#f4a574"/>
+    </linearGradient>
+
+    <!-- Mask to create sprocket holes -->
+    <mask id="filmMask-gradient">
+      <rect width="200" height="60" fill="white"/>
+
+      <!-- Outer edge perforations -->
+      <rect x="33" y="3" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="41" y="5" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="48" y="9" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="53" y="15" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="55" y="22" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="53" y="29" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="47" y="34" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="39" y="37" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="31" y="40" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="23" y="42" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="15" y="45" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="10" y="50" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="15" y="55" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="23" y="56" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="31" y="56" width="2.5" height="4" rx="0.4" fill="black"/>
+
+      <!-- Inner edge perforations -->
+      <rect x="26" y="7" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="34" y="9" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="41" y="12" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="47" y="17" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="49" y="24" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="46" y="30" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="40" y="34" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="32" y="37" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="24" y="39" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="16" y="42" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="17" y="49" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="24" y="52" width="2.5" height="4" rx="0.4" fill="black"/>
+      <rect x="32" y="52" width="2.5" height="4" rx="0.4" fill="black"/>
+    </mask>
+  </defs>
+
+  <!-- Film Strip S with gradient and perforations cut out -->
+  <path d="M 28 2
+           C 52 2, 60 12, 60 24
+           C 60 36, 46 40, 32 43
+           C 18 46, 8 48, 8 52
+           C 8 56, 16 60, 36 60
+           L 40 60
+           C 40 60, 42 60, 42 60
+           L 42 56
+           C 20 56, 14 54, 14 52
+           C 14 48, 26 45, 40 42
+           C 54 39, 66 33, 66 24
+           C 66 10, 52 0, 28 0
+           Z"
+        fill="url(#twilightGradient)"
+        mask="url(#filmMask-gradient)"/>
+
+  <!-- "nip" text with gradient -->
+  <text x="72" y="44" font-family="Inter, SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif" font-size="38" font-weight="500" fill="url(#textGradient)" letter-spacing="-1">nip</text>
+</svg>

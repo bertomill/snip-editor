@@ -9,16 +9,19 @@ import { textStyleTemplates } from '@/lib/templates/text-templates'
 import { animationTemplates } from '@/lib/templates/animation-templates'
 import { stickerCategories, getStickersByCategory } from '@/lib/templates/sticker-templates'
 import { filterPresets } from '@/lib/templates/filter-presets'
+import { captionTemplates } from '@/lib/caption-templates'
 import { TextOverlay, StickerOverlay, ClipTransition, defaultAudioSettings } from '@/types/overlays'
 import { TransitionRefinementPanel } from '@/components/overlays/TransitionRefinementPanel'
 import { generateAutoTransitions } from '@/lib/transitions/auto-transitions'
 
-type PanelType = 'text' | 'stickers' | 'filters' | 'audio' | 'cuts' | null;
+type PanelType = 'text' | 'stickers' | 'filters' | 'audio' | 'cuts' | 'captions' | null;
 
 interface SidebarProps {
   onOpenUploads?: () => void;
   onNavigateHome?: () => void;
   onCreateProject?: () => void;
+  // View state - determines which mobile bottom bar to show
+  view?: 'feed' | 'editor';
   // For overlay panels that need timing info
   totalDurationMs?: number;
   currentTimeMs?: number;
@@ -30,6 +33,7 @@ export function Sidebar({
   onOpenUploads,
   onNavigateHome,
   onCreateProject,
+  view = 'feed',
   totalDurationMs = 10000,
   currentTimeMs = 0,
   clipCount = 1,
@@ -40,7 +44,7 @@ export function Sidebar({
   const [activePanel, setActivePanel] = useState<PanelType>(null)
 
   // Get overlay context for captions, overlays, and transitions
-  const { state: overlayState, toggleCaptionPreview, addTextOverlay, addSticker, setFilter, setAudioSettings, updateTransition, removeTransition, setTransitions } = useOverlay()
+  const { state: overlayState, toggleCaptionPreview, addTextOverlay, addSticker, setFilter, setAudioSettings, updateTransition, removeTransition, setTransitions, setCaptionTemplate } = useOverlay()
 
   const togglePanel = (panel: PanelType) => {
     setActivePanel(activePanel === panel ? null : panel)
@@ -53,11 +57,11 @@ export function Sidebar({
         {/* Logo */}
         <Link href="/" className="mb-8">
           <Image
-            src="/branding/icon-transparent.png"
+            src="/branding/snip-icon-gradient.svg"
             alt="Snip"
             width={40}
             height={40}
-            className="rounded-xl hover:scale-105 transition-transform"
+            className="hover:scale-105 transition-transform"
           />
         </Link>
 
@@ -81,58 +85,69 @@ export function Sidebar({
           {/* Discover/Explore */}
           <NavItem href="/" icon={<ExploreIcon />} label="Explore" />
 
-          {/* Create */}
-          <NavButton
-            icon={<CreateIcon />}
-            label="Create"
+          {/* Create - Primary Action */}
+          <button
             onClick={() => onCreateProject?.()}
-          />
+            className="group flex flex-col items-center gap-1 p-2 rounded-xl transition-all"
+          >
+            <div className="p-2.5 rounded-xl bg-[#4A8FE7] text-white shadow-lg shadow-[#4A8FE7]/30 group-hover:bg-[#5A9FF7] group-hover:shadow-[#4A8FE7]/50 group-hover:scale-105 transition-all">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <span className="text-[10px] font-medium text-[#4A8FE7]">Create</span>
+          </button>
 
-          {/* Divider */}
-          <div className="w-8 h-px bg-[var(--border-subtle)] my-2" />
+          {/* Editor Tools - only show when in editor view */}
+          {view === 'editor' && (
+            <>
+              {/* Divider */}
+              <div className="w-8 h-px bg-[var(--border-subtle)] my-2" />
 
-          {/* Overlay Tools */}
-          <NavButton
-            icon={<TextIcon />}
-            label="Text"
-            onClick={() => togglePanel('text')}
-            active={activePanel === 'text'}
-          />
+              {/* Overlay Tools */}
+              <NavButton
+                icon={<TextIcon />}
+                label="Text"
+                onClick={() => togglePanel('text')}
+                active={activePanel === 'text'}
+              />
 
-          <NavButton
-            icon={<StickerIcon />}
-            label="Stickers"
-            onClick={() => togglePanel('stickers')}
-            active={activePanel === 'stickers'}
-          />
+              <NavButton
+                icon={<StickerIcon />}
+                label="Stickers"
+                onClick={() => togglePanel('stickers')}
+                active={activePanel === 'stickers'}
+              />
 
-          <NavButton
-            icon={<FilterIcon />}
-            label="Filters"
-            onClick={() => togglePanel('filters')}
-            active={activePanel === 'filters'}
-          />
+              <NavButton
+                icon={<FilterIcon />}
+                label="Filters"
+                onClick={() => togglePanel('filters')}
+                active={activePanel === 'filters'}
+              />
 
-          <NavButton
-            icon={<AudioEnhanceIcon />}
-            label="Audio"
-            onClick={() => togglePanel('audio')}
-            active={activePanel === 'audio'}
-          />
+              <NavButton
+                icon={<AudioEnhanceIcon />}
+                label="Audio"
+                onClick={() => togglePanel('audio')}
+                active={activePanel === 'audio'}
+              />
 
-          <NavButton
-            icon={<CutsIcon />}
-            label="Cuts"
-            onClick={() => togglePanel('cuts')}
-            active={activePanel === 'cuts'}
-          />
+              <NavButton
+                icon={<CutsIcon />}
+                label="Cuts"
+                onClick={() => togglePanel('cuts')}
+                active={activePanel === 'cuts'}
+              />
 
-          <NavButton
-            icon={<CaptionIcon />}
-            label="Captions"
-            onClick={toggleCaptionPreview}
-            active={overlayState.showCaptionPreview}
-          />
+              <NavButton
+                icon={<CaptionIcon />}
+                label="Captions"
+                onClick={() => togglePanel('captions')}
+                active={activePanel === 'captions' || overlayState.showCaptionPreview}
+              />
+            </>
+          )}
         </nav>
 
         {/* Bottom section - Profile */}
@@ -223,21 +238,49 @@ export function Sidebar({
         updateTransition={updateTransition}
         removeTransition={removeTransition}
         setTransitions={setTransitions}
+        setCaptionTemplate={setCaptionTemplate}
+        toggleCaptionPreview={toggleCaptionPreview}
       />
 
-      {/* Mobile Bottom Toolbar - CapCut style */}
-      <MobileBottomToolbar
-        onNavigateHome={onNavigateHome}
-        onCreateProject={onCreateProject}
-        onOpenTextDrawer={() => togglePanel('text')}
-        onOpenStickerDrawer={() => togglePanel('stickers')}
-        onOpenFilterDrawer={() => togglePanel('filters')}
-        onOpenAudioDrawer={() => togglePanel('audio')}
-        onToggleCaptions={toggleCaptionPreview}
-        captionsEnabled={overlayState.showCaptionPreview}
-        audioEnabled={overlayState.audioSettings?.enhanceAudio ?? false}
-      />
+      {/* Mobile Bottom Bar - different for feed vs editor */}
+      {view === 'feed' ? (
+        <MobileProjectsBottomBar onCreateProject={onCreateProject} />
+      ) : (
+        <MobileBottomToolbar
+          onNavigateHome={onNavigateHome}
+          onCreateProject={onCreateProject}
+          onOpenTextDrawer={() => togglePanel('text')}
+          onOpenStickerDrawer={() => togglePanel('stickers')}
+          onOpenFilterDrawer={() => togglePanel('filters')}
+          onOpenAudioDrawer={() => togglePanel('audio')}
+          onOpenCaptionsDrawer={() => togglePanel('captions')}
+          captionsEnabled={overlayState.showCaptionPreview}
+          audioEnabled={overlayState.audioSettings?.enhanceAudio ?? false}
+        />
+      )}
     </>
+  )
+}
+
+// Shop app style floating pill bottom bar for projects view
+function MobileProjectsBottomBar({
+  onCreateProject,
+}: {
+  onCreateProject?: () => void
+}) {
+  return (
+    <div className="md:hidden fixed bottom-8 left-1/2 -translate-x-1/2 z-50 safe-area-pb">
+      {/* Create Button - primary action, floating pill */}
+      <button
+        onClick={onCreateProject}
+        className="flex items-center gap-2.5 bg-[#4A8FE7] hover:bg-[#5A9FF7] active:bg-[#3A7FD7] text-white px-8 py-4 rounded-full font-semibold text-base transition-all active:scale-95 shadow-xl shadow-[#4A8FE7]/40 hover:shadow-[#4A8FE7]/60"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+        Create
+      </button>
+    </div>
   )
 }
 
@@ -248,7 +291,7 @@ function MobileBottomToolbar({
   onOpenStickerDrawer,
   onOpenFilterDrawer,
   onOpenAudioDrawer,
-  onToggleCaptions,
+  onOpenCaptionsDrawer,
   captionsEnabled = false,
   audioEnabled = false,
 }: {
@@ -258,7 +301,7 @@ function MobileBottomToolbar({
   onOpenStickerDrawer?: () => void
   onOpenFilterDrawer?: () => void
   onOpenAudioDrawer?: () => void
-  onToggleCaptions?: () => void
+  onOpenCaptionsDrawer?: () => void
   captionsEnabled?: boolean
   audioEnabled?: boolean
 }) {
@@ -294,7 +337,7 @@ function MobileBottomToolbar({
         <ToolbarButton
           icon={<MobileCaptionIcon />}
           label="Captions"
-          onClick={onToggleCaptions}
+          onClick={onOpenCaptionsDrawer}
           active={captionsEnabled}
         />
         <ToolbarButton
@@ -348,6 +391,8 @@ function SidebarPanel({
   updateTransition,
   removeTransition,
   setTransitions,
+  setCaptionTemplate,
+  toggleCaptionPreview,
 }: {
   activePanel: PanelType
   onClose: () => void
@@ -357,11 +402,13 @@ function SidebarPanel({
   addSticker: (sticker: StickerOverlay) => void
   setFilter: (filterId: string | null) => void
   setAudioSettings: (settings: Partial<import('@/types/overlays').AudioSettings>) => void
-  overlayState: { textOverlays: TextOverlay[]; stickers: StickerOverlay[]; filterId: string | null; audioSettings: import('@/types/overlays').AudioSettings; clipTransitions: ClipTransition[] }
+  overlayState: { textOverlays: TextOverlay[]; stickers: StickerOverlay[]; filterId: string | null; audioSettings: import('@/types/overlays').AudioSettings; clipTransitions: ClipTransition[]; captionTemplateId: string; showCaptionPreview: boolean }
   clipCount: number
   updateTransition: (id: string, updates: Partial<ClipTransition>) => void
   removeTransition: (id: string) => void
   setTransitions: (transitions: ClipTransition[]) => void
+  setCaptionTemplate: (templateId: string) => void
+  toggleCaptionPreview: () => void
 }) {
   if (!activePanel) return null
 
@@ -425,6 +472,14 @@ function SidebarPanel({
               const autoTransitions = generateAutoTransitions(clips);
               setTransitions(autoTransitions);
             }}
+          />
+        )}
+        {activePanel === 'captions' && (
+          <CaptionPanelContent
+            captionTemplateId={overlayState.captionTemplateId}
+            setCaptionTemplate={setCaptionTemplate}
+            showCaptionPreview={overlayState.showCaptionPreview}
+            toggleCaptionPreview={toggleCaptionPreview}
           />
         )}
       </div>
@@ -870,6 +925,100 @@ function AudioPanelContent({
       <div className="pt-3 border-t border-[#2C2C2E]">
         <p className="text-[10px] text-[#636366] text-center leading-relaxed">
           Audio enhancement cleans up voice recordings before transcription for improved accuracy.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// Caption Panel Content
+function CaptionPanelContent({
+  captionTemplateId,
+  setCaptionTemplate,
+  showCaptionPreview,
+  toggleCaptionPreview,
+}: {
+  captionTemplateId: string
+  setCaptionTemplate: (templateId: string) => void
+  showCaptionPreview: boolean
+  toggleCaptionPreview: () => void
+}) {
+  const handleSelectTemplate = (templateId: string) => {
+    setCaptionTemplate(templateId)
+    // Auto-enable caption preview when selecting a style
+    if (!showCaptionPreview) {
+      toggleCaptionPreview()
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Caption visibility toggle */}
+      <div className="flex items-center justify-between p-3 bg-[#2C2C2E] rounded-xl">
+        <span className="text-sm text-white">Show captions</span>
+        <button
+          onClick={toggleCaptionPreview}
+          className={`w-10 h-6 rounded-full p-0.5 transition-colors ${
+            showCaptionPreview ? 'bg-[#4A8FE7]' : 'bg-[#3A3A3C]'
+          }`}
+        >
+          <div
+            className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${
+              showCaptionPreview ? 'translate-x-4' : 'translate-x-0'
+            }`}
+          />
+        </button>
+      </div>
+
+      {/* Caption Style Grid */}
+      <div className="grid grid-cols-2 gap-3">
+        {captionTemplates.map((template) => {
+          const isSelected = captionTemplateId === template.id
+
+          return (
+            <button
+              key={template.id}
+              onClick={() => handleSelectTemplate(template.id)}
+              className={`relative rounded-xl overflow-hidden transition-all text-left p-3 ${
+                isSelected
+                  ? 'ring-2 ring-[#4A8FE7] ring-offset-1 ring-offset-[#1C1C1E] bg-[#4A8FE7]/10'
+                  : 'hover:bg-[#2C2C2E]'
+              }`}
+            >
+              {/* Style preview */}
+              <div
+                className="h-10 rounded-lg mb-2 flex items-center justify-center text-sm font-semibold"
+                style={{
+                  backgroundColor: template.styles.highlightStyle?.backgroundColor || "#3B82F6",
+                  color: template.styles.highlightStyle?.color || "#FFF",
+                  fontFamily: template.styles.fontFamily,
+                  textShadow: template.styles.textShadow,
+                }}
+              >
+                Aa
+              </div>
+
+              {/* Template info */}
+              <p className="font-medium text-xs text-white">{template.name}</p>
+              <p className="text-[#636366] text-[10px]">{template.preview}</p>
+
+              {/* Selected checkmark */}
+              {isSelected && (
+                <div className="absolute top-2 right-2 w-4 h-4 bg-[#4A8FE7] rounded-full flex items-center justify-center">
+                  <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Info footer */}
+      <div className="pt-3 border-t border-[#2C2C2E]">
+        <p className="text-[10px] text-[#636366] text-center leading-relaxed">
+          Captions are generated from your transcript and will be burned into the exported video.
         </p>
       </div>
     </div>

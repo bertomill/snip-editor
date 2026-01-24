@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { uploadSourceClip, getSignedUrlForClip, deleteProjectClips } from '@/lib/supabase/storage-server';
+import { uploadSourceClip, getSignedUrlForClip, deleteProjectClips, uploadProjectThumbnail } from '@/lib/supabase/storage-server';
+import { generateThumbnailFromBuffer } from '@/lib/utils/thumbnail-generator';
 
 interface ClipInput {
   data: string;          // base64 video
@@ -67,8 +68,10 @@ export async function POST(
 
     // Upload and save each clip
     const savedClips = [];
+    let thumbnailUrl: string | null = null;
 
-    for (const clip of clips) {
+    for (let i = 0; i < clips.length; i++) {
+      const clip = clips[i];
       // Decode base64 and upload to storage
       const buffer = Buffer.from(clip.data, 'base64');
 
@@ -89,6 +92,24 @@ export async function POST(
       if (!uploadResult) {
         console.error(`Failed to upload clip: ${clip.filename}`);
         continue;
+      }
+
+      // Generate thumbnail from the first clip
+      if (i === 0 && !thumbnailUrl) {
+        try {
+          console.log('Generating thumbnail from first clip...');
+          const thumbnailBuffer = await generateThumbnailFromBuffer(buffer, clip.filename);
+          if (thumbnailBuffer) {
+            const thumbnailResult = await uploadProjectThumbnail(user.id, projectId, thumbnailBuffer);
+            if (thumbnailResult) {
+              // Store the path, not the signed URL (signed URLs expire)
+              thumbnailUrl = thumbnailResult.path;
+              console.log('Thumbnail generated and uploaded successfully');
+            }
+          }
+        } catch (thumbError) {
+          console.error('Thumbnail generation failed (non-blocking):', thumbError);
+        }
       }
 
       // Insert clip record into database
@@ -121,13 +142,19 @@ export async function POST(
       });
     }
 
-    // Update project clip count
+    // Update project clip count and thumbnail
+    const updateData: Record<string, unknown> = {
+      clip_count: savedClips.length,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (thumbnailUrl) {
+      updateData.thumbnail_url = thumbnailUrl;
+    }
+
     await supabase
       .from('projects')
-      .update({
-        clip_count: savedClips.length,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', projectId);
 
     return NextResponse.json({

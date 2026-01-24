@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
-import { captionTemplates, CaptionTemplate } from "@/lib/caption-templates";
+import { captionTemplates } from "@/lib/caption-templates";
 import {
   OverlayProvider,
   useOverlay,
@@ -40,12 +40,14 @@ interface TranscriptSegment {
 }
 
 interface VideoClip {
-  file: File;
-  url: string;
+  file: File | null;           // null until blob downloaded for loaded projects
+  url: string;                 // signed URL initially, then blob URL
+  signedUrl?: string;          // keep signed URL for fallback
   duration: number;
   transcript?: string;
   segments?: TranscriptSegment[];
   words?: Omit<TranscriptWord, 'clipIndex'>[];  // Words from API (without clipIndex)
+  blobReady: boolean;          // track if blob is downloaded
 }
 
 export default function Home() {
@@ -81,6 +83,22 @@ function HomeContent() {
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [isLoadingProject, setIsLoadingProject] = useState(false);
   const savedClipNames = useRef<Set<string>>(new Set());
+
+  // Background clip download progress (for loaded projects)
+  const [clipDownloadProgress, setClipDownloadProgress] = useState<{
+    total: number;
+    completed: number;
+    downloading: boolean;
+  }>({ total: 0, completed: 0, downloading: false });
+
+  // Background export state
+  const [exportState, setExportState] = useState<{
+    status: 'idle' | 'preparing' | 'converting' | 'rendering' | 'done' | 'error';
+    progress: number;
+    renderId: string | null;
+    downloadUrl: string | null;
+    error: string | null;
+  }>({ status: 'idle', progress: 0, renderId: null, downloadUrl: null, error: null });
 
   const { createProject, updateProject, projects, refreshProjects } = useProjects();
   const { state: overlayState, loadState: loadOverlayState, resetOverlays } = useOverlay();
@@ -118,6 +136,39 @@ function HomeContent() {
     }
   }, [user, router, createProject, resetOverlays]);
 
+  // Background download blobs for loaded project clips
+  const downloadClipBlobs = useCallback(async (
+    initialClips: VideoClip[],
+    clipInfos: Array<{ signedUrl: string; filename: string }>
+  ) => {
+    setClipDownloadProgress({ total: initialClips.length, completed: 0, downloading: true });
+
+    for (let i = 0; i < clipInfos.length; i++) {
+      try {
+        const blobResponse = await fetch(clipInfos[i].signedUrl);
+        const blob = await blobResponse.blob();
+        const file = new File([blob], clipInfos[i].filename, { type: blob.type });
+        const blobUrl = URL.createObjectURL(blob);
+
+        // Update clip with blob data
+        setClips(prev => prev.map((clip, idx) =>
+          idx === i ? { ...clip, file, url: blobUrl, blobReady: true } : clip
+        ));
+
+        // Mark as saved so it won't be re-uploaded
+        savedClipNames.current.add(clipInfos[i].filename);
+
+        setClipDownloadProgress(prev => ({ ...prev, completed: prev.completed + 1 }));
+      } catch (error) {
+        console.error(`Failed to download clip ${i}:`, error);
+        // Continue with other clips even if one fails
+        setClipDownloadProgress(prev => ({ ...prev, completed: prev.completed + 1 }));
+      }
+    }
+
+    setClipDownloadProgress(prev => ({ ...prev, downloading: false }));
+  }, []);
+
   // Handle selecting a project from feed
   const handleSelectProject = useCallback(async (projectId: string) => {
     setCurrentProjectId(projectId);
@@ -129,6 +180,7 @@ function HomeContent() {
     setDeletedPauseIds(new Set());
     setHasUnsavedChanges(false);
     savedClipNames.current = new Set();
+    setClipDownloadProgress({ total: 0, completed: 0, downloading: false });
     resetOverlays();
     setView("editor");
 
@@ -173,50 +225,60 @@ function HomeContent() {
         }
       }
 
-      // Load clips from storage
+      // Phase 1: Load clips instantly with signed URLs (no blob download)
       if (clipsResponse.ok && clipsJson.clips && clipsJson.clips.length > 0) {
-        const loadedClips: VideoClip[] = await Promise.all(
-          clipsJson.clips.map(async (clip: {
-            id: string;
-            filename: string;
-            signedUrl: string;
-            duration: number;
-            orderIndex: number;
-            transcript?: string;
-            segments?: { text: string; start: number; end: number }[];
-            words?: { id: string; word: string; start: number; end: number }[];
-          }) => {
-            // Fetch the video blob from signed URL
-            const blobResponse = await fetch(clip.signedUrl);
-            const blob = await blobResponse.blob();
-            const file = new File([blob], clip.filename, { type: blob.type });
-            const url = URL.createObjectURL(blob);
+        const clipInfos = clipsJson.clips.map((clip: {
+          id: string;
+          filename: string;
+          signedUrl: string;
+          duration: number;
+          orderIndex: number;
+          transcript?: string;
+          segments?: { text: string; start: number; end: number }[];
+          words?: { id: string; word: string; start: number; end: number }[];
+        }) => ({
+          signedUrl: clip.signedUrl,
+          filename: clip.filename,
+        }));
 
-            return {
-              file,
-              url,
-              duration: clip.duration,
-              transcript: clip.transcript,
-              segments: clip.segments?.map((seg, idx) => ({
-                ...seg,
-                clipIndex: clip.orderIndex,
-              })),
-              words: clip.words,
-            };
-          })
-        );
+        // Create clips with signed URLs immediately (no blob yet)
+        const loadedClips: VideoClip[] = clipsJson.clips.map((clip: {
+          id: string;
+          filename: string;
+          signedUrl: string;
+          duration: number;
+          orderIndex: number;
+          transcript?: string;
+          segments?: { text: string; start: number; end: number }[];
+          words?: { id: string; word: string; start: number; end: number }[];
+        }) => ({
+          file: null, // Blob not downloaded yet
+          url: clip.signedUrl, // Use signed URL for immediate preview
+          signedUrl: clip.signedUrl, // Keep for reference
+          duration: clip.duration,
+          transcript: clip.transcript,
+          segments: clip.segments?.map((seg) => ({
+            ...seg,
+            clipIndex: clip.orderIndex,
+          })),
+          words: clip.words,
+          blobReady: false, // Mark as not ready
+        }));
 
         setClips(loadedClips);
-        // Mark loaded clips as already saved (so they don't get re-uploaded)
-        loadedClips.forEach(clip => savedClipNames.current.add(clip.file.name));
         setStep("edit");
+        setIsLoadingProject(false); // Hide loading overlay immediately
+
+        // Phase 2: Start background blob downloads
+        downloadClipBlobs(loadedClips, clipInfos);
+      } else {
+        setIsLoadingProject(false);
       }
     } catch (error) {
       console.error('Failed to load project:', error);
-    } finally {
       setIsLoadingProject(false);
     }
-  }, [loadOverlayState, resetOverlays]);
+  }, [loadOverlayState, resetOverlays, downloadClipBlobs]);
 
   // Save project data (optimistic + background clip upload)
   const saveProject = useCallback(async () => {
@@ -253,16 +315,18 @@ function HomeContent() {
         }),
       });
 
-      // Find clips that haven't been saved yet (skip re-uploads)
-      const unsavedClips = clips.filter(clip => !savedClipNames.current.has(clip.file.name));
+      // Find clips that haven't been saved yet (skip re-uploads and clips without blobs)
+      const unsavedClips = clips.filter(clip =>
+        clip.file && clip.blobReady && !savedClipNames.current.has(clip.file.name)
+      );
 
-      // Only upload new clips
+      // Only upload new clips that have blobs downloaded
       let clipsPromise: Promise<Response> | null = null;
       if (unsavedClips.length > 0) {
         const clipData = await Promise.all(
           unsavedClips.map(async (clip) => {
             const index = clips.indexOf(clip);
-            const arrayBuffer = await clip.file.arrayBuffer();
+            const arrayBuffer = await clip.file!.arrayBuffer();
             const bytes = new Uint8Array(arrayBuffer);
             let binary = "";
             for (let i = 0; i < bytes.byteLength; i++) {
@@ -272,7 +336,7 @@ function HomeContent() {
 
             return {
               data: base64,
-              filename: clip.file.name,
+              filename: clip.file!.name,
               duration: clip.duration,
               orderIndex: index,
               transcript: clip.transcript,
@@ -299,7 +363,7 @@ function HomeContent() {
         const response = await clipsPromise;
         if (response.ok) {
           // Mark clips as saved to avoid re-uploading
-          unsavedClips.forEach(clip => savedClipNames.current.add(clip.file.name));
+          unsavedClips.forEach(clip => savedClipNames.current.add(clip.file!.name));
         }
       }
 
@@ -344,6 +408,173 @@ function HomeContent() {
     setCurrentProjectId(null);
   }, [refreshProjects]);
 
+  // Background export - start rendering without blocking UI
+  const startBackgroundExport = useCallback(async () => {
+    // Filter clips that have files
+    const clipsWithFiles = clips.filter(clip => clip.file);
+    if (clipsWithFiles.length === 0) {
+      setExportState({
+        status: 'error',
+        progress: 0,
+        renderId: null,
+        downloadUrl: null,
+        error: 'No clips available for export',
+      });
+      return;
+    }
+
+    // Check if any clips need conversion
+    const clipsNeedingConversion = clipsWithFiles.filter(clip => {
+      const filename = clip.file!.name.toLowerCase();
+      const type = clip.file!.type;
+      return filename.endsWith('.mov') || filename.endsWith('.hevc') || type === 'video/quicktime';
+    });
+    const needsConversion = clipsNeedingConversion.length > 0;
+
+    setExportState({
+      status: needsConversion ? 'converting' : 'preparing',
+      progress: 0,
+      renderId: null,
+      downloadUrl: null,
+      error: null,
+    });
+
+    try {
+      // Convert clips to base64
+      const clipData = await Promise.all(
+        clipsWithFiles.map(async (clip) => {
+          const arrayBuffer = await clip.file!.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+          let binary = "";
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const base64 = btoa(binary);
+          return {
+            data: base64,
+            filename: clip.file!.name,
+            duration: clip.duration,
+          };
+        })
+      );
+
+      // Get all words and segments
+      const allWords = clips.flatMap((clip, idx) =>
+        (clip.words || []).map(w => ({ ...w, clipIndex: idx }))
+      );
+      const allSegments = clips.flatMap((clip, idx) =>
+        (clip.segments || []).map(s => ({ ...s, clipIndex: idx }))
+      );
+
+      const response = await fetch("/api/render", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clips: clipData,
+          segments: allSegments,
+          deletedSegmentIndices: Array.from(deletedSegments),
+          words: allWords,
+          deletedWordIds: Array.from(deletedWordIds),
+          deletedPauseIds: Array.from(deletedPauseIds),
+          captionTemplateId: overlayState.captionTemplateId || 'classic',
+          width: 1080,
+          height: 1920,
+          fps: 30,
+          filterId: overlayState.filterId,
+          textOverlays: overlayState.textOverlays,
+          stickers: overlayState.stickers,
+          captionPositionY: overlayState.captionPositionY,
+          clipTransitions: overlayState.clipTransitions,
+          userId: user?.id,
+          convertIfNeeded: needsConversion,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setExportState(prev => ({
+          ...prev,
+          status: needsConversion ? 'converting' : 'rendering',
+          renderId: data.renderId,
+        }));
+      } else {
+        setExportState(prev => ({
+          ...prev,
+          status: 'error',
+          error: data.error || "Failed to start render",
+        }));
+      }
+    } catch (error) {
+      setExportState(prev => ({
+        ...prev,
+        status: 'error',
+        error: error instanceof Error ? error.message : "Failed to start render",
+      }));
+    }
+  }, [clips, deletedSegments, deletedWordIds, deletedPauseIds, overlayState, user?.id]);
+
+  // Poll for export progress
+  useEffect(() => {
+    if ((exportState.status !== 'rendering' && exportState.status !== 'converting') || !exportState.renderId) return;
+
+    const pollProgress = async () => {
+      try {
+        const response = await fetch("/api/render/progress", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ renderId: exportState.renderId }),
+        });
+
+        const data = await response.json();
+
+        if (data.type === "done") {
+          setExportState(prev => ({
+            ...prev,
+            status: 'done',
+            progress: 100,
+            downloadUrl: data.url,
+          }));
+        } else if (data.type === "error") {
+          setExportState(prev => ({
+            ...prev,
+            status: 'error',
+            error: data.message,
+          }));
+        } else if (data.type === "progress") {
+          // Switch from converting to rendering once we pass 5%
+          const newStatus = exportState.status === 'converting' && data.progress > 5 ? 'rendering' : exportState.status;
+          setExportState(prev => ({
+            ...prev,
+            status: newStatus,
+            progress: data.progress,
+          }));
+        }
+      } catch (error) {
+        console.error("Error polling progress:", error);
+      }
+    };
+
+    const interval = setInterval(pollProgress, 1000);
+    return () => clearInterval(interval);
+  }, [exportState.status, exportState.renderId]);
+
+  // Handle export download
+  const handleExportDownload = useCallback(() => {
+    if (exportState.downloadUrl) {
+      if (exportState.downloadUrl.startsWith('http')) {
+        window.open(exportState.downloadUrl, '_blank');
+      } else {
+        window.location.href = `/api/render/download/${exportState.renderId}`;
+      }
+    }
+  }, [exportState.downloadUrl, exportState.renderId]);
+
+  // Dismiss export notification
+  const dismissExport = useCallback(() => {
+    setExportState({ status: 'idle', progress: 0, renderId: null, downloadUrl: null, error: null });
+  }, []);
+
   // Save project name
   const handleSaveProjectName = useCallback(async (newName: string) => {
     const trimmedName = newName.trim() || "Untitled Project";
@@ -385,6 +616,7 @@ function HomeContent() {
         file,
         url,
         duration,
+        blobReady: true, // Local file upload has blob immediately
       };
 
       setClips(prev => [...prev, newClip]);
@@ -414,7 +646,7 @@ function HomeContent() {
       files.map(async (file) => {
         const url = URL.createObjectURL(file);
         const duration = await getVideoDuration(url);
-        return { file, url, duration };
+        return { file, url, duration, blobReady: true };
       })
     );
 
@@ -521,10 +753,16 @@ function HomeContent() {
         />
         <div className="min-h-screen flex flex-col bg-[var(--background)] md:pl-[72px] pb-24 md:pb-0">
           <header className="flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[var(--border-subtle)]">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight text-white">
-                Snip
-              </h1>
+            <div className="flex items-center gap-2">
+              {/* Film strip S logo */}
+              <Image
+                src="/branding/snip-logo-white.svg"
+                alt="Snip"
+                width={100}
+                height={30}
+                className="h-7 w-auto"
+                priority
+              />
             </div>
           </header>
           <main className="flex-1 p-4 sm:p-6">
@@ -580,6 +818,24 @@ function HomeContent() {
               <p className="text-white font-medium text-lg">Loading project</p>
               <p className="text-[#8E8E93] text-sm">Fetching your clips...</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Background clip download progress indicator */}
+      {clipDownloadProgress.downloading && (
+        <div className="fixed bottom-4 right-4 bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg p-3 shadow-lg z-50">
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm text-[#8E8E93]">
+              Preparing clips... {clipDownloadProgress.completed}/{clipDownloadProgress.total}
+            </span>
+          </div>
+          <div className="mt-2 h-1 bg-[#2A2A2A] rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[#4A8FE7] transition-all duration-300"
+              style={{ width: `${(clipDownloadProgress.completed / clipDownloadProgress.total) * 100}%` }}
+            />
           </div>
         </div>
       )}
@@ -720,10 +976,13 @@ function HomeContent() {
                 )}
               </button>
               <button
-                onClick={() => setStep("export")}
-                className="text-sm px-6 py-2.5 rounded-full bg-[#4A8FE7]/90 backdrop-blur-xl text-white font-medium border border-[#4A8FE7]/50 shadow-lg shadow-[#4A8FE7]/25 hover:bg-[#4A8FE7] hover:shadow-[#4A8FE7]/40 transition-all duration-300"
+                onClick={startBackgroundExport}
+                disabled={exportState.status !== 'idle' && exportState.status !== 'done' && exportState.status !== 'error'}
+                className="text-sm px-6 py-2.5 rounded-full bg-[#4A8FE7]/90 backdrop-blur-xl text-white font-medium border border-[#4A8FE7]/50 shadow-lg shadow-[#4A8FE7]/25 hover:bg-[#4A8FE7] hover:shadow-[#4A8FE7]/40 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Export
+                {exportState.status !== 'idle' && exportState.status !== 'done' && exportState.status !== 'error'
+                  ? 'Exporting...'
+                  : 'Export'}
               </button>
             </div>
           )}
@@ -748,20 +1007,141 @@ function HomeContent() {
               setAutoCutEnabled={setAutoCutEnabled}
             />
           )}
-          {step === "export" && (
-            <ExportStep
-              clips={clips}
-              segments={allSegments}
-              deletedSegmentIndices={Array.from(deletedSegments)}
-              words={allWords}
-              deletedWordIds={Array.from(deletedWordIds)}
-              deletedPauseIds={Array.from(deletedPauseIds)}
-              onBack={() => setStep("edit")}
-            />
-          )}
         </main>
+
+        {/* Floating Export Progress Indicator */}
+        {exportState.status !== 'idle' && (
+          <ExportProgressIndicator
+            status={exportState.status}
+            progress={exportState.progress}
+            error={exportState.error}
+            onDownload={handleExportDownload}
+            onDismiss={dismissExport}
+            onRetry={startBackgroundExport}
+          />
+        )}
       </div>
     </MediaLibraryProvider>
+  );
+}
+
+// Floating Export Progress Indicator Component
+function ExportProgressIndicator({
+  status,
+  progress,
+  error,
+  onDownload,
+  onDismiss,
+  onRetry,
+}: {
+  status: 'idle' | 'preparing' | 'converting' | 'rendering' | 'done' | 'error';
+  progress: number;
+  error: string | null;
+  onDownload: () => void;
+  onDismiss: () => void;
+  onRetry: () => void;
+}) {
+  const getStatusText = () => {
+    switch (status) {
+      case 'preparing': return 'Preparing export...';
+      case 'converting': return 'Converting video formats...';
+      case 'rendering': return `Rendering video (${Math.round(progress)}%)`;
+      case 'done': return 'Export complete!';
+      case 'error': return 'Export failed';
+      default: return '';
+    }
+  };
+
+  const getStatusIcon = () => {
+    if (status === 'done') {
+      return (
+        <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+      );
+    }
+    if (status === 'error') {
+      return (
+        <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </div>
+      );
+    }
+    return (
+      <div className="w-10 h-10 rounded-full bg-[#4A8FE7]/20 flex items-center justify-center">
+        <div className="w-5 h-5 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  };
+
+  return (
+    <div className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-[60] animate-slide-up">
+      <div className="bg-[#1C1C1E]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 p-4 min-w-[300px] max-w-[360px]">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-3">
+          {getStatusIcon()}
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-medium text-sm truncate">{getStatusText()}</p>
+            {status === 'error' && error && (
+              <p className="text-red-400 text-xs truncate">{error}</p>
+            )}
+          </div>
+          <button
+            onClick={onDismiss}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Progress bar (only during conversion/rendering) */}
+        {(status === 'preparing' || status === 'converting' || status === 'rendering') && (
+          <div className="mb-3">
+            <div className="w-full h-2 bg-[#2C2C2E] rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${
+                  status === 'converting'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500'
+                    : 'bg-gradient-to-r from-[#4A8FE7] to-[#5F7BFD]'
+                }`}
+                style={{ width: `${Math.max(status === 'preparing' ? 5 : progress, 2)}%` }}
+              />
+            </div>
+            <p className="text-[#636366] text-[10px] mt-1.5 text-center">
+              {status === 'preparing'
+                ? 'Processing clips...'
+                : status === 'converting'
+                  ? 'Converting MOV/HEVC to MP4...'
+                  : 'This may take a few minutes'}
+            </p>
+          </div>
+        )}
+
+        {/* Actions */}
+        {status === 'done' && (
+          <button
+            onClick={onDownload}
+            className="w-full py-2.5 rounded-xl bg-[#4A8FE7] text-white text-sm font-medium hover:bg-[#3A7FD7] transition-colors"
+          >
+            Download Video
+          </button>
+        )}
+        {status === 'error' && (
+          <button
+            onClick={onRetry}
+            className="w-full py-2.5 rounded-xl bg-[#4A8FE7] text-white text-sm font-medium hover:bg-[#3A7FD7] transition-colors"
+          >
+            Try Again
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1232,7 +1612,7 @@ function EditStep({
           start: clipStartTime,
           end: clipStartTime + clip.duration,
           type: TrackItemType.VIDEO,
-          label: clip.file.name.slice(0, 15),
+          label: (clip.file?.name || `Clip ${i + 1}`).slice(0, 15),
           data: { clipIndex: i, url: clip.url },
         };
       }),
@@ -1373,6 +1753,9 @@ function EditStep({
   // Handle timeline frame change (seek)
   const handleTimelineFrameChange = useCallback((frame: number) => {
     const newTime = frame / 30; // fps = 30
+
+    // Immediately update state for smooth playhead (don't wait for timeupdate)
+    setCurrentTime(newTime);
 
     // Find which clip this time falls into
     let accumulatedTime = 0;
@@ -1635,6 +2018,12 @@ function EditStep({
     for (let i = 0; i < clips.length; i++) {
       const clip = clips[i];
       setTranscribeProgress(((i) / clips.length) * 100);
+
+      // Skip clips that don't have blobs downloaded yet
+      if (!clip.file) {
+        console.warn(`Skipping clip ${i} - blob not yet downloaded`);
+        continue;
+      }
 
       try {
         const formData = new FormData();
@@ -2077,398 +2466,6 @@ function EditStep({
   );
 }
 
-function ExportStep({
-  clips,
-  segments,
-  deletedSegmentIndices,
-  words,
-  deletedWordIds,
-  deletedPauseIds,
-  onBack,
-}: {
-  clips: VideoClip[];
-  segments: TranscriptSegment[];
-  deletedSegmentIndices: number[];
-  words: TranscriptWord[];
-  deletedWordIds: string[];
-  deletedPauseIds: string[];
-  onBack: () => void;
-}) {
-  const { state: overlayState } = useOverlay();
-  const { user } = useUser();
-  const [selectedTemplate, setSelectedTemplate] = useState<CaptionTemplate>(captionTemplates[0]);
-  const [renderState, setRenderState] = useState<"idle" | "converting" | "rendering" | "done" | "error">("idle");
-  const [renderProgress, setRenderProgress] = useState(0);
-  const [renderId, setRenderId] = useState<string | null>(null);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // Check if any clips need conversion (MOV/HEVC formats)
-  const clipsNeedingConversion = useMemo(() => {
-    return clips.filter(clip => {
-      const filename = clip.file.name.toLowerCase();
-      const type = clip.file.type;
-      return filename.endsWith('.mov') ||
-             filename.endsWith('.hevc') ||
-             type === 'video/quicktime';
-    });
-  }, [clips]);
-
-  const needsConversion = clipsNeedingConversion.length > 0;
-
-  // Poll for render progress
-  useEffect(() => {
-    // Poll during both converting and rendering states
-    if ((renderState !== "rendering" && renderState !== "converting") || !renderId) return;
-
-    const isConverting = renderState === "converting";
-
-    const pollProgress = async () => {
-      try {
-        const response = await fetch("/api/render/progress", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ renderId }),
-        });
-
-        const data = await response.json();
-
-        if (data.type === "done") {
-          setRenderState("done");
-          setRenderProgress(100);
-          setDownloadUrl(data.url);
-        } else if (data.type === "error") {
-          setRenderState("error");
-          setErrorMessage(data.message);
-        } else if (data.type === "progress") {
-          // Switch from converting to rendering once we pass the conversion phase (progress > 5%)
-          if (isConverting && data.progress > 5) {
-            setRenderState("rendering");
-          }
-          setRenderProgress(data.progress);
-        }
-      } catch (error) {
-        console.error("Error polling progress:", error);
-      }
-    };
-
-    const interval = setInterval(pollProgress, 1000);
-    return () => clearInterval(interval);
-  }, [renderState, renderId]);
-
-  const handleExport = async () => {
-    // Show converting state if needed
-    if (needsConversion) {
-      setRenderState("converting");
-    } else {
-      setRenderState("rendering");
-    }
-    setRenderProgress(0);
-    setErrorMessage(null);
-
-    try {
-      // Convert clips to base64 for sending to API
-      const clipData = await Promise.all(
-        clips.map(async (clip) => {
-          const arrayBuffer = await clip.file.arrayBuffer();
-          // Browser-compatible base64 encoding
-          const bytes = new Uint8Array(arrayBuffer);
-          let binary = "";
-          for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
-          }
-          const base64 = btoa(binary);
-          return {
-            data: base64,
-            filename: clip.file.name,
-            duration: clip.duration,
-          };
-        })
-      );
-
-      const response = await fetch("/api/render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clips: clipData,
-          segments,
-          deletedSegmentIndices,
-          words,  // Word-level timestamps for accurate captions
-          deletedWordIds,  // Word-level deletions
-          deletedPauseIds,  // Pause deletions (jump cuts)
-          captionTemplateId: selectedTemplate.id,
-          width: 1080,
-          height: 1920,
-          fps: 30,
-          // Include overlay state
-          filterId: overlayState.filterId,
-          textOverlays: overlayState.textOverlays,
-          stickers: overlayState.stickers,
-          captionPositionY: overlayState.captionPositionY,
-          clipTransitions: overlayState.clipTransitions,
-          // Include userId for Supabase storage
-          userId: user?.id,
-          // Request conversion for MOV/HEVC files
-          convertIfNeeded: needsConversion,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setRenderId(data.renderId);
-      } else {
-        setRenderState("error");
-        setErrorMessage(data.error || "Failed to start render");
-      }
-    } catch (error) {
-      setRenderState("error");
-      setErrorMessage(error instanceof Error ? error.message : "Failed to start render");
-    }
-  };
-
-  const handleDownload = () => {
-    if (downloadUrl) {
-      // If downloadUrl is a Supabase signed URL (starts with http), open directly
-      // Otherwise use the local download API
-      if (downloadUrl.startsWith('http')) {
-        window.open(downloadUrl, '_blank');
-      } else {
-        window.location.href = `/api/render/download/${renderId}`;
-      }
-    }
-  };
-
-  // Overlay summary for export
-  const overlayCount = overlayState.textOverlays.length + overlayState.stickers.length +
-    (overlayState.filterId && overlayState.filterId !== 'none' ? 1 : 0);
-
-  // Done state
-  if (renderState === "done") {
-    return (
-      <div className="text-center px-4 animate-fade-in">
-        <div className="w-20 h-20 rounded-full bg-emerald-500/15 flex items-center justify-center mx-auto mb-6">
-          <svg
-            className="w-10 h-10 text-emerald-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5 13l4 4L19 7"
-            />
-          </svg>
-        </div>
-        <h2 className="text-3xl font-semibold mb-3 tracking-tight">Export complete</h2>
-        <p className="text-[#8E8E93] mb-8 text-base">Your video is ready to download</p>
-        <button onClick={handleDownload} className="btn-primary px-8 py-3">
-          Download Video
-        </button>
-      </div>
-    );
-  }
-
-  // Error state
-  if (renderState === "error") {
-    return (
-      <div className="text-center px-4 animate-fade-in">
-        <div className="w-20 h-20 rounded-full bg-red-500/15 flex items-center justify-center mx-auto mb-6">
-          <svg
-            className="w-10 h-10 text-red-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </div>
-        <h2 className="text-3xl font-semibold mb-3 tracking-tight">Export failed</h2>
-        <p className="text-[#8E8E93] mb-8 text-base">{errorMessage || "An error occurred"}</p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <button onClick={onBack} className="btn-secondary">
-            Back to edit
-          </button>
-          <button onClick={() => setRenderState("idle")} className="btn-primary">
-            Try again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Converting state (for MOV/HEVC files)
-  if (renderState === "converting") {
-    return (
-      <div className="text-center px-4 max-w-md mx-auto animate-fade-in">
-        <div className="w-20 h-20 rounded-full bg-amber-500/15 flex items-center justify-center mx-auto mb-6">
-          <div className="w-10 h-10 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-        <h2 className="text-3xl font-semibold mb-3 tracking-tight">Converting video</h2>
-        <p className="text-[#8E8E93] mb-8 text-base">
-          Converting MOV/HEVC to MP4 for rendering...
-        </p>
-        <div className="w-full h-2 bg-[#181818] rounded-full overflow-hidden mb-3">
-          <div
-            className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-300"
-            style={{ width: `${Math.min(renderProgress * 2, 100)}%` }}
-          />
-        </div>
-        <p className="text-[#45454F] text-sm">This ensures compatibility with the renderer</p>
-      </div>
-    );
-  }
-
-  // Rendering state
-  if (renderState === "rendering") {
-    return (
-      <div className="text-center px-4 max-w-md mx-auto animate-fade-in">
-        <div className="w-20 h-20 rounded-full bg-[#4A8FE7]/15 flex items-center justify-center mx-auto mb-6">
-          <div className="w-10 h-10 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin" />
-        </div>
-        <h2 className="text-3xl font-semibold mb-3 tracking-tight">Rendering video</h2>
-        <p className="text-[#8E8E93] mb-8 text-base">
-          {renderProgress < 15
-            ? "Preparing composition..."
-            : `Rendering frames (${Math.round(renderProgress)}%)`}
-        </p>
-        <div className="w-full h-2 bg-[#181818] rounded-full overflow-hidden mb-3">
-          <div
-            className="h-full bg-gradient-to-r from-[#4A8FE7] to-[#5F7BFD] rounded-full transition-all duration-300 progress-glow"
-            style={{ width: `${renderProgress}%` }}
-          />
-        </div>
-        <p className="text-[#45454F] text-sm">This may take a few minutes</p>
-      </div>
-    );
-  }
-
-  // Idle state - show template picker
-  return (
-    <div className="text-center px-4 max-w-2xl mx-auto animate-fade-in">
-      <p className="label mb-5">Export</p>
-      <h2 className="text-3xl font-semibold mb-3 tracking-tight">Choose caption style</h2>
-      <p className="text-[#8E8E93] mb-10 text-base">
-        Select a style for your burned-in captions
-      </p>
-
-      {/* Caption Template Picker */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-        {captionTemplates.map((template) => (
-          <button
-            key={template.id}
-            onClick={() => setSelectedTemplate(template)}
-            className={`card p-4 text-left transition-all duration-300 ${
-              selectedTemplate.id === template.id
-                ? "ring-2 ring-[#4A8FE7] ring-offset-2 ring-offset-[var(--background)] scale-[1.02]"
-                : "hover:bg-[#242430] hover:scale-[1.01]"
-            }`}
-          >
-            <div
-              className="h-14 rounded-xl mb-3 flex items-center justify-center text-base font-semibold"
-              style={{
-                backgroundColor: template.styles.highlightStyle?.backgroundColor || "#3B82F6",
-                color: template.styles.highlightStyle?.color || "#FFF",
-                fontFamily: template.styles.fontFamily,
-                textShadow: template.styles.textShadow,
-              }}
-            >
-              Aa
-            </div>
-            <p className="font-medium text-sm mb-0.5">{template.name}</p>
-            <p className="text-[#636366] text-xs">{template.preview}</p>
-          </button>
-        ))}
-      </div>
-
-      {/* MOV/HEVC conversion notice */}
-      {needsConversion && (
-        <div className="card p-4 mb-6 text-left border border-amber-500/30 bg-amber-500/5">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-amber-500/15 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-amber-500 font-medium text-sm mb-1">Format conversion required</p>
-              <p className="text-[#8E8E93] text-xs leading-relaxed">
-                {clipsNeedingConversion.length} clip{clipsNeedingConversion.length > 1 ? 's' : ''} (MOV/HEVC) will be converted to MP4 for rendering. This may add extra processing time.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Export summary */}
-      <div className="card p-5 mb-10 text-left">
-        <p className="label mb-3">Summary</p>
-        <div className="flex flex-wrap gap-6 text-sm">
-          <div>
-            <span className="text-[#636366]">Clips:</span>{" "}
-            <span className="text-white font-medium">{clips.length}</span>
-          </div>
-          {words.length > 0 ? (
-            <>
-              <div>
-                <span className="text-[#636366]">Words:</span>{" "}
-                <span className="text-white font-medium">
-                  {words.length - deletedWordIds.length} active
-                </span>
-              </div>
-              {deletedWordIds.length > 0 && (
-                <div>
-                  <span className="text-[#636366]">Removed:</span>{" "}
-                  <span className="text-white font-medium">{deletedWordIds.length} words</span>
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <div>
-                <span className="text-[#636366]">Segments:</span>{" "}
-                <span className="text-white font-medium">
-                  {segments.length - deletedSegmentIndices.length} active
-                </span>
-              </div>
-              <div>
-                <span className="text-[#636366]">Removed:</span>{" "}
-                <span className="text-white font-medium">{deletedSegmentIndices.length}</span>
-              </div>
-            </>
-          )}
-          <div>
-            <span className="text-[#636366]">Style:</span>{" "}
-            <span className="text-white font-medium">{selectedTemplate.name}</span>
-          </div>
-          {overlayCount > 0 && (
-            <div>
-              <span className="text-[#636366]">Overlays:</span>{" "}
-              <span className="text-white font-medium">{overlayCount}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-4 justify-center">
-        <button onClick={onBack} className="btn-secondary">
-          Back to edit
-        </button>
-        <button onClick={handleExport} className="btn-primary px-8">
-          Export video
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // Mobile Video Panel Component
 function MobileVideoPanel({
   activeClip,
@@ -2596,7 +2593,7 @@ function MobileTranscriptPanel({
 }: {
   isTranscribing: boolean;
   transcribeProgress: number;
-  clips: { file: File }[];
+  clips: { file: File | null }[];
   allWords: TranscriptWord[];
   currentTime: number;
   handleWordClick: (word: TranscriptWord) => void;
