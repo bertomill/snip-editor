@@ -101,11 +101,35 @@ export const useTimelineTracks = ({
     });
   }, [onTracksChange]);
 
+  const handleTrackReorder = useCallback((fromIndex: number, toIndex: number) => {
+    setTracks(prevTracks => {
+      // Validate indices
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= prevTracks.length ||
+        toIndex >= prevTracks.length ||
+        fromIndex === toIndex
+      ) {
+        return prevTracks;
+      }
+
+      // Create new array and reorder
+      const newTracks = [...prevTracks];
+      const [movedTrack] = newTracks.splice(fromIndex, 1);
+      newTracks.splice(toIndex, 0, movedTrack);
+
+      onTracksChange?.(newTracks);
+      return newTracks;
+    });
+  }, [onTracksChange]);
+
   return {
     tracks,
     setTracks,
     handleItemMove,
     handleItemResize,
     handleItemsDelete,
+    handleTrackReorder,
   };
 };

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { TIMELINE_CONSTANTS } from '../constants';
 import { formatTime } from '../utils';
 
@@ -11,6 +11,7 @@ interface TimelineMarkersProps {
   fps: number;
   zoomScale: number;
   onFrameChange?: (frame: number) => void;
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
@@ -20,11 +21,51 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
   fps,
   zoomScale,
   onFrameChange,
+  scrollContainerRef,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const autoScrollRef = useRef<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const currentTimeInSeconds = currentFrame / fps;
   const playheadPosition = (currentTimeInSeconds / viewportDuration) * 100;
+
+  // Auto-scroll helpers
+  const startAutoScroll = useCallback((direction: 'left' | 'right') => {
+    const scrollContainer = scrollContainerRef?.current;
+    if (!scrollContainer) return;
+
+    const scroll = () => {
+      const scrollSpeed = 8;
+      if (direction === 'left') {
+        scrollContainer.scrollLeft = Math.max(0, scrollContainer.scrollLeft - scrollSpeed);
+      } else {
+        scrollContainer.scrollLeft = scrollContainer.scrollLeft + scrollSpeed;
+      }
+      autoScrollRef.current = requestAnimationFrame(scroll);
+    };
+
+    if (autoScrollRef.current) {
+      cancelAnimationFrame(autoScrollRef.current);
+    }
+    autoScrollRef.current = requestAnimationFrame(scroll);
+  }, [scrollContainerRef]);
+
+  const stopAutoScroll = useCallback(() => {
+    if (autoScrollRef.current) {
+      cancelAnimationFrame(autoScrollRef.current);
+      autoScrollRef.current = null;
+    }
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (autoScrollRef.current) {
+        cancelAnimationFrame(autoScrollRef.current);
+      }
+    };
+  }, []);
 
   // Calculate marker intervals based on zoom
   const getMarkerInterval = () => {
@@ -75,17 +116,28 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
       const dragTime = dragPercentage * viewportDuration;
       const dragFrame = Math.round(dragTime * fps);
       onFrameChange(dragFrame);
+
+      // Auto-scroll near edges
+      const edgeThreshold = 50;
+      if (x < edgeThreshold) {
+        startAutoScroll('left');
+      } else if (x > rect.width - edgeThreshold) {
+        startAutoScroll('right');
+      } else {
+        stopAutoScroll();
+      }
     };
 
     const handleMouseUp = () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
       setIsDragging(false);
+      stopAutoScroll();
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [viewportDuration, fps, onFrameChange]);
+  }, [viewportDuration, fps, onFrameChange, startAutoScroll, stopAutoScroll]);
 
   // Touch support for mobile
   const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
@@ -124,17 +176,28 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
       const dragTime = dragPercentage * viewportDuration;
       const dragFrame = Math.round(dragTime * fps);
       onFrameChange(dragFrame);
+
+      // Auto-scroll near edges
+      const edgeThreshold = 50;
+      if (x < edgeThreshold) {
+        startAutoScroll('left');
+      } else if (x > rect.width - edgeThreshold) {
+        startAutoScroll('right');
+      } else {
+        stopAutoScroll();
+      }
     };
 
     const handleTouchEnd = () => {
       document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('touchend', handleTouchEnd);
       setIsDragging(false);
+      stopAutoScroll();
     };
 
     document.addEventListener('touchmove', handleTouchMove, { passive: false });
     document.addEventListener('touchend', handleTouchEnd);
-  }, [viewportDuration, fps, onFrameChange]);
+  }, [viewportDuration, fps, onFrameChange, startAutoScroll, stopAutoScroll]);
 
   return (
     <div
@@ -162,10 +225,21 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
 
       {/* Playhead - draggable handle */}
       <div
-        className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10 pointer-events-none"
-        style={{ left: `${playheadPosition}%` }}
+        className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10"
+        style={{ left: `${playheadPosition}%`, pointerEvents: 'none' }}
       >
-        <div className="absolute -top-0 -translate-x-1/2 w-3 h-4 bg-red-500 rounded-sm cursor-grab" />
+        <div
+          className={`absolute -top-0 -translate-x-1/2 w-4 h-5 bg-red-500 rounded-sm hover:bg-red-400 transition-colors ${isDragging ? 'cursor-grabbing scale-110' : 'cursor-grab'}`}
+          style={{ pointerEvents: 'auto' }}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            handleMouseDown(e as unknown as React.MouseEvent<HTMLDivElement>);
+          }}
+          onTouchStart={(e) => {
+            e.stopPropagation();
+            handleTouchStart(e as unknown as React.TouchEvent<HTMLDivElement>);
+          }}
+        />
       </div>
     </div>
   );

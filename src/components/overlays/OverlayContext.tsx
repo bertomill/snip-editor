@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { OverlayState, OverlayAction, TextOverlay, StickerOverlay, AudioSettings, defaultAudioSettings } from '@/types/overlays';
+import { OverlayState, OverlayAction, TextOverlay, StickerOverlay, ClipTransition, AudioSettings, defaultAudioSettings } from '@/types/overlays';
 
 const initialState: OverlayState = {
   textOverlays: [],
@@ -10,6 +10,7 @@ const initialState: OverlayState = {
   showCaptionPreview: true,
   captionPositionY: 75, // Default near bottom (75% from top)
   audioSettings: defaultAudioSettings,
+  clipTransitions: [],
 };
 
 function overlayReducer(state: OverlayState, action: OverlayAction): OverlayState {
@@ -87,6 +88,37 @@ function overlayReducer(state: OverlayState, action: OverlayAction): OverlayStat
         audioSettings: { ...state.audioSettings, ...action.payload },
       };
 
+    case 'ADD_TRANSITION':
+      return {
+        ...state,
+        clipTransitions: [...state.clipTransitions, action.payload],
+      };
+
+    case 'UPDATE_TRANSITION':
+      return {
+        ...state,
+        clipTransitions: state.clipTransitions.map((t) =>
+          t.id === action.payload.id
+            ? { ...t, ...action.payload.updates }
+            : t
+        ),
+      };
+
+    case 'REMOVE_TRANSITION':
+      return {
+        ...state,
+        clipTransitions: state.clipTransitions.filter((t) => t.id !== action.payload),
+      };
+
+    case 'SET_TRANSITIONS':
+      return {
+        ...state,
+        clipTransitions: action.payload,
+      };
+
+    case 'SET_STATE':
+      return { ...state, ...action.payload };
+
     default:
       return state;
   }
@@ -105,6 +137,11 @@ interface OverlayContextValue {
   toggleCaptionPreview: () => void;
   setCaptionPosition: (positionY: number) => void;
   setAudioSettings: (settings: Partial<AudioSettings>) => void;
+  addTransition: (transition: ClipTransition) => void;
+  updateTransition: (id: string, updates: Partial<ClipTransition>) => void;
+  removeTransition: (id: string) => void;
+  setTransitions: (transitions: ClipTransition[]) => void;
+  loadState: (state: Partial<OverlayState>) => void;
   resetOverlays: () => void;
 }
 
@@ -126,6 +163,11 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
     toggleCaptionPreview: () => dispatch({ type: 'TOGGLE_CAPTION_PREVIEW' }),
     setCaptionPosition: (positionY) => dispatch({ type: 'SET_CAPTION_POSITION', payload: positionY }),
     setAudioSettings: (settings) => dispatch({ type: 'SET_AUDIO_SETTINGS', payload: settings }),
+    addTransition: (transition) => dispatch({ type: 'ADD_TRANSITION', payload: transition }),
+    updateTransition: (id, updates) => dispatch({ type: 'UPDATE_TRANSITION', payload: { id, updates } }),
+    removeTransition: (id) => dispatch({ type: 'REMOVE_TRANSITION', payload: id }),
+    setTransitions: (transitions) => dispatch({ type: 'SET_TRANSITIONS', payload: transitions }),
+    loadState: (newState) => dispatch({ type: 'SET_STATE', payload: newState }),
     resetOverlays: () => dispatch({ type: 'RESET_OVERLAYS' }),
   };
 

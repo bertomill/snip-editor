@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useCallback, useRef, useEffect } from 'react';
 import { TimelineTrack as TimelineTrackType, TimelineItem as TimelineItemType } from '../types';
 import { TIMELINE_CONSTANTS } from '../constants';
 import { getTimelineContentStyles } from '../utils';
@@ -44,6 +44,9 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
   onDragEnd,
 }) => {
   const { ghostElement, isValidDrop, isDragging } = useTimelineStore();
+  const isScrubbing = useRef(false);
+  const autoScrollRef = useRef<number | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentTimeInSeconds = currentFrame / fps;
   const playheadPosition = (currentTimeInSeconds / viewportDuration) * 100;
@@ -55,6 +58,101 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
 
   const contentStyles = getTimelineContentStyles(zoomScale);
 
+  // Auto-scroll when scrubbing near edges
+  const startAutoScroll = useCallback((direction: 'left' | 'right') => {
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer) return;
+
+    const scroll = () => {
+      const scrollSpeed = 8;
+      if (direction === 'left') {
+        scrollContainer.scrollLeft = Math.max(0, scrollContainer.scrollLeft - scrollSpeed);
+      } else {
+        scrollContainer.scrollLeft = scrollContainer.scrollLeft + scrollSpeed;
+      }
+      autoScrollRef.current = requestAnimationFrame(scroll);
+    };
+
+    if (autoScrollRef.current) {
+      cancelAnimationFrame(autoScrollRef.current);
+    }
+    autoScrollRef.current = requestAnimationFrame(scroll);
+  }, []);
+
+  const stopAutoScroll = useCallback(() => {
+    if (autoScrollRef.current) {
+      cancelAnimationFrame(autoScrollRef.current);
+      autoScrollRef.current = null;
+    }
+  }, []);
+
+  // Handle click-to-seek on tracks area
+  const handleTracksMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Don't interfere with item interactions
+    if ((e.target as HTMLElement).closest('.timeline-item')) return;
+    if (!onFrameChange) return;
+
+    e.preventDefault();
+    isScrubbing.current = true;
+
+    const container = e.currentTarget;
+    const rect = container.getBoundingClientRect();
+    const scrollContainer = scrollContainerRef.current;
+    const scrollLeft = scrollContainer?.scrollLeft || 0;
+
+    // Calculate position accounting for scroll
+    const clickX = e.clientX - rect.left + scrollLeft;
+    const totalWidth = container.scrollWidth;
+    const percentage = Math.max(0, Math.min(1, clickX / totalWidth));
+    const newTime = percentage * viewportDuration;
+    const newFrame = Math.round(newTime * fps);
+    onFrameChange(newFrame);
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isScrubbing.current) return;
+
+      const currentScrollLeft = scrollContainer?.scrollLeft || 0;
+      const x = moveEvent.clientX - rect.left + currentScrollLeft;
+      const dragPercentage = Math.max(0, Math.min(1, x / totalWidth));
+      const dragTime = dragPercentage * viewportDuration;
+      const dragFrame = Math.round(dragTime * fps);
+      onFrameChange(dragFrame);
+
+      // Auto-scroll near edges
+      const edgeThreshold = 50;
+      const containerRect = scrollContainer?.getBoundingClientRect();
+      if (containerRect) {
+        const relativeX = moveEvent.clientX - containerRect.left;
+        if (relativeX < edgeThreshold) {
+          startAutoScroll('left');
+        } else if (relativeX > containerRect.width - edgeThreshold) {
+          startAutoScroll('right');
+        } else {
+          stopAutoScroll();
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      isScrubbing.current = false;
+      stopAutoScroll();
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [viewportDuration, fps, onFrameChange, startAutoScroll, stopAutoScroll]);
+
+  // Cleanup auto-scroll on unmount
+  useEffect(() => {
+    return () => {
+      if (autoScrollRef.current) {
+        cancelAnimationFrame(autoScrollRef.current);
+      }
+    };
+  }, []);
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       {/* Markers */}
@@ -65,16 +163,24 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
         fps={fps}
         zoomScale={zoomScale}
         onFrameChange={onFrameChange}
+        scrollContainerRef={scrollContainerRef}
       />
 
       {/* Tracks container with scroll */}
       <div
-        ref={timelineRef}
-        className="timeline-tracks-scroll-container flex-1 overflow-x-auto overflow-y-auto relative"
+        ref={(el) => {
+          // Assign to both refs
+          (scrollContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+          if (typeof timelineRef === 'object' && timelineRef !== null) {
+            (timelineRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+          }
+        }}
+        className={`timeline-tracks-scroll-container flex-1 overflow-x-auto overflow-y-auto relative ${isScrubbing.current ? 'cursor-grabbing' : ''}`}
       >
         <div
-          className="relative"
+          className="relative cursor-pointer"
           style={contentStyles}
+          onMouseDown={handleTracksMouseDown}
         >
           {/* Tracks */}
           {tracks.map((track) => (

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { startRendering, saveVideoToTemp, convertVideoToMp4 } from "@/lib/renderer/remotion-renderer";
 import { transcriptToCaption, wordsToCaption, SnipCompositionProps, TranscriptSegment, TranscriptWord } from "@/lib/types/composition";
 import { getCaptionTemplate, getDefaultCaptionTemplate } from "@/lib/caption-templates";
-import { TextOverlay, StickerOverlay } from "@/types/overlays";
+import { TextOverlay, StickerOverlay, ClipTransition } from "@/types/overlays";
 import { uploadTempVideo } from "@/lib/supabase/storage-server";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
@@ -25,6 +25,7 @@ interface RenderRequestBody {
   // Word-level editing
   words?: TranscriptWord[];
   deletedWordIds?: string[];
+  deletedPauseIds?: string[];  // Pause deletions (jump cuts)
   captionTemplateId: string;
   width?: number;
   height?: number;
@@ -35,6 +36,8 @@ interface RenderRequestBody {
   stickers?: StickerOverlay[];
   // Caption position (percentage from top)
   captionPositionY?: number;
+  // Clip transitions
+  clipTransitions?: ClipTransition[];
   // User ID for Supabase storage
   userId?: string;
   // Convert MOV/HEVC files to MP4 before rendering
@@ -63,6 +66,63 @@ function clipHasDeletedWords(
   deletedWordIds: Set<string>
 ): boolean {
   return words.some((w) => w.clipIndex === clipIndex && deletedWordIds.has(w.id));
+}
+
+/**
+ * Calculate deleted pause ranges for a specific clip based on deleted pause IDs
+ * Pause IDs follow the format: "pause-after-{wordId}"
+ */
+function getDeletedPauseRangesForClip(
+  clipIndex: number,
+  words: TranscriptWord[],
+  deletedPauseIds: Set<string>,
+  pauseThreshold: number = 0.3
+): TimeSegment[] {
+  const ranges: TimeSegment[] = [];
+
+  for (let i = 0; i < words.length - 1; i++) {
+    const word = words[i];
+    const nextWord = words[i + 1];
+
+    // Only consider pauses within the same clip
+    if (word.clipIndex !== clipIndex) continue;
+
+    const gap = nextWord.start - word.end;
+    if (gap >= pauseThreshold) {
+      const pauseId = `pause-after-${word.id}`;
+      if (deletedPauseIds.has(pauseId)) {
+        ranges.push({ start: word.end, end: nextWord.start });
+      }
+    }
+  }
+
+  return ranges;
+}
+
+/**
+ * Check if any pauses from a clip were deleted
+ */
+function clipHasDeletedPauses(
+  clipIndex: number,
+  words: TranscriptWord[],
+  deletedPauseIds: Set<string>,
+  pauseThreshold: number = 0.3
+): boolean {
+  for (let i = 0; i < words.length - 1; i++) {
+    const word = words[i];
+    const nextWord = words[i + 1];
+
+    if (word.clipIndex !== clipIndex) continue;
+
+    const gap = nextWord.start - word.end;
+    if (gap >= pauseThreshold) {
+      const pauseId = `pause-after-${word.id}`;
+      if (deletedPauseIds.has(pauseId)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 
@@ -106,8 +166,9 @@ export async function POST(request: NextRequest) {
     const clipInputs: SnipCompositionProps["clips"] = [];
     let currentTimeMs = 0;
 
-    // Prepare deleted word tracking for video cutting
+    // Prepare deleted word and pause tracking for video cutting
     const deletedWordIds = new Set(body.deletedWordIds || []);
+    const deletedPauseIds = new Set(body.deletedPauseIds || []);
     const words = body.words || [];
 
     // Track deleted ranges per clip for timestamp adjustment later
@@ -134,10 +195,24 @@ export async function POST(request: NextRequest) {
         console.log(`✅ Converted to ${filename}`);
       }
 
-      // Cut video segments for deleted words
-      if (words.length > 0 && clipHasDeletedWords(i, words, deletedWordIds)) {
-        const deletedRanges = getDeletedRangesForClip(i, words, deletedWordIds);
-        const mergedDeleted = mergeTimeRanges(deletedRanges);
+      // Cut video segments for deleted words and pauses
+      const hasDeletedWords = words.length > 0 && clipHasDeletedWords(i, words, deletedWordIds);
+      const hasDeletedPauses = words.length > 0 && clipHasDeletedPauses(i, words, deletedPauseIds);
+
+      if (hasDeletedWords || hasDeletedPauses) {
+        // Get deleted ranges from words
+        const wordRanges = hasDeletedWords
+          ? getDeletedRangesForClip(i, words, deletedWordIds)
+          : [];
+
+        // Get deleted ranges from pauses (jump cuts)
+        const pauseRanges = hasDeletedPauses
+          ? getDeletedPauseRangesForClip(i, words, deletedPauseIds)
+          : [];
+
+        // Merge all deleted ranges
+        const allDeletedRanges = [...wordRanges, ...pauseRanges];
+        const mergedDeleted = mergeTimeRanges(allDeletedRanges);
         deletedRangesByClip.set(i, mergedDeleted);
 
         const keepSegments = invertTimeRanges(mergedDeleted, clip.duration);
@@ -148,7 +223,7 @@ export async function POST(request: NextRequest) {
         }
 
         const totalCutDuration = mergedDeleted.reduce((acc, r) => acc + (r.end - r.start), 0);
-        console.log(`✂️ Cutting clip ${i}: removing ${totalCutDuration.toFixed(2)}s across ${mergedDeleted.length} ranges`);
+        console.log(`✂️ Cutting clip ${i}: removing ${totalCutDuration.toFixed(2)}s across ${mergedDeleted.length} ranges (${wordRanges.length} words, ${pauseRanges.length} pauses)`);
 
         const cutResult = await cutVideoBufferSegments(buffer, keepSegments, filename);
         buffer = Buffer.from(cutResult.buffer);
@@ -241,6 +316,8 @@ export async function POST(request: NextRequest) {
       stickers: body.stickers || [],
       // Caption position
       captionPositionY: body.captionPositionY ?? 75,
+      // Clip transitions
+      clipTransitions: body.clipTransitions || [],
     };
 
     // Start the render (pass renderId so it matches the temp folder)

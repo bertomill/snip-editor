@@ -46,7 +46,7 @@ export interface VideoClipInput {
   originalDuration: number;  // Original clip duration in seconds
 }
 
-import { TextOverlay, StickerOverlay } from '@/types/overlays';
+import { TextOverlay, StickerOverlay, ClipTransition } from '@/types/overlays';
 
 export interface SnipCompositionProps {
   clips: VideoClipInput[];
@@ -62,6 +62,8 @@ export interface SnipCompositionProps {
   stickers?: StickerOverlay[];
   // Caption position (percentage from top, 0-100)
   captionPositionY?: number;
+  // Clip transitions
+  clipTransitions?: ClipTransition[];
 }
 
 export interface TranscriptSegment {

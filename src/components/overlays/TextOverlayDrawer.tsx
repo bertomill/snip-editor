@@ -26,8 +26,17 @@ export function TextOverlayDrawer({
   const [content, setContent] = useState('');
   const [templateId, setTemplateId] = useState(textStyleTemplates[0].id);
   const [animationId, setAnimationId] = useState('fade');
-  const [position, setPosition] = useState<'top' | 'center' | 'bottom'>('center');
+  const [positionPreset, setPositionPreset] = useState<'top' | 'center' | 'bottom'>('center');
   const [durationMs, setDurationMs] = useState(3000);
+
+  // Convert preset to x/y coordinates
+  const getPositionFromPreset = (preset: 'top' | 'center' | 'bottom') => {
+    switch (preset) {
+      case 'top': return { x: 50, y: 15 };
+      case 'center': return { x: 50, y: 50 };
+      case 'bottom': return { x: 50, y: 85 };
+    }
+  };
 
   const canAdd = state.textOverlays.length < 5;
 
@@ -39,7 +48,7 @@ export function TextOverlayDrawer({
       content: content.trim(),
       templateId,
       animationId,
-      position,
+      position: getPositionFromPreset(positionPreset),
       startMs: currentTimeMs,
       durationMs,
     };
@@ -146,14 +155,14 @@ export function TextOverlayDrawer({
 
         {/* Position Picker */}
         <div className="mb-5">
-          <label className="block text-xs text-[#8E8E93] mb-2">Position</label>
+          <label className="block text-xs text-[#8E8E93] mb-2">Initial Position (drag to adjust in preview)</label>
           <div className="flex gap-2">
             {(['top', 'center', 'bottom'] as const).map((pos) => (
               <button
                 key={pos}
-                onClick={() => setPosition(pos)}
+                onClick={() => setPositionPreset(pos)}
                 className={`flex-1 py-2 rounded-xl text-xs capitalize transition-all ${
-                  position === pos
+                  positionPreset === pos
                     ? 'bg-[#4A8FE7] text-white'
                     : 'bg-[#2C2C2E] text-[#8E8E93] hover:bg-[#3C3C3E]'
                 }`}

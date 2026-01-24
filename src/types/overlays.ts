@@ -8,7 +8,7 @@ export interface TextOverlay {
   content: string;
   templateId: string;      // References text-templates
   animationId: string;     // References animation-templates
-  position: 'top' | 'center' | 'bottom';
+  position: { x: number; y: number }; // Percentage (0-100), draggable
   startMs: number;
   durationMs: number;
 }
@@ -61,6 +61,17 @@ export interface StickerTemplate {
   category: 'reactions' | 'emotions' | 'objects' | 'shapes';
 }
 
+// Transition Types for clip boundaries
+export type TransitionType = 'none' | 'zoom-punch' | 'flash' | 'shake' | 'glitch' | 'whip-pan' | 'speed-ramp';
+
+export interface ClipTransition {
+  id: string;
+  type: TransitionType;
+  clipIndex: number;      // Applied after this clip ends
+  durationFrames: number;
+  intensity: number;      // 0.5-2.0 multiplier
+}
+
 // Audio Settings for voice cleanup
 export interface AudioSettings {
   enhanceAudio: boolean;
@@ -85,6 +96,7 @@ export interface OverlayState {
   showCaptionPreview: boolean;
   captionPositionY: number; // Percentage from top (0-100), default ~75 (bottom area)
   audioSettings: AudioSettings;
+  clipTransitions: ClipTransition[];
 }
 
 // Overlay Actions
@@ -99,6 +111,11 @@ export type OverlayAction =
   | { type: 'TOGGLE_CAPTION_PREVIEW' }
   | { type: 'SET_CAPTION_POSITION'; payload: number }
   | { type: 'SET_AUDIO_SETTINGS'; payload: Partial<AudioSettings> }
+  | { type: 'ADD_TRANSITION'; payload: ClipTransition }
+  | { type: 'UPDATE_TRANSITION'; payload: { id: string; updates: Partial<ClipTransition> } }
+  | { type: 'REMOVE_TRANSITION'; payload: string }
+  | { type: 'SET_TRANSITIONS'; payload: ClipTransition[] }
+  | { type: 'SET_STATE'; payload: Partial<OverlayState> }
   | { type: 'RESET_OVERLAYS' };
 
 // Render API extended types
@@ -106,4 +123,5 @@ export interface RenderOverlayParams {
   filterId?: string;
   textOverlays?: TextOverlay[];
   stickers?: StickerOverlay[];
+  clipTransitions?: ClipTransition[];
 }

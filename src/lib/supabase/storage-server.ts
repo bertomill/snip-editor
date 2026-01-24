@@ -125,3 +125,94 @@ export async function uploadRenderedVideo(
 
   return { path: storagePath, signedUrl: signedData.signedUrl }
 }
+
+/**
+ * Upload a source video clip to Supabase storage for project persistence
+ * Returns storage path on success
+ */
+export async function uploadSourceClip(
+  userId: string,
+  projectId: string,
+  filename: string,
+  buffer: Buffer,
+  contentType: string = 'video/mp4'
+): Promise<{ path: string } | null> {
+  const supabase = await createClient()
+
+  const storagePath = `${userId}/sources/${projectId}/${filename}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('videos')
+    .upload(storagePath, buffer, {
+      contentType,
+      upsert: true
+    })
+
+  if (uploadError) {
+    console.error('Supabase source clip upload error:', uploadError)
+    return null
+  }
+
+  return { path: storagePath }
+}
+
+/**
+ * Get a signed URL for a source clip
+ */
+export async function getSignedUrlForClip(
+  storagePath: string,
+  expiresIn: number = 3600
+): Promise<string | null> {
+  const supabase = await createClient()
+
+  const { data: signedData, error: signedError } = await supabase.storage
+    .from('videos')
+    .createSignedUrl(storagePath, expiresIn)
+
+  if (signedError || !signedData?.signedUrl) {
+    console.error('Signed URL error:', signedError)
+    return null
+  }
+
+  return signedData.signedUrl
+}
+
+/**
+ * Delete all source clips for a project
+ */
+export async function deleteProjectClips(
+  userId: string,
+  projectId: string
+): Promise<boolean> {
+  const supabase = await createClient()
+
+  const folderPath = `${userId}/sources/${projectId}`
+
+  // List all files in the folder
+  const { data: files, error: listError } = await supabase.storage
+    .from('videos')
+    .list(folderPath)
+
+  if (listError) {
+    console.error('Error listing project clips:', listError)
+    return false
+  }
+
+  if (!files || files.length === 0) {
+    return true // Nothing to delete
+  }
+
+  // Delete all files in the folder
+  const filePaths = files.map(file => `${folderPath}/${file.name}`)
+  const { error: deleteError } = await supabase.storage
+    .from('videos')
+    .remove(filePaths)
+
+  if (deleteError) {
+    console.error('Error deleting project clips:', deleteError)
+    return false
+  }
+
+  console.log(`🧹 Cleaned up ${filePaths.length} source clips from Supabase`)
+  return true
+}

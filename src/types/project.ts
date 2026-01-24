@@ -10,20 +10,38 @@ export interface Project {
   data?: ProjectData;
 }
 
+import { TextOverlay, StickerOverlay, AudioSettings, ClipTransition } from './overlays';
+
 export interface ProjectData {
   overlays?: {
-    textOverlays: unknown[];
-    stickers: unknown[];
+    textOverlays: TextOverlay[];
+    stickers: StickerOverlay[];
     filterId: string | null;
     captionPositionY: number;
+    audioSettings?: AudioSettings;
+    clipTransitions?: ClipTransition[];
+    showCaptionPreview?: boolean;
   };
   deletedWordIds?: string[];
   deletedPauseIds?: string[];
   clipCount?: number;
 }
 
+export interface TranscriptWord {
+  id: string;
+  word: string;
+  start: number;
+  end: number;
+}
+
 export interface ProjectWithClips extends Project {
   clips: ProjectClip[];
+}
+
+export interface TranscriptSegment {
+  text: string;
+  start: number;
+  end: number;
 }
 
 export interface ProjectClip {
@@ -34,4 +52,7 @@ export interface ProjectClip {
   duration: number;
   order: number;
   createdAt: string;
+  transcript?: string;
+  segments?: TranscriptSegment[];
+  words?: TranscriptWord[];
 }

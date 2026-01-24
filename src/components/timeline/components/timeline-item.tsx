@@ -33,7 +33,7 @@ export const TimelineItem: React.FC<TimelineItemProps> = ({
 
   // Check if this is a script/pause item (non-draggable)
   const isScriptItem = item.type === TrackItemType.SCRIPT || item.type === TrackItemType.PAUSE;
-  const isDeleted = item.type === TrackItemType.SCRIPT && item.data?.isDeleted;
+  const isDeleted = (item.type === TrackItemType.SCRIPT || item.type === TrackItemType.PAUSE) && item.data?.isDeleted;
 
   // Get color based on item type - liquid glass style
   const getItemStyles = () => {
@@ -50,7 +50,9 @@ export const TimelineItem: React.FC<TimelineItemProps> = ({
           ? `${baseGlass} bg-gradient-to-r from-red-800/50 to-red-900/40`
           : `${baseGlass} bg-gradient-to-r from-sky-600/70 to-sky-700/60`;
       case TrackItemType.PAUSE:
-        return 'bg-gray-700/30 border border-gray-600/30';
+        return item.data?.isDeleted
+          ? `${baseGlass} bg-gradient-to-r from-red-800/50 to-red-900/40`
+          : 'bg-amber-500/40 border border-amber-400/50 border-dashed';
       default:
         return `${baseGlass} bg-gradient-to-r from-gray-500/70 to-gray-600/60`;
     }

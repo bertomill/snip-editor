@@ -9,9 +9,11 @@ import { textStyleTemplates } from '@/lib/templates/text-templates'
 import { animationTemplates } from '@/lib/templates/animation-templates'
 import { stickerCategories, getStickersByCategory } from '@/lib/templates/sticker-templates'
 import { filterPresets } from '@/lib/templates/filter-presets'
-import { TextOverlay, StickerOverlay } from '@/types/overlays'
+import { TextOverlay, StickerOverlay, ClipTransition, defaultAudioSettings } from '@/types/overlays'
+import { TransitionRefinementPanel } from '@/components/overlays/TransitionRefinementPanel'
+import { generateAutoTransitions } from '@/lib/transitions/auto-transitions'
 
-type PanelType = 'text' | 'stickers' | 'filters' | 'audio' | null;
+type PanelType = 'text' | 'stickers' | 'filters' | 'audio' | 'cuts' | null;
 
 interface SidebarProps {
   onOpenUploads?: () => void;
@@ -20,6 +22,8 @@ interface SidebarProps {
   // For overlay panels that need timing info
   totalDurationMs?: number;
   currentTimeMs?: number;
+  // For transitions
+  clipCount?: number;
 }
 
 export function Sidebar({
@@ -28,14 +32,15 @@ export function Sidebar({
   onCreateProject,
   totalDurationMs = 10000,
   currentTimeMs = 0,
+  clipCount = 1,
 }: SidebarProps) {
   const { user, loading } = useUser()
   const signOut = useSignOut()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [activePanel, setActivePanel] = useState<PanelType>(null)
 
-  // Get overlay context for captions and overlays
-  const { state: overlayState, toggleCaptionPreview, addTextOverlay, addSticker, setFilter, setAudioSettings } = useOverlay()
+  // Get overlay context for captions, overlays, and transitions
+  const { state: overlayState, toggleCaptionPreview, addTextOverlay, addSticker, setFilter, setAudioSettings, updateTransition, removeTransition, setTransitions } = useOverlay()
 
   const togglePanel = (panel: PanelType) => {
     setActivePanel(activePanel === panel ? null : panel)
@@ -113,6 +118,13 @@ export function Sidebar({
             label="Audio"
             onClick={() => togglePanel('audio')}
             active={activePanel === 'audio'}
+          />
+
+          <NavButton
+            icon={<CutsIcon />}
+            label="Cuts"
+            onClick={() => togglePanel('cuts')}
+            active={activePanel === 'cuts'}
           />
 
           <NavButton
@@ -207,6 +219,10 @@ export function Sidebar({
         setFilter={setFilter}
         setAudioSettings={setAudioSettings}
         overlayState={overlayState}
+        clipCount={clipCount}
+        updateTransition={updateTransition}
+        removeTransition={removeTransition}
+        setTransitions={setTransitions}
       />
 
       {/* Mobile Bottom Toolbar - CapCut style */}
@@ -219,7 +235,7 @@ export function Sidebar({
         onOpenAudioDrawer={() => togglePanel('audio')}
         onToggleCaptions={toggleCaptionPreview}
         captionsEnabled={overlayState.showCaptionPreview}
-        audioEnabled={overlayState.audioSettings.enhanceAudio}
+        audioEnabled={overlayState.audioSettings?.enhanceAudio ?? false}
       />
     </>
   )
@@ -248,7 +264,7 @@ function MobileBottomToolbar({
 }) {
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#1C1C1E]/95 backdrop-blur-xl border-t border-white/10 safe-area-pb">
-      <div className="flex items-center overflow-x-auto scrollbar-hide px-2 py-2 gap-1">
+      <div className="flex items-center justify-evenly py-2">
         <ToolbarButton
           icon={<EditIcon />}
           label="Edit"
@@ -305,7 +321,7 @@ function ToolbarButton({
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center justify-center min-w-[64px] py-2 px-3 rounded-lg transition-colors ${
+      className={`flex flex-col items-center justify-center py-2 px-2 rounded-lg transition-colors ${
         active
           ? 'text-[#4A8FE7] bg-[#4A8FE7]/10'
           : 'text-gray-400 hover:text-white active:bg-white/10'
@@ -328,6 +344,10 @@ function SidebarPanel({
   setFilter,
   setAudioSettings,
   overlayState,
+  clipCount,
+  updateTransition,
+  removeTransition,
+  setTransitions,
 }: {
   activePanel: PanelType
   onClose: () => void
@@ -337,7 +357,11 @@ function SidebarPanel({
   addSticker: (sticker: StickerOverlay) => void
   setFilter: (filterId: string | null) => void
   setAudioSettings: (settings: Partial<import('@/types/overlays').AudioSettings>) => void
-  overlayState: { textOverlays: TextOverlay[]; stickers: StickerOverlay[]; filterId: string | null; audioSettings: import('@/types/overlays').AudioSettings }
+  overlayState: { textOverlays: TextOverlay[]; stickers: StickerOverlay[]; filterId: string | null; audioSettings: import('@/types/overlays').AudioSettings; clipTransitions: ClipTransition[] }
+  clipCount: number
+  updateTransition: (id: string, updates: Partial<ClipTransition>) => void
+  removeTransition: (id: string) => void
+  setTransitions: (transitions: ClipTransition[]) => void
 }) {
   if (!activePanel) return null
 
@@ -382,8 +406,25 @@ function SidebarPanel({
         )}
         {activePanel === 'audio' && (
           <AudioPanelContent
-            audioSettings={overlayState.audioSettings}
+            audioSettings={overlayState.audioSettings ?? defaultAudioSettings}
             setAudioSettings={setAudioSettings}
+          />
+        )}
+        {activePanel === 'cuts' && (
+          <TransitionRefinementPanel
+            clipTransitions={overlayState.clipTransitions}
+            clipCount={clipCount}
+            onUpdateTransition={updateTransition}
+            onRemoveTransition={removeTransition}
+            onResetToAuto={() => {
+              // Generate auto transitions
+              const clips = Array.from({ length: clipCount }, (_, i) => ({
+                duration: totalDurationMs / 1000 / clipCount,
+                index: i,
+              }));
+              const autoTransitions = generateAutoTransitions(clips);
+              setTransitions(autoTransitions);
+            }}
           />
         )}
       </div>
@@ -406,10 +447,19 @@ function TextPanelContent({
   const [content, setContent] = useState('')
   const [templateId, setTemplateId] = useState(textStyleTemplates[0].id)
   const [animationId, setAnimationId] = useState('fade')
-  const [position, setPosition] = useState<'top' | 'center' | 'bottom'>('center')
+  const [positionPreset, setPositionPreset] = useState<'top' | 'center' | 'bottom'>('center')
   const [durationMs, setDurationMs] = useState(3000)
 
   const canAdd = textOverlayCount < 5
+
+  // Convert preset to x/y coordinates
+  const getPositionFromPreset = (preset: 'top' | 'center' | 'bottom') => {
+    switch (preset) {
+      case 'top': return { x: 50, y: 15 };
+      case 'center': return { x: 50, y: 50 };
+      case 'bottom': return { x: 50, y: 85 };
+    }
+  };
 
   const handleAdd = () => {
     if (!content.trim() || !canAdd) return
@@ -419,7 +469,7 @@ function TextPanelContent({
       content: content.trim(),
       templateId,
       animationId,
-      position,
+      position: getPositionFromPreset(positionPreset),
       startMs: currentTimeMs,
       durationMs,
     }
@@ -501,14 +551,14 @@ function TextPanelContent({
 
       {/* Position Picker */}
       <div>
-        <label className="block text-xs text-[#8E8E93] mb-2">Position</label>
+        <label className="block text-xs text-[#8E8E93] mb-2">Position (drag to adjust)</label>
         <div className="flex gap-1.5">
           {(['top', 'center', 'bottom'] as const).map((pos) => (
             <button
               key={pos}
-              onClick={() => setPosition(pos)}
+              onClick={() => setPositionPreset(pos)}
               className={`flex-1 py-1.5 rounded-lg text-[10px] capitalize transition-all ${
-                position === pos
+                positionPreset === pos
                   ? 'bg-[#4A8FE7] text-white'
                   : 'bg-[#2C2C2E] text-[#8E8E93] hover:bg-[#3C3C3E]'
               }`}
@@ -1041,6 +1091,14 @@ function AudioEnhanceIcon() {
   return (
     <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+    </svg>
+  )
+}
+
+function CutsIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
     </svg>
   )
 }

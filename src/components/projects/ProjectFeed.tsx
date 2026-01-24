@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Project } from '@/types/project';
 import { ProjectCard } from './ProjectCard';
 import { useProjects } from '@/contexts/ProjectsContext';
@@ -20,6 +20,8 @@ interface GroupedProjects {
 
 export function ProjectFeed({ onSelectProject, onCreateProject }: ProjectFeedProps) {
   const { projects, isLoading, deleteProject } = useProjects();
+  const [deleteConfirm, setDeleteConfirm] = useState<{ projectId: string; projectName: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Group projects by date
   const groupedProjects = useMemo((): GroupedProjects => {
@@ -56,10 +58,23 @@ export function ProjectFeed({ onSelectProject, onCreateProject }: ProjectFeedPro
     return groups;
   }, [projects]);
 
-  const handleDelete = async (projectId: string) => {
-    if (confirm('Are you sure you want to delete this project?')) {
-      await deleteProject(projectId);
+  const handleDeleteClick = (projectId: string, projectName: string) => {
+    setDeleteConfirm({ projectId, projectName });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm) return;
+    setIsDeleting(true);
+    try {
+      await deleteProject(deleteConfirm.projectId);
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirm(null);
     }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirm(null);
   };
 
   // Loading skeleton
@@ -119,7 +134,7 @@ export function ProjectFeed({ onSelectProject, onCreateProject }: ProjectFeedPro
               key={project.id}
               project={project}
               onClick={() => onSelectProject(project.id)}
-              onDelete={() => handleDelete(project.id)}
+              onDelete={() => handleDeleteClick(project.id, project.name)}
             />
           ))}
         </div>
@@ -163,6 +178,66 @@ export function ProjectFeed({ onSelectProject, onCreateProject }: ProjectFeedPro
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
         </svg>
       </button>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={handleDeleteCancel}
+          />
+
+          {/* Modal */}
+          <div className="relative bg-[#1C1C1E] border border-[var(--border)] rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
+            {/* Icon */}
+            <div className="flex justify-center pt-6">
+              <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center">
+                <svg className="w-7 h-7 text-red-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 pt-4 pb-6 text-center">
+              <h3 className="text-lg font-semibold text-white mb-2">Delete Project?</h3>
+              <p className="text-[#8E8E93] text-sm">
+                Are you sure you want to delete <span className="text-white font-medium">"{deleteConfirm.projectName}"</span>? This action cannot be undone.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex border-t border-[var(--border)]">
+              <button
+                onClick={handleDeleteCancel}
+                disabled={isDeleting}
+                className="flex-1 py-3.5 text-[#4A8FE7] font-medium hover:bg-white/5 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <div className="w-px bg-[var(--border)]" />
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                className="flex-1 py-3.5 text-red-500 font-medium hover:bg-red-500/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isDeleting ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

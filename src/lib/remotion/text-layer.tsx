@@ -20,28 +20,15 @@ export const TextLayer: React.FC<TextLayerProps> = ({ textOverlays, fps }) => {
         const durationFrames = Math.floor((overlay.durationMs / 1000) * fps);
         const style = getTextStyleById(overlay.templateId) || getDefaultTextStyle();
 
-        // Position mapping
+        // Position using x/y percentages
         const positionStyles: React.CSSProperties = {
           position: 'absolute',
-          left: 0,
-          right: 0,
+          left: `${overlay.position.x}%`,
+          top: `${overlay.position.y}%`,
+          transform: 'translate(-50%, -50%)',
           display: 'flex',
           justifyContent: 'center',
-          padding: '20px',
         };
-
-        switch (overlay.position) {
-          case 'top':
-            positionStyles.top = '10%';
-            break;
-          case 'center':
-            positionStyles.top = '50%';
-            positionStyles.transform = 'translateY(-50%)';
-            break;
-          case 'bottom':
-            positionStyles.bottom = '15%';
-            break;
-        }
 
         // Handle gradient backgrounds specially
         const isGradient = style.backgroundColor?.includes('gradient');

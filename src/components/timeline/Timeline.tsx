@@ -58,6 +58,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     handleItemMove: internalItemMove,
     handleItemResize: internalItemResize,
     handleItemsDelete: internalItemsDelete,
+    handleTrackReorder,
   } = useTimelineTracks({
     initialTracks,
     onTracksChange,
@@ -143,7 +144,7 @@ export const Timeline: React.FC<TimelineProps> = ({
       <div className="timeline-tracks-wrapper flex flex-1 overflow-hidden relative">
         {/* Track handles/labels */}
         <div className="hidden md:block overflow-hidden">
-          <TimelineTrackHandles tracks={tracks} />
+          <TimelineTrackHandles tracks={tracks} onTrackReorder={handleTrackReorder} />
         </div>
 
         {/* Main timeline content */}
