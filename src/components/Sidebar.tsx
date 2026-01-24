@@ -1,0 +1,208 @@
+'use client'
+
+import { useState } from 'react'
+import { useUser, useSignOut } from '@/lib/supabase'
+import Link from 'next/link'
+import Image from 'next/image'
+
+export function Sidebar() {
+  const { user, loading } = useUser()
+  const signOut = useSignOut()
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
+
+  return (
+    <aside className="fixed left-0 top-0 bottom-0 w-[72px] bg-[#0A0A0A] border-r border-[#1C1C1E] flex flex-col items-center py-4 z-50">
+      {/* Logo */}
+      <Link href="/" className="mb-8">
+        <Image
+          src="/branding/icon-transparent.png"
+          alt="Snip"
+          width={40}
+          height={40}
+          className="rounded-xl hover:scale-105 transition-transform"
+        />
+      </Link>
+
+      {/* Navigation */}
+      <nav className="flex-1 flex flex-col items-center gap-2">
+        {/* Home */}
+        <NavItem href="/" icon={<HomeIcon />} label="Home" active />
+
+        {/* Discover/Explore */}
+        <NavItem href="/" icon={<ExploreIcon />} label="Explore" />
+
+        {/* Create */}
+        <NavItem href="/" icon={<CreateIcon />} label="Create" />
+      </nav>
+
+      {/* Bottom section - Profile */}
+      <div className="relative">
+        {loading ? (
+          <div className="w-10 h-10 rounded-full bg-[#1C1C1E] animate-pulse" />
+        ) : user ? (
+          <>
+            <button
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="w-10 h-10 rounded-full bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center text-white font-semibold text-sm hover:scale-105 transition-transform ring-2 ring-transparent hover:ring-[#4A8FE7]/50"
+            >
+              {user.email?.[0].toUpperCase()}
+            </button>
+
+            {/* Profile Menu */}
+            {showProfileMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowProfileMenu(false)}
+                />
+                <div className="absolute bottom-0 left-full ml-2 w-64 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl shadow-2xl z-50 overflow-hidden">
+                  {/* Profile Header */}
+                  <div className="p-4 border-b border-[#2A2A2A]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center text-white font-semibold text-lg">
+                        {user.email?.[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-medium truncate">
+                          {user.user_metadata?.full_name || 'User'}
+                        </p>
+                        <p className="text-gray-400 text-sm truncate">
+                          {user.email}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Menu Items */}
+                  <div className="p-2">
+                    <MenuItem icon={<ProfileIcon />} label="View profile" />
+                    <MenuItem icon={<ProjectsIcon />} label="My projects" />
+                    <MenuItem icon={<SettingsIcon />} label="Settings" />
+                    <div className="border-t border-[#2A2A2A] my-2" />
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false)
+                        signOut()
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                    >
+                      <LogoutIcon />
+                      <span className="text-sm">Log out</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          <Link
+            href="/login"
+            className="w-10 h-10 rounded-full bg-[#1C1C1E] flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#2A2A2A] transition-colors"
+          >
+            <ProfileIcon />
+          </Link>
+        )}
+      </div>
+    </aside>
+  )
+}
+
+function NavItem({
+  href,
+  icon,
+  label,
+  active = false,
+}: {
+  href: string
+  icon: React.ReactNode
+  label: string
+  active?: boolean
+}) {
+  return (
+    <Link
+      href={href}
+      className={`group flex flex-col items-center gap-1 p-2 rounded-xl transition-colors ${
+        active ? 'text-white' : 'text-gray-400 hover:text-white'
+      }`}
+    >
+      <div
+        className={`p-2 rounded-xl transition-colors ${
+          active ? 'bg-[#1C1C1E]' : 'group-hover:bg-[#1C1C1E]'
+        }`}
+      >
+        {icon}
+      </div>
+      <span className="text-[10px] font-medium">{label}</span>
+    </Link>
+  )
+}
+
+function MenuItem({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <button className="w-full flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:bg-[#2A2A2A] rounded-lg transition-colors">
+      {icon}
+      <span className="text-sm">{label}</span>
+    </button>
+  )
+}
+
+// Icons
+function HomeIcon() {
+  return (
+    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 3L4 9v12h5v-7h6v7h5V9l-8-6z" />
+    </svg>
+  )
+}
+
+function ExploreIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" />
+      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="currentColor" />
+    </svg>
+  )
+}
+
+function CreateIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <line x1="12" y1="8" x2="12" y2="16" />
+      <line x1="8" y1="12" x2="16" y2="12" />
+    </svg>
+  )
+}
+
+function ProfileIcon() {
+  return (
+    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z" />
+    </svg>
+  )
+}
+
+function ProjectsIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+    </svg>
+  )
+}
+
+function SettingsIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 1v4m0 14v4m-9-9h4m14 0h-4m-2.5-6.5l2.8-2.8m-11.3 11.3l2.8-2.8m0-5.7l-2.8-2.8m11.3 11.3l-2.8-2.8" />
+    </svg>
+  )
+}
+
+function LogoutIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4m7 14l5-5-5-5m5 5H9" />
+    </svg>
+  )
+}

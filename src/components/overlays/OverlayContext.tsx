@@ -1,0 +1,127 @@
+"use client";
+
+import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import { OverlayState, OverlayAction, TextOverlay, StickerOverlay } from '@/types/overlays';
+
+const initialState: OverlayState = {
+  textOverlays: [],
+  stickers: [],
+  filterId: null,
+  showCaptionPreview: true,
+};
+
+function overlayReducer(state: OverlayState, action: OverlayAction): OverlayState {
+  switch (action.type) {
+    case 'ADD_TEXT_OVERLAY':
+      if (state.textOverlays.length >= 5) return state; // Max 5 text overlays
+      return {
+        ...state,
+        textOverlays: [...state.textOverlays, action.payload],
+      };
+
+    case 'UPDATE_TEXT_OVERLAY':
+      return {
+        ...state,
+        textOverlays: state.textOverlays.map((overlay) =>
+          overlay.id === action.payload.id
+            ? { ...overlay, ...action.payload.updates }
+            : overlay
+        ),
+      };
+
+    case 'REMOVE_TEXT_OVERLAY':
+      return {
+        ...state,
+        textOverlays: state.textOverlays.filter((o) => o.id !== action.payload),
+      };
+
+    case 'ADD_STICKER':
+      if (state.stickers.length >= 10) return state; // Max 10 stickers
+      return {
+        ...state,
+        stickers: [...state.stickers, action.payload],
+      };
+
+    case 'UPDATE_STICKER':
+      return {
+        ...state,
+        stickers: state.stickers.map((sticker) =>
+          sticker.id === action.payload.id
+            ? { ...sticker, ...action.payload.updates }
+            : sticker
+        ),
+      };
+
+    case 'REMOVE_STICKER':
+      return {
+        ...state,
+        stickers: state.stickers.filter((s) => s.id !== action.payload),
+      };
+
+    case 'SET_FILTER':
+      return {
+        ...state,
+        filterId: action.payload,
+      };
+
+    case 'TOGGLE_CAPTION_PREVIEW':
+      return {
+        ...state,
+        showCaptionPreview: !state.showCaptionPreview,
+      };
+
+    case 'RESET_OVERLAYS':
+      return initialState;
+
+    default:
+      return state;
+  }
+}
+
+interface OverlayContextValue {
+  state: OverlayState;
+  dispatch: React.Dispatch<OverlayAction>;
+  addTextOverlay: (overlay: TextOverlay) => void;
+  updateTextOverlay: (id: string, updates: Partial<TextOverlay>) => void;
+  removeTextOverlay: (id: string) => void;
+  addSticker: (sticker: StickerOverlay) => void;
+  updateSticker: (id: string, updates: Partial<StickerOverlay>) => void;
+  removeSticker: (id: string) => void;
+  setFilter: (filterId: string | null) => void;
+  toggleCaptionPreview: () => void;
+  resetOverlays: () => void;
+}
+
+const OverlayContext = createContext<OverlayContextValue | null>(null);
+
+export function OverlayProvider({ children }: { children: ReactNode }) {
+  const [state, dispatch] = useReducer(overlayReducer, initialState);
+
+  const value: OverlayContextValue = {
+    state,
+    dispatch,
+    addTextOverlay: (overlay) => dispatch({ type: 'ADD_TEXT_OVERLAY', payload: overlay }),
+    updateTextOverlay: (id, updates) => dispatch({ type: 'UPDATE_TEXT_OVERLAY', payload: { id, updates } }),
+    removeTextOverlay: (id) => dispatch({ type: 'REMOVE_TEXT_OVERLAY', payload: id }),
+    addSticker: (sticker) => dispatch({ type: 'ADD_STICKER', payload: sticker }),
+    updateSticker: (id, updates) => dispatch({ type: 'UPDATE_STICKER', payload: { id, updates } }),
+    removeSticker: (id) => dispatch({ type: 'REMOVE_STICKER', payload: id }),
+    setFilter: (filterId) => dispatch({ type: 'SET_FILTER', payload: filterId }),
+    toggleCaptionPreview: () => dispatch({ type: 'TOGGLE_CAPTION_PREVIEW' }),
+    resetOverlays: () => dispatch({ type: 'RESET_OVERLAYS' }),
+  };
+
+  return (
+    <OverlayContext.Provider value={value}>
+      {children}
+    </OverlayContext.Provider>
+  );
+}
+
+export function useOverlay() {
+  const context = useContext(OverlayContext);
+  if (!context) {
+    throw new Error('useOverlay must be used within an OverlayProvider');
+  }
+  return context;
+}
