@@ -176,76 +176,103 @@ export function Sidebar({
         </div>
       </aside>
 
-      {/* Mobile Bottom Nav Bar - Liquid glass style */}
-      <MobileBottomNav
+      {/* Mobile Bottom Toolbar - CapCut style */}
+      <MobileBottomToolbar
         onNavigateHome={onNavigateHome}
         onCreateProject={onCreateProject}
+        onOpenTextDrawer={onOpenTextDrawer}
+        onOpenStickerDrawer={onOpenStickerDrawer}
+        onOpenFilterDrawer={onOpenFilterDrawer}
+        onToggleCaptions={toggleCaptionPreview}
+        captionsEnabled={overlayState.showCaptionPreview}
       />
     </>
   )
 }
 
-function MobileBottomNav({
+function MobileBottomToolbar({
   onNavigateHome,
   onCreateProject,
+  onOpenTextDrawer,
+  onOpenStickerDrawer,
+  onOpenFilterDrawer,
+  onToggleCaptions,
+  captionsEnabled = false,
 }: {
   onNavigateHome?: () => void
   onCreateProject?: () => void
+  onOpenTextDrawer?: () => void
+  onOpenStickerDrawer?: () => void
+  onOpenFilterDrawer?: () => void
+  onToggleCaptions?: () => void
+  captionsEnabled?: boolean
 }) {
   return (
-    <nav className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-      <div className="flex items-center gap-1 bg-white/10 backdrop-blur-xl rounded-full px-2 py-2 shadow-lg shadow-black/20 border border-white/20">
-        <MobileNavButton
-          icon={<HomeIconFilled />}
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#1C1C1E]/95 backdrop-blur-xl border-t border-white/10 safe-area-pb">
+      <div className="flex items-center overflow-x-auto scrollbar-hide px-2 py-2 gap-1">
+        <ToolbarButton
+          icon={<EditIcon />}
+          label="Edit"
           onClick={onNavigateHome}
-          active
         />
-        <MobileNavButton
-          icon={<SearchIcon />}
+        <ToolbarButton
+          icon={<AudioIcon />}
+          label="Audio"
           onClick={() => {}}
         />
-        <MobileNavButton
-          icon={<PlusIcon />}
+        <ToolbarButton
+          icon={<MobileTextIcon />}
+          label="Text"
+          onClick={onOpenTextDrawer}
+        />
+        <ToolbarButton
+          icon={<EffectsIcon />}
+          label="Effects"
+          onClick={onOpenStickerDrawer}
+        />
+        <ToolbarButton
+          icon={<OverlayIcon />}
+          label="Overlay"
           onClick={onCreateProject}
-          accent
+        />
+        <ToolbarButton
+          icon={<MobileCaptionIcon />}
+          label="Captions"
+          onClick={onToggleCaptions}
+          active={captionsEnabled}
+        />
+        <ToolbarButton
+          icon={<MobileFilterIcon />}
+          label="Filters"
+          onClick={onOpenFilterDrawer}
         />
       </div>
     </nav>
   )
 }
 
-function MobileNavButton({
+function ToolbarButton({
   icon,
+  label,
   onClick,
   active = false,
-  accent = false,
 }: {
   icon: React.ReactNode
+  label: string
   onClick?: () => void
   active?: boolean
-  accent?: boolean
 }) {
-  if (accent) {
-    return (
-      <button
-        onClick={onClick}
-        className="p-3 rounded-full bg-[#4A8FE7] text-white transition-all hover:bg-[#5A9FF7] active:scale-95"
-      >
-        {icon}
-      </button>
-    )
-  }
-
   return (
     <button
       onClick={onClick}
-      className={`p-3 rounded-full transition-colors ${
+      className={`flex flex-col items-center justify-center min-w-[64px] py-2 px-3 rounded-lg transition-colors ${
         active
-          ? 'text-white'
-          : 'text-white/60 hover:text-white'
+          ? 'text-[#4A8FE7] bg-[#4A8FE7]/10'
+          : 'text-gray-400 hover:text-white active:bg-white/10'
       }`}
     >
-      {icon}
+      <div className="w-6 h-6 mb-1">{icon}</div>
+      <span className="text-[10px] font-medium">{label}</span>
     </button>
   )
 }
@@ -457,6 +484,70 @@ function CaptionIcon() {
     <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <rect x="2" y="4" width="20" height="16" rx="2" />
       <path strokeLinecap="round" d="M6 12h4M14 12h4M6 16h8" />
+    </svg>
+  )
+}
+
+// Mobile Toolbar Icons (CapCut style)
+function EditIcon() {
+  return (
+    <svg className="w-full h-full" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.121 4.121a3 3 0 00-4.242 0l-9 9a1 1 0 00-.293.707V18a1 1 0 001 1h4.172a1 1 0 00.707-.293l9-9a3 3 0 000-4.243" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12.5 7.5l4 4" />
+    </svg>
+  )
+}
+
+function AudioIcon() {
+  return (
+    <svg className="w-full h-full" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
+    </svg>
+  )
+}
+
+function MobileTextIcon() {
+  return (
+    <svg className="w-full h-full" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M12 6v14M8 6v2M16 6v2" />
+    </svg>
+  )
+}
+
+function EffectsIcon() {
+  return (
+    <svg className="w-full h-full" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+    </svg>
+  )
+}
+
+function OverlayIcon() {
+  return (
+    <svg className="w-full h-full" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  )
+}
+
+function MobileCaptionIcon() {
+  return (
+    <svg className="w-full h-full" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path strokeLinecap="round" d="M6 12h4M14 12h4M6 16h8" />
+    </svg>
+  )
+}
+
+function MobileFilterIcon() {
+  return (
+    <svg className="w-full h-full" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" />
+      <path strokeLinecap="round" d="M12 3a9 9 0 019 9M12 3v18M3 12h18" />
     </svg>
   )
 }

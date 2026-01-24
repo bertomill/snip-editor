@@ -249,6 +249,11 @@ body {
   display: none;
 }
 
+/* Safe area padding for iPhone notch/home indicator */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* Smooth transitions for interactive elements */
 button, a, input, textarea {
   transition: all 0.2s ease;
