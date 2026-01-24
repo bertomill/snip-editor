@@ -4,10 +4,14 @@ import { useMemo, useState } from 'react';
 import { Project } from '@/types/project';
 import { ProjectCard } from './ProjectCard';
 import { useProjects } from '@/contexts/ProjectsContext';
+import { motion, useMotionTemplate, useMotionValue } from 'motion/react';
 
 interface ProjectFeedProps {
   onSelectProject: (projectId: string) => void;
   onCreateProject: () => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  viewMode?: 'list' | 'gallery';
 }
 
 type ProjectFilter = 'all' | 'yours' | 'shared';
@@ -18,12 +22,119 @@ const filterLabels: Record<ProjectFilter, string> = {
   shared: 'Shared with you',
 };
 
-export function ProjectFeed({ onSelectProject, onCreateProject }: ProjectFeedProps) {
+interface GroupedProjects {
+  label: string;
+  projects: Project[];
+}
+
+function groupProjectsByDate(projects: Project[]): GroupedProjects[] {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+  const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const groups: { [key: string]: Project[] } = {
+    'Today': [],
+    'Yesterday': [],
+    'Previous 7 Days': [],
+    'Previous 30 Days': [],
+    'Older': [],
+  };
+
+  projects.forEach(project => {
+    const projectDate = new Date(project.updatedAt || project.createdAt);
+    const projectDay = new Date(projectDate.getFullYear(), projectDate.getMonth(), projectDate.getDate());
+
+    if (projectDay.getTime() >= today.getTime()) {
+      groups['Today'].push(project);
+    } else if (projectDay.getTime() >= yesterday.getTime()) {
+      groups['Yesterday'].push(project);
+    } else if (projectDay.getTime() >= weekAgo.getTime()) {
+      groups['Previous 7 Days'].push(project);
+    } else if (projectDay.getTime() >= monthAgo.getTime()) {
+      groups['Previous 30 Days'].push(project);
+    } else {
+      groups['Older'].push(project);
+    }
+  });
+
+  // Return only non-empty groups in order
+  return ['Today', 'Yesterday', 'Previous 7 Days', 'Previous 30 Days', 'Older']
+    .filter(label => groups[label].length > 0)
+    .map(label => ({ label, projects: groups[label] }));
+}
+
+// Search input with radial gradient hover effect
+function SearchInput({
+  value,
+  onChange
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const radius = 120;
+  const [visible, setVisible] = useState(false);
+
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+
+  function handleMouseMove({ currentTarget, clientX, clientY }: React.MouseEvent) {
+    const { left, top } = currentTarget.getBoundingClientRect();
+    mouseX.set(clientX - left);
+    mouseY.set(clientY - top);
+  }
+
+  return (
+    <motion.div
+      style={{
+        background: useMotionTemplate`
+          radial-gradient(
+            ${visible ? radius + "px" : "0px"} circle at ${mouseX}px ${mouseY}px,
+            #1d4ed8,
+            transparent 80%
+          )
+        `,
+      }}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setVisible(true)}
+      onMouseLeave={() => setVisible(false)}
+      className="group/input rounded-xl p-[2px] transition duration-300 mb-4"
+    >
+      <div className="relative flex items-center bg-[#1C1C1E] rounded-xl">
+        <svg
+          className="absolute left-4 w-5 h-5 text-[#8E8E93] transition-colors duration-200 group-hover/input:text-[#60a5fa]"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          placeholder="Search across all content"
+          value={value}
+          onChange={onChange}
+          className="w-full bg-transparent text-white placeholder-[#8E8E93] pl-12 pr-4 py-3 rounded-xl focus:outline-none text-[15px] transition-colors duration-200"
+        />
+      </div>
+    </motion.div>
+  );
+}
+
+export function ProjectFeed({ onSelectProject, onCreateProject, searchQuery: externalSearchQuery, onSearchChange, viewMode: externalViewMode }: ProjectFeedProps) {
   const { projects, isLoading, deleteProject } = useProjects();
   const [deleteConfirm, setDeleteConfirm] = useState<{ projectId: string; projectName: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  // Use external search state if provided, otherwise use internal
+  const [internalSearchQuery, setInternalSearchQuery] = useState('');
+  const searchQuery = externalSearchQuery ?? internalSearchQuery;
+  const setSearchQuery = onSearchChange ?? setInternalSearchQuery;
+  // Use external view mode for mobile, internal for desktop
+  const [internalViewMode, setInternalViewMode] = useState<'list' | 'grid'>('list');
+  // Map 'gallery' to 'grid' for internal use
+  const viewMode = externalViewMode === 'gallery' ? 'grid' : (externalViewMode ?? internalViewMode);
   const [projectFilter, setProjectFilter] = useState<ProjectFilter>('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [actionProject, setActionProject] = useState<Project | null>(null);
@@ -48,6 +159,11 @@ export function ProjectFeed({ onSelectProject, onCreateProject }: ProjectFeedPro
 
     return filtered;
   }, [projects, searchQuery, projectFilter]);
+
+  // Group projects by date
+  const groupedProjects = useMemo(() => {
+    return groupProjectsByDate(filteredProjects);
+  }, [filteredProjects]);
 
   const handleDeleteClick = (projectId: string, projectName: string) => {
     setDeleteConfirm({ projectId, projectName });
@@ -173,29 +289,12 @@ export function ProjectFeed({ onSelectProject, onCreateProject }: ProjectFeedPro
         )}
       </div>
 
-      {/* Search Bar with gradient border */}
-      <div className="relative mb-4">
-        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-500 via-violet-500 to-purple-600 p-[1px]">
-          <div className="w-full h-full rounded-xl bg-[#1a1a2e]" />
-        </div>
-        <div className="relative flex items-center">
-          <svg
-            className="absolute left-4 w-5 h-5 text-[#8E8E93]"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search across all content"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-transparent text-white placeholder-[#8E8E93] pl-12 pr-4 py-3 rounded-xl focus:outline-none text-[15px]"
-          />
-        </div>
+      {/* Search Bar with blue radial hover effect - hidden on mobile (shown in bottom bar) */}
+      <div className="hidden md:block">
+        <SearchInput
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
       </div>
 
       {/* Filter Pills */}
@@ -213,60 +312,61 @@ export function ProjectFeed({ onSelectProject, onCreateProject }: ProjectFeedPro
         ))}
       </div>
 
-      {/* Recents Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-white">Recents</h2>
-        <button
-          onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-          className="p-2 hover:bg-[var(--background-card)] rounded-lg transition-colors"
-        >
-          {viewMode === 'list' ? (
-            <svg className="w-5 h-5 text-white/70" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="3" y="3" width="8" height="8" rx="1" />
-              <rect x="13" y="3" width="8" height="8" rx="1" />
-              <rect x="3" y="13" width="8" height="8" rx="1" />
-              <rect x="13" y="13" width="8" height="8" rx="1" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5 text-white/70" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="3" y="4" width="18" height="4" rx="1" />
-              <rect x="3" y="10" width="18" height="4" rx="1" />
-              <rect x="3" y="16" width="18" height="4" rx="1" />
-            </svg>
-          )}
-        </button>
-      </div>
-
-      {/* Project List */}
+      {/* Grouped Project List - Apple Notes Style */}
       {viewMode === 'list' ? (
-        <div className="space-y-1">
-          {filteredProjects.map(project => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onClick={() => onSelectProject(project.id)}
-              onDelete={() => handleDeleteClick(project.id, project.name)}
-              onShowActions={setActionProject}
-            />
+        <div className="space-y-6">
+          {groupedProjects.map((group) => (
+            <div key={group.label}>
+              {/* Section Header */}
+              <h2 className="text-lg font-semibold text-white mb-3 px-1">{group.label}</h2>
+
+              {/* Rounded Container */}
+              <div className="bg-[#2C2C2E] rounded-xl overflow-hidden">
+                {group.projects.map((project, index) => (
+                  <div key={project.id}>
+                    <ProjectCard
+                      project={project}
+                      onClick={() => onSelectProject(project.id)}
+                      onDelete={() => handleDeleteClick(project.id, project.name)}
+                      onShowActions={setActionProject}
+                    />
+                    {/* Divider line - not on last item */}
+                    {index < group.projects.length - 1 && (
+                      <div className="mx-4 border-b border-[#3A3A3C]" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
-          {filteredProjects.map(project => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onClick={() => onSelectProject(project.id)}
-              onDelete={() => handleDeleteClick(project.id, project.name)}
-              onShowActions={setActionProject}
-              variant="grid"
-            />
+        <div className="space-y-6">
+          {groupedProjects.map((group) => (
+            <div key={group.label}>
+              {/* Section Header */}
+              <h2 className="text-lg font-semibold text-white mb-3 px-1">{group.label}</h2>
+
+              {/* Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                {group.projects.map(project => (
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    onClick={() => onSelectProject(project.id)}
+                    onDelete={() => handleDeleteClick(project.id, project.name)}
+                    onShowActions={setActionProject}
+                    variant="grid"
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
 
       {/* No results */}
-      {filteredProjects.length === 0 && (
+      {groupedProjects.length === 0 && filteredProjects.length === 0 && (
         <div className="text-center py-12">
           {projectFilter === 'shared' ? (
             <>

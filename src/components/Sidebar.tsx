@@ -27,6 +27,9 @@ interface SidebarProps {
   currentTimeMs?: number;
   // For transitions
   clipCount?: number;
+  // Search state for feed view (mobile bottom bar)
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
 export function Sidebar({
@@ -37,6 +40,8 @@ export function Sidebar({
   totalDurationMs = 10000,
   currentTimeMs = 0,
   clipCount = 1,
+  searchQuery,
+  onSearchChange,
 }: SidebarProps) {
   const { user, loading } = useUser()
   const signOut = useSignOut()
@@ -264,7 +269,11 @@ export function Sidebar({
 
       {/* Mobile Bottom Bar - different for feed vs editor */}
       {view === 'feed' ? (
-        <MobileProjectsBottomBar onCreateProject={onCreateProject} />
+        <MobileProjectsBottomBar
+          onCreateProject={onCreateProject}
+          searchQuery={searchQuery}
+          onSearchChange={onSearchChange}
+        />
       ) : (
         <MobileBottomToolbar
           onNavigateHome={onNavigateHome}
@@ -282,24 +291,51 @@ export function Sidebar({
   )
 }
 
-// Shop app style floating pill bottom bar for projects view
+// Apple Notes style floating bottom bar for projects view
 function MobileProjectsBottomBar({
   onCreateProject,
+  searchQuery,
+  onSearchChange,
 }: {
   onCreateProject?: () => void
+  searchQuery?: string
+  onSearchChange?: (query: string) => void
 }) {
   return (
-    <div className="md:hidden fixed bottom-8 left-1/2 -translate-x-1/2 z-50 safe-area-pb">
-      {/* Create Button - primary action, floating pill */}
-      <button
-        onClick={onCreateProject}
-        className="flex items-center gap-2.5 bg-[#4A8FE7] hover:bg-[#5A9FF7] active:bg-[#3A7FD7] text-white px-8 py-4 rounded-full font-semibold text-base transition-all active:scale-95 shadow-xl shadow-[#4A8FE7]/40 hover:shadow-[#4A8FE7]/60"
-      >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-        </svg>
-        Create
-      </button>
+    <div className="md:hidden fixed bottom-10 left-4 right-4 z-50 safe-area-pb">
+      <div className="flex items-center gap-4">
+        {/* Search Input - Floating pill style */}
+        <div className="flex-1">
+          <div className="flex items-center bg-[#2C2C2E] backdrop-blur-xl border border-white/15 rounded-full px-5 py-4 shadow-2xl shadow-black/50">
+            <svg
+              className="w-6 h-6 text-[#8E8E93] mr-3 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search"
+              value={searchQuery || ''}
+              onChange={(e) => onSearchChange?.(e.target.value)}
+              className="flex-1 bg-transparent text-white placeholder-[#8E8E93] text-base focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Create Button - Plus icon */}
+        <button
+          onClick={onCreateProject}
+          className="w-14 h-14 flex items-center justify-center bg-[#4A8FE7] hover:bg-[#5A9FF7] active:bg-[#3A7FD7] rounded-full transition-all active:scale-95 shadow-2xl shadow-[#4A8FE7]/50"
+        >
+          <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+        </button>
+      </div>
     </div>
   )
 }

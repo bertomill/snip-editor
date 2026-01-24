@@ -49,6 +49,8 @@ interface VideoClip {
   segments?: TranscriptSegment[];
   words?: Omit<TranscriptWord, 'clipIndex'>[];  // Words from API (without clipIndex)
   blobReady: boolean;          // track if blob is downloaded
+  storagePath?: string;        // path in Supabase storage for transcription
+  uploadStatus?: 'pending' | 'uploading' | 'complete' | 'error';  // storage upload status
 }
 
 export default function Home() {
@@ -79,6 +81,9 @@ function HomeContent() {
   const [projectName, setProjectName] = useState("Untitled Project");
   const [isEditingName, setIsEditingName] = useState(false);
   const [autoCutEnabled, setAutoCutEnabled] = useState(false);
+  const [feedSearchQuery, setFeedSearchQuery] = useState("");
+  const [showFeedMenu, setShowFeedMenu] = useState(false);
+  const [feedViewMode, setFeedViewMode] = useState<'list' | 'gallery'>('list');
 
   // Save/Load state
   const [isSaving, setIsSaving] = useState(false);
@@ -661,6 +666,47 @@ function HomeContent() {
     };
   }, [clips]);
 
+  // Upload a video to Supabase Storage for transcription
+  const uploadVideoToStorage = useCallback(async (clipIndex: number, file: File) => {
+    try {
+      // Update status to uploading
+      setClips(prev => prev.map((clip, idx) =>
+        idx === clipIndex ? { ...clip, uploadStatus: 'uploading' as const } : clip
+      ));
+
+      const formData = new FormData();
+      formData.append('video', file);
+
+      const response = await fetch('/api/upload-video', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Update clip with storage path
+      setClips(prev => prev.map((clip, idx) =>
+        idx === clipIndex ? {
+          ...clip,
+          storagePath: data.storagePath,
+          uploadStatus: 'complete' as const
+        } : clip
+      ));
+
+      console.log(`[Upload] Clip ${clipIndex} uploaded to storage: ${data.storagePath}`);
+    } catch (error) {
+      console.error(`[Upload] Failed to upload clip ${clipIndex}:`, error);
+      // Mark as error but don't block - fallback to direct upload
+      setClips(prev => prev.map((clip, idx) =>
+        idx === clipIndex ? { ...clip, uploadStatus: 'error' as const } : clip
+      ));
+    }
+  }, []);
+
   const handleFilesSelected = async (files: File[], autoCut: boolean = false) => {
     setStep("edit");
     setAutoCutEnabled(autoCut);
@@ -684,11 +730,26 @@ function HomeContent() {
 
         const url = URL.createObjectURL(processedFile);
         const duration = await getVideoDuration(url);
-        return { file: processedFile, url, duration, blobReady: true };
+        // Initialize with pending upload status for large files
+        const shouldUploadToStorage = processedFile.size > 4 * 1024 * 1024; // >4MB
+        return {
+          file: processedFile,
+          url,
+          duration,
+          blobReady: true,
+          uploadStatus: shouldUploadToStorage ? 'pending' as const : undefined,
+        };
       })
     );
 
     setClips(videoClips);
+
+    // Start background upload for large files
+    videoClips.forEach((clip, index) => {
+      if (clip.uploadStatus === 'pending' && clip.file) {
+        uploadVideoToStorage(index, clip.file);
+      }
+    });
   };
 
   // All segments with global timestamps
@@ -783,15 +844,15 @@ function HomeContent() {
           onOpenUploads={() => setShowUploads(true)}
           onNavigateHome={() => setView("feed")}
           onCreateProject={handleCreateProject}
+          searchQuery={feedSearchQuery}
+          onSearchChange={setFeedSearchQuery}
         />
         <MediaLibraryPanel
           isOpen={showUploads}
           onClose={() => setShowUploads(false)}
           onSelectMedia={handleAddMediaToTimeline}
         />
-        <div className="min-h-screen flex flex-col bg-[var(--background-content)] md:pl-[72px] pb-24 md:pb-0">
-          {/* Mobile gradient header background */}
-          <div className="md:hidden absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-[#4A8FE7]/30 via-[#4A8FE7]/10 to-transparent pointer-events-none" />
+        <div className="min-h-screen flex flex-col bg-canva-gradient md:pl-[72px] pb-24 md:pb-0">
 
           {/* Header with logo and create button */}
           <header className="relative flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[var(--border-subtle)] md:border-b">
@@ -806,15 +867,69 @@ function HomeContent() {
                 priority
               />
             </div>
-            {/* Mobile create button */}
-            <button
-              onClick={handleCreateProject}
-              className="md:hidden w-10 h-10 flex items-center justify-center text-white"
-            >
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-            </button>
+            {/* Mobile menu button (three dots) */}
+            <div className="md:hidden relative">
+              <button
+                onClick={() => setShowFeedMenu(!showFeedMenu)}
+                className="w-10 h-10 flex items-center justify-center text-white"
+              >
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="5" r="2" />
+                  <circle cx="12" cy="12" r="2" />
+                  <circle cx="12" cy="19" r="2" />
+                </svg>
+              </button>
+
+              {/* Dropdown Menu */}
+              {showFeedMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowFeedMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-[#2C2C2E] border border-[var(--border)] rounded-xl shadow-2xl z-50 overflow-hidden animate-scale-in">
+                    {/* View as Gallery / List */}
+                    <button
+                      onClick={() => {
+                        setFeedViewMode(feedViewMode === 'list' ? 'gallery' : 'list');
+                        setShowFeedMenu(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3.5 text-white hover:bg-white/5 transition-colors"
+                    >
+                      {feedViewMode === 'list' ? (
+                        <svg className="w-5 h-5 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                        </svg>
+                      )}
+                      <span className="text-[15px]">
+                        {feedViewMode === 'list' ? 'View as Gallery' : 'View as List'}
+                      </span>
+                    </button>
+
+                    {/* Divider */}
+                    <div className="border-t border-[var(--border)]" />
+
+                    {/* Select Projects */}
+                    <button
+                      onClick={() => {
+                        // TODO: Implement select mode
+                        setShowFeedMenu(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3.5 text-white hover:bg-white/5 transition-colors"
+                    >
+                      <svg className="w-5 h-5 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-[15px]">Select Projects</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </header>
 
           {/* Mobile-only profile row below header */}
@@ -962,6 +1077,9 @@ function HomeContent() {
             <ProjectFeed
               onSelectProject={handleSelectProject}
               onCreateProject={handleCreateProject}
+              searchQuery={feedSearchQuery}
+              onSearchChange={setFeedSearchQuery}
+              viewMode={feedViewMode}
             />
           </main>
         </div>
@@ -1074,7 +1192,7 @@ function HomeContent() {
         )}
 
         <div className="min-h-screen flex flex-col bg-[var(--background-content)] md:pl-[72px] pb-24 md:pb-0">
-        <header className="flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[var(--border-subtle)]">
+        <header className="sticky top-0 z-50 flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[var(--border-subtle)] bg-[var(--background-content)]">
           <div className="flex items-center gap-3">
             {/* Back button */}
             <button
@@ -2221,64 +2339,91 @@ function EditStep({
       }
 
       try {
-        let fileToUpload: File;
+        let response: Response;
 
-        // Extract audio client-side if supported (much smaller file size)
-        if (useClientExtraction) {
-          console.log(`[Transcribe] Extracting audio from clip ${i + 1} client-side...`);
-          try {
-            fileToUpload = await extractAudioFromVideo(clip.file, (progress) => {
-              // Progress for extraction (first half of clip progress)
-              setTranscribeProgress(baseProgress + (progress / clips.length) * 0.5);
-            });
-            console.log(`[Transcribe] Audio extracted: ${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB`);
-          } catch (extractError) {
-            console.warn(`[Transcribe] Client-side extraction failed, falling back to server:`, extractError);
-            // Fall back to sending full video
-            fileToUpload = clip.file;
-          }
+        // Use storage path if available (for large files that were uploaded to storage)
+        if (clip.storagePath && clip.uploadStatus === 'complete') {
+          console.log(`[Transcribe] Using storage path for clip ${i + 1}: ${clip.storagePath}`);
+          setTranscribeProgress(baseProgress + (100 / clips.length) * 0.6);
+
+          response = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              storagePath: clip.storagePath,
+              enhanceAudio: audioSettings.enhanceAudio,
+              noiseReduction: audioSettings.noiseReduction,
+              noiseReductionStrength: audioSettings.noiseReductionStrength,
+              loudnessNormalization: audioSettings.loudnessNormalization,
+            }),
+          });
         } else {
-          // Re-create File with guaranteed valid MIME type for iOS Safari compatibility
-          fileToUpload = clip.file;
-          if (!clip.file.type || clip.file.type === 'application/octet-stream') {
-            const ext = clip.file.name.split('.').pop()?.toLowerCase();
-            const mimeMap: Record<string, string> = {
-              'mp4': 'video/mp4',
-              'mov': 'video/quicktime',
-              'webm': 'video/webm',
-              'm4v': 'video/x-m4v',
-              'hevc': 'video/mp4',
-            };
-            const mimeType = mimeMap[ext || ''] || 'video/mp4';
-            fileToUpload = new File([clip.file], clip.file.name, { type: mimeType });
+          // Fallback: Upload via FormData (for small files or when storage upload failed)
+          let fileToUpload: File;
+
+          // Extract audio client-side if supported (much smaller file size)
+          if (useClientExtraction) {
+            console.log(`[Transcribe] Extracting audio from clip ${i + 1} client-side...`);
+            try {
+              fileToUpload = await extractAudioFromVideo(clip.file, (progress) => {
+                // Progress for extraction (first half of clip progress)
+                setTranscribeProgress(baseProgress + (progress / clips.length) * 0.5);
+              });
+              console.log(`[Transcribe] Audio extracted: ${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB`);
+            } catch (extractError) {
+              console.warn(`[Transcribe] Client-side extraction failed, falling back to server:`, extractError);
+              // Fall back to sending full video
+              fileToUpload = clip.file;
+            }
+          } else {
+            // Re-create File with guaranteed valid MIME type for iOS Safari compatibility
+            fileToUpload = clip.file;
+            if (!clip.file.type || clip.file.type === 'application/octet-stream') {
+              const ext = clip.file.name.split('.').pop()?.toLowerCase();
+              const mimeMap: Record<string, string> = {
+                'mp4': 'video/mp4',
+                'mov': 'video/quicktime',
+                'webm': 'video/webm',
+                'm4v': 'video/x-m4v',
+                'hevc': 'video/mp4',
+              };
+              const mimeType = mimeMap[ext || ''] || 'video/mp4';
+              fileToUpload = new File([clip.file], clip.file.name, { type: mimeType });
+            }
           }
-        }
 
-        const formData = new FormData();
-        // Use "audio" key if we extracted audio, "video" if sending full video
-        const fileKey = fileToUpload.type.startsWith('audio/') ? 'audio' : 'video';
-        formData.append(fileKey, fileToUpload);
+          const formData = new FormData();
+          // Use "audio" key if we extracted audio, "video" if sending full video
+          const fileKey = fileToUpload.type.startsWith('audio/') ? 'audio' : 'video';
+          formData.append(fileKey, fileToUpload);
 
-        // Add audio enhancement settings (only if sending video - audio is already clean)
-        if (fileKey === 'video' && audioSettings.enhanceAudio) {
-          formData.append("enhanceAudio", "true");
-          formData.append("noiseReduction", String(audioSettings.noiseReduction));
-          formData.append("noiseReductionStrength", audioSettings.noiseReductionStrength);
-          formData.append("loudnessNormalization", String(audioSettings.loudnessNormalization));
-        }
+          // Add audio enhancement settings (only if sending video - audio is already clean)
+          if (fileKey === 'video' && audioSettings.enhanceAudio) {
+            formData.append("enhanceAudio", "true");
+            formData.append("noiseReduction", String(audioSettings.noiseReduction));
+            formData.append("noiseReductionStrength", audioSettings.noiseReductionStrength);
+            formData.append("loudnessNormalization", String(audioSettings.loudnessNormalization));
+          }
 
-        setTranscribeProgress(baseProgress + (100 / clips.length) * 0.6);
+          setTranscribeProgress(baseProgress + (100 / clips.length) * 0.6);
 
-        const response = await fetch("/api/transcribe", {
-          method: "POST",
-          body: formData,
-        });
+          response = await fetch("/api/transcribe", {
+            method: "POST",
+            body: formData,
+          });
 
-        // Handle 413 (file too large) specifically
-        if (response.status === 413) {
-          const fileSizeMB = fileToUpload.size / (1024 * 1024);
-          alert(`Clip ${i + 1} is too large (${fileSizeMB.toFixed(1)}MB). Try using a shorter clip.`);
-          continue;
+          // Handle 413 (file too large) specifically - suggest waiting for storage upload
+          if (response.status === 413) {
+            const fileSizeMB = fileToUpload.size / (1024 * 1024);
+            if (clip.uploadStatus === 'uploading') {
+              alert(`Clip ${i + 1} (${fileSizeMB.toFixed(1)}MB) is still uploading to storage. Please wait and try again.`);
+            } else if (clip.uploadStatus === 'error') {
+              alert(`Clip ${i + 1} is too large (${fileSizeMB.toFixed(1)}MB) and storage upload failed. Try using a shorter clip.`);
+            } else {
+              alert(`Clip ${i + 1} is too large (${fileSizeMB.toFixed(1)}MB). Try using a shorter clip.`);
+            }
+            continue;
+          }
         }
 
         const data = await response.json();
@@ -2381,9 +2526,9 @@ function EditStep({
 
   return (
     <>
-    <div className="w-full max-w-6xl mx-auto flex flex-col gap-6 sm:gap-8 animate-fade-in-up pb-[220px]">
-      {/* Mobile Tab Header */}
-      <div className="lg:hidden flex items-center justify-center gap-1 bg-white/5 backdrop-blur-xl border border-white/10 p-1.5 rounded-full mx-4 shadow-lg">
+    {/* Mobile Tab Header - Fixed below main header */}
+    <div className="lg:hidden sticky top-[65px] z-40 bg-[var(--background-content)] pt-3 pb-2 px-4">
+      <div className="flex items-center justify-center gap-1 bg-white/5 backdrop-blur-xl border border-white/10 p-1.5 rounded-full shadow-lg">
         <button
           onClick={() => setMobileTab('video')}
           className="relative flex-1 py-2.5 px-6 rounded-full text-sm font-medium transition-colors duration-200"
@@ -2415,26 +2560,9 @@ function EditStep({
           </span>
         </button>
       </div>
+    </div>
 
-      {/* Mobile Swipe Indicator */}
-      <div className="lg:hidden flex justify-center gap-2 pb-2">
-        <motion.div
-          className="w-2 h-2 rounded-full bg-[#3A3A3C]"
-          animate={{
-            backgroundColor: mobileTab === 'video' ? '#4A8FE7' : '#3A3A3C',
-            scale: mobileTab === 'video' ? 1.2 : 1
-          }}
-          transition={{ type: "spring", bounce: 0.3, duration: 0.4 }}
-        />
-        <motion.div
-          className="w-2 h-2 rounded-full bg-[#3A3A3C]"
-          animate={{
-            backgroundColor: mobileTab === 'transcript' ? '#4A8FE7' : '#3A3A3C',
-            scale: mobileTab === 'transcript' ? 1.2 : 1
-          }}
-          transition={{ type: "spring", bounce: 0.3, duration: 0.4 }}
-        />
-      </div>
+    <div className="w-full max-w-6xl mx-auto flex flex-col gap-4 sm:gap-8 animate-fade-in-up pb-[220px]">
 
       {/* Mobile Swipeable Content */}
       <div
