@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "motion/react";
 import Image from "next/image";
 import { captionTemplates, CaptionTemplate } from "@/lib/caption-templates";
 import {
@@ -72,14 +74,18 @@ function HomeContent() {
   const [showUploads, setShowUploads] = useState(false);
   const [projectName, setProjectName] = useState("Untitled Project");
   const [isEditingName, setIsEditingName] = useState(false);
+  const [autoCutEnabled, setAutoCutEnabled] = useState(false);
 
   // Save/Load state
   const [isSaving, setIsSaving] = useState(false);
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [isLoadingProject, setIsLoadingProject] = useState(false);
   const savedClipNames = useRef<Set<string>>(new Set());
 
-  const { createProject, updateProject, projects } = useProjects();
+  const { createProject, updateProject, projects, refreshProjects } = useProjects();
   const { state: overlayState, loadState: loadOverlayState, resetOverlays } = useOverlay();
+  const { user } = useUser();
+  const router = useRouter();
 
   // Track changes
   useEffect(() => {
@@ -90,6 +96,12 @@ function HomeContent() {
 
   // Handle creating a new project
   const handleCreateProject = useCallback(async () => {
+    // Redirect to login if not authenticated
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+
     const project = await createProject(`Untitled Project`);
     if (project) {
       setCurrentProjectId(project.id);
@@ -104,7 +116,7 @@ function HomeContent() {
       resetOverlays();
       setView("editor");
     }
-  }, [createProject, resetOverlays]);
+  }, [user, router, createProject, resetOverlays]);
 
   // Handle selecting a project from feed
   const handleSelectProject = useCallback(async (projectId: string) => {
@@ -290,6 +302,10 @@ function HomeContent() {
           unsavedClips.forEach(clip => savedClipNames.current.add(clip.file.name));
         }
       }
+
+      // Show success animation
+      setShowSaveSuccess(true);
+      setTimeout(() => setShowSaveSuccess(false), 2000);
     } catch (error) {
       console.error('Failed to save project:', error);
       // Revert optimistic update on error
@@ -304,26 +320,29 @@ function HomeContent() {
     if (hasUnsavedChanges) {
       setShowExitDialog(true);
     } else {
+      refreshProjects(); // Refresh to get updated thumbnails
       setView("feed");
       setCurrentProjectId(null);
     }
-  }, [hasUnsavedChanges]);
+  }, [hasUnsavedChanges, refreshProjects]);
 
   // Save and exit
   const handleSaveAndExit = useCallback(async () => {
     await saveProject();
     setShowExitDialog(false);
+    refreshProjects(); // Refresh to get updated thumbnails
     setView("feed");
     setCurrentProjectId(null);
-  }, [saveProject]);
+  }, [saveProject, refreshProjects]);
 
   // Discard and exit
   const handleDiscardAndExit = useCallback(() => {
     setShowExitDialog(false);
     setHasUnsavedChanges(false);
+    refreshProjects(); // Refresh to get updated thumbnails
     setView("feed");
     setCurrentProjectId(null);
-  }, []);
+  }, [refreshProjects]);
 
   // Save project name
   const handleSaveProjectName = useCallback(async (newName: string) => {
@@ -387,8 +406,9 @@ function HomeContent() {
     };
   }, [clips]);
 
-  const handleFilesSelected = async (files: File[]) => {
+  const handleFilesSelected = async (files: File[], autoCut: boolean = false) => {
     setStep("edit");
+    setAutoCutEnabled(autoCut);
 
     const videoClips: VideoClip[] = await Promise.all(
       files.map(async (file) => {
@@ -446,11 +466,50 @@ function HomeContent() {
     return words;
   }, [clips]);
 
+  // Auto remove silent pauses - removes all pauses above threshold
+  const handleAutoRemoveSilence = useCallback(() => {
+    const PAUSE_THRESHOLD = 0.3; // Match timeline constant
+    const pausesToDelete = new Set<string>();
+
+    // Find all pauses between consecutive words
+    for (let i = 0; i < allWords.length - 1; i++) {
+      const word = allWords[i];
+      const nextWord = allWords[i + 1];
+
+      // Only consider pauses within the same clip
+      if (word.clipIndex !== nextWord.clipIndex) continue;
+
+      const gap = nextWord.start - word.end;
+      if (gap >= PAUSE_THRESHOLD) {
+        pausesToDelete.add(`pause-after-${word.id}`);
+      }
+    }
+
+    // Also handle leading pauses (before first word of each clip)
+    const clipIndices = new Set(allWords.map(w => w.clipIndex));
+    clipIndices.forEach(clipIndex => {
+      const clipWords = allWords.filter(w => w.clipIndex === clipIndex);
+      if (clipWords.length > 0) {
+        const firstWord = clipWords[0];
+        if (firstWord.start >= PAUSE_THRESHOLD) {
+          pausesToDelete.add(`pause-before-clip-${clipIndex}`);
+        }
+      }
+    });
+
+    if (pausesToDelete.size > 0) {
+      setDeletedPauseIds(prev => new Set([...prev, ...pausesToDelete]));
+    }
+
+    return pausesToDelete.size;
+  }, [allWords]);
+
   // Feed view
   if (view === "feed") {
     return (
       <MediaLibraryProvider>
         <Sidebar
+          view="feed"
           onOpenUploads={() => setShowUploads(true)}
           onNavigateHome={() => setView("feed")}
           onCreateProject={handleCreateProject}
@@ -483,6 +542,7 @@ function HomeContent() {
   return (
     <MediaLibraryProvider>
       <Sidebar
+        view="editor"
         onOpenUploads={() => setShowUploads(true)}
         onNavigateHome={handleBackToFeed}
         onCreateProject={handleCreateProject}
@@ -605,16 +665,53 @@ function HomeContent() {
             )}
           </div>
           {step === "edit" && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Auto Cut Button - removes silent pauses */}
+              <button
+                onClick={() => {
+                  const count = handleAutoRemoveSilence();
+                  if (count === 0) {
+                    // Could show a toast, but for now just log
+                    console.log('No pauses to remove');
+                  }
+                }}
+                disabled={allWords.length === 0}
+                className="text-sm px-4 py-2.5 rounded-full bg-amber-500/10 backdrop-blur-xl border border-amber-500/30 text-amber-400 font-medium disabled:opacity-50 flex items-center gap-2 transition-all duration-300 hover:bg-amber-500/20 hover:border-amber-500/50"
+                title="Auto remove silent pauses"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
+                </svg>
+                <span className="hidden sm:inline">Auto Cut</span>
+              </button>
               <button
                 onClick={saveProject}
                 disabled={isSaving || !hasUnsavedChanges}
-                className="btn-secondary text-sm px-4 py-2.5 disabled:opacity-50 flex items-center gap-2"
+                className={`text-sm px-5 py-2.5 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 font-medium disabled:opacity-50 flex items-center gap-2 transition-all duration-300 hover:bg-white/10 ${
+                  showSaveSuccess ? 'text-green-400 border-green-400/30' : 'text-white'
+                }`}
               >
                 {isSaving ? (
                   <>
                     <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                     Saving...
+                  </>
+                ) : showSaveSuccess ? (
+                  <>
+                    <svg
+                      className="w-4 h-4 text-green-400 animate-scale-in"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2.5}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    Saved
                   </>
                 ) : (
                   <>
@@ -624,7 +721,7 @@ function HomeContent() {
               </button>
               <button
                 onClick={() => setStep("export")}
-                className="btn-primary text-sm px-5 py-2.5"
+                className="text-sm px-6 py-2.5 rounded-full bg-[#4A8FE7]/90 backdrop-blur-xl text-white font-medium border border-[#4A8FE7]/50 shadow-lg shadow-[#4A8FE7]/25 hover:bg-[#4A8FE7] hover:shadow-[#4A8FE7]/40 transition-all duration-300"
               >
                 Export
               </button>
@@ -647,6 +744,8 @@ function HomeContent() {
               deletedPauseIds={deletedPauseIds}
               setDeletedPauseIds={setDeletedPauseIds}
               allWords={allWords}
+              autoCutEnabled={autoCutEnabled}
+              setAutoCutEnabled={setAutoCutEnabled}
             />
           )}
           {step === "export" && (
@@ -676,12 +775,67 @@ function getVideoDuration(url: string): Promise<number> {
   });
 }
 
+interface SelectedFile {
+  file: File;
+  thumbnail: string;
+  duration: number;
+}
+
 function UploadStep({
   onFilesSelected,
 }: {
-  onFilesSelected: (files: File[]) => void;
+  onFilesSelected: (files: File[], autoCut?: boolean) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Generate thumbnail and get duration for a video file
+  const processFile = async (file: File): Promise<SelectedFile> => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      const url = URL.createObjectURL(file);
+      video.src = url;
+      video.preload = 'metadata';
+
+      video.onloadedmetadata = () => {
+        video.currentTime = 1; // Seek to 1 second for thumbnail
+      };
+
+      video.onseeked = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 120;
+        canvas.height = 160;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
+        const thumbnail = canvas.toDataURL('image/jpeg', 0.7);
+        URL.revokeObjectURL(url);
+        resolve({
+          file,
+          thumbnail,
+          duration: video.duration,
+        });
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve({
+          file,
+          thumbnail: '',
+          duration: 0,
+        });
+      };
+    });
+  };
+
+  const handleFilesAdded = async (files: File[]) => {
+    setIsProcessing(true);
+    const processed = await Promise.all(files.map(processFile));
+    setSelectedFiles((prev) => [...prev, ...processed]);
+    setIsProcessing(false);
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -689,13 +843,31 @@ function UploadStep({
     const files = Array.from(e.dataTransfer.files).filter((file) =>
       file.type.startsWith("video/")
     );
-    if (files.length > 0) onFilesSelected(files);
+    if (files.length > 0) handleFilesAdded(files);
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      onFilesSelected(Array.from(e.target.files));
+      handleFilesAdded(Array.from(e.target.files));
     }
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleNext = () => {
+    onFilesSelected(selectedFiles.map((f) => f.file), false);
+  };
+
+  const handleAutoCut = () => {
+    onFilesSelected(selectedFiles.map((f) => f.file), true);
   };
 
   return (
@@ -744,6 +916,80 @@ function UploadStep({
         <p className="text-white font-semibold text-lg mb-1">Click or drag to upload</p>
         <p className="text-[#636366] text-sm">MOV, MP4, and more</p>
       </label>
+
+      {/* Selected Files Preview */}
+      {(selectedFiles.length > 0 || isProcessing) && (
+        <div className="mt-8 animate-fade-in">
+          {/* Thumbnail row */}
+          <div className="flex items-center gap-3 justify-center mb-6 overflow-x-auto pb-2">
+            {selectedFiles.map((file, index) => (
+              <div key={index} className="relative flex-shrink-0 group">
+                <div className="w-20 h-28 rounded-lg overflow-hidden bg-[#2C2C2E] border border-[#3C3C3E]">
+                  {file.thumbnail ? (
+                    <img
+                      src={file.thumbnail}
+                      alt={file.file.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <svg className="w-6 h-6 text-[#636366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  )}
+                  {/* Duration badge */}
+                  <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">
+                    {formatDuration(file.duration)}
+                  </div>
+                </div>
+                {/* Remove button */}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    removeFile(index);
+                  }}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-[#FF3B30] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            {isProcessing && (
+              <div className="w-20 h-28 rounded-lg bg-[#2C2C2E] border border-[#3C3C3E] flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+          </div>
+
+          {/* Action buttons - TikTok style */}
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={handleAutoCut}
+              disabled={isProcessing}
+              className="flex items-center gap-2 px-6 py-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] border border-[#3C3C3E] rounded-full text-white font-medium transition-all disabled:opacity-50"
+            >
+              <svg className="w-5 h-5 text-[#FF3B30]" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 9l-7 7-7-7" />
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+              </svg>
+              AutoCut
+            </button>
+            <button
+              onClick={handleNext}
+              disabled={isProcessing}
+              className="px-8 py-3 bg-[#FF2D55] hover:bg-[#FF375F] rounded-full text-white font-medium transition-all disabled:opacity-50"
+            >
+              Next ({selectedFiles.length})
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -758,6 +1004,8 @@ function EditStep({
   deletedPauseIds,
   setDeletedPauseIds,
   allWords,
+  autoCutEnabled,
+  setAutoCutEnabled,
 }: {
   clips: VideoClip[];
   setClips: React.Dispatch<React.SetStateAction<VideoClip[]>>;
@@ -768,6 +1016,8 @@ function EditStep({
   deletedPauseIds: Set<string>;
   setDeletedPauseIds: React.Dispatch<React.SetStateAction<Set<string>>>;
   allWords: TranscriptWord[];
+  autoCutEnabled: boolean;
+  setAutoCutEnabled: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const [activeClipIndex, setActiveClipIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -776,8 +1026,18 @@ function EditStep({
   const [transcribeProgress, setTranscribeProgress] = useState(0);
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState<number | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const desktopVideoRef = useRef<HTMLVideoElement>(null);
+  const mobileVideoRef = useRef<HTMLVideoElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
+
+  // Helper to get the currently visible video element
+  const getActiveVideoRef = useCallback(() => {
+    // lg breakpoint is 1024px
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+      return desktopVideoRef.current;
+    }
+    return mobileVideoRef.current;
+  }, []);
 
   // Mobile tab state
   const [mobileTab, setMobileTab] = useState<'video' | 'transcript'>('video');
@@ -816,7 +1076,7 @@ function EditStep({
   // Timeline selection state
   const [selectedTimelineItems, setSelectedTimelineItems] = useState<string[]>([]);
 
-  const { state: overlayState, updateTextOverlay, updateSticker, removeTextOverlay, removeSticker, setCaptionPosition, setTransitions } = useOverlay();
+  const { state: overlayState, updateTextOverlay, updateSticker, removeTextOverlay, removeSticker, setCaptionPosition, setTransitions, setFilter } = useOverlay();
 
   const activeClip = clips[activeClipIndex];
 
@@ -844,12 +1104,13 @@ function EditStep({
       if (e.code === 'Space' &&
           !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
         e.preventDefault();
-        if (videoRef.current) {
+        const video = getActiveVideoRef();
+        if (video) {
           if (isPlaying) {
-            videoRef.current.pause();
+            video.pause();
             setIsPlaying(false);
           } else {
-            videoRef.current.play().catch((err) => {
+            video.play().catch((err) => {
               if (err.name !== 'AbortError') console.error('Video play error:', err);
             });
             setIsPlaying(true);
@@ -860,7 +1121,61 @@ function EditStep({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying]);
+  }, [isPlaying, getActiveVideoRef]);
+
+  // Auto-cut effect: apply creative effects after transcription completes
+  useEffect(() => {
+    if (!autoCutEnabled) return;
+
+    // Check if all clips have been transcribed (have words)
+    const allTranscribed = clips.length > 0 && clips.every(clip => clip.words && clip.words.length > 0);
+    if (!allTranscribed) return;
+
+    // Apply auto-cut effects once
+    setAutoCutEnabled(false); // Disable to prevent re-triggering
+
+    // 1. Auto-delete long pauses (>0.5s) - creates jump cuts
+    const pauseThreshold = 0.5; // seconds
+    const pausesToDelete = new Set<string>();
+
+    clips.forEach((clip, clipIndex) => {
+      if (!clip.words) return;
+      for (let i = 0; i < clip.words.length - 1; i++) {
+        const currentWord = clip.words[i];
+        const nextWord = clip.words[i + 1];
+        const gap = nextWord.start - currentWord.end;
+        if (gap > pauseThreshold) {
+          // Create a pause ID to mark for deletion
+          pausesToDelete.add(`pause-clip-${clipIndex}-${currentWord.id}-${nextWord.id}`);
+        }
+      }
+    });
+
+    if (pausesToDelete.size > 0) {
+      setDeletedPauseIds(prev => new Set([...prev, ...pausesToDelete]));
+    }
+
+    // 2. Apply a creative filter (random selection from good options)
+    const creativeFilters = ['cinematic', 'vibrant', 'retro', 'moody', 'fade'];
+    const randomFilter = creativeFilters[Math.floor(Math.random() * creativeFilters.length)];
+    setFilter(randomFilter);
+
+    // 3. Apply varied transitions if multiple clips
+    if (clips.length >= 2) {
+      const clipInfos = clips.map((clip, i) => ({
+        duration: clip.duration,
+        index: i,
+      }));
+      const autoTransitions = generateAutoTransitions(clipInfos, 'varied');
+      setTransitions(autoTransitions);
+    }
+
+    console.log('AutoCut applied:', {
+      pausesDeleted: pausesToDelete.size,
+      filter: randomFilter,
+      transitionsApplied: clips.length >= 2,
+    });
+  }, [autoCutEnabled, clips, setAutoCutEnabled, setDeletedPauseIds, setFilter, setTransitions]);
 
   // Merged transcript from all clips
   const fullTranscript = useMemo(() => {
@@ -929,6 +1244,7 @@ function EditStep({
           words: allWords,
           deletedWordIds,
           deletedPauseIds,
+          clips: clips.map(c => ({ duration: c.duration })),
         })
       : { id: 'script-track', name: 'Script', items: [] };
 
@@ -1063,21 +1379,23 @@ function EditStep({
     for (let i = 0; i < clips.length; i++) {
       if (newTime < accumulatedTime + clips[i].duration) {
         setActiveClipIndex(i);
-        if (videoRef.current) {
-          videoRef.current.currentTime = newTime - accumulatedTime;
+        const video = getActiveVideoRef();
+        if (video) {
+          video.currentTime = newTime - accumulatedTime;
         }
         return;
       }
       accumulatedTime += clips[i].duration;
     }
-  }, [clips]);
+  }, [clips, getActiveVideoRef]);
 
   const handlePlayPause = () => {
-    if (videoRef.current) {
+    const video = getActiveVideoRef();
+    if (video) {
       if (isPlaying) {
-        videoRef.current.pause();
+        video.pause();
       } else {
-        videoRef.current.play().catch((e) => {
+        video.play().catch((e) => {
           if (e.name !== 'AbortError') console.error('Video play error:', e);
         });
       }
@@ -1086,17 +1404,45 @@ function EditStep({
   };
 
   const handleTimeUpdate = useCallback(() => {
-    if (videoRef.current) {
+    const video = getActiveVideoRef();
+    if (video) {
       const previousClipsDuration = clips
         .slice(0, activeClipIndex)
         .reduce((acc, clip) => acc + clip.duration, 0);
-      const globalTime = previousClipsDuration + videoRef.current.currentTime;
+      const globalTime = previousClipsDuration + video.currentTime;
       setCurrentTime(globalTime);
 
       // Skip deleted pauses during playback (jump cuts)
       if (isPlaying && deletedPauseIds.size > 0 && allWords.length > 0) {
-        // Check if we're in a deleted pause
         const pauseThreshold = 0.3; // Same threshold as generate-script-track
+
+        // Group words by clip for boundary detection
+        const wordsByClip = new Map<number, TranscriptWord[]>();
+        for (const word of allWords) {
+          const clipWords = wordsByClip.get(word.clipIndex) || [];
+          clipWords.push(word);
+          wordsByClip.set(word.clipIndex, clipWords);
+        }
+
+        // Check for leading pause at clip start (before first word)
+        const clipStartTime = clips
+          .slice(0, activeClipIndex)
+          .reduce((acc, clip) => acc + clip.duration, 0);
+        const clipWords = wordsByClip.get(activeClipIndex);
+        if (clipWords && clipWords.length > 0) {
+          const firstWord = clipWords[0];
+          const leadingGap = firstWord.start - clipStartTime;
+          if (leadingGap >= pauseThreshold) {
+            const leadingPauseId = `pause-before-clip-${activeClipIndex}-first-word`;
+            if (deletedPauseIds.has(leadingPauseId) && globalTime >= clipStartTime && globalTime < firstWord.start) {
+              // Jump to first word
+              video.currentTime = firstWord.start - clipStartTime;
+              return;
+            }
+          }
+        }
+
+        // Check for inter-word pauses
         for (let i = 0; i < allWords.length - 1; i++) {
           const word = allWords[i];
           const nextWord = allWords[i + 1];
@@ -1110,11 +1456,36 @@ function EditStep({
               if (nextWord.clipIndex !== activeClipIndex) {
                 setActiveClipIndex(nextWord.clipIndex);
               }
-              const clipStartTime = clips
+              const nextClipStartTime = clips
                 .slice(0, nextWord.clipIndex)
                 .reduce((acc, clip) => acc + clip.duration, 0);
-              videoRef.current.currentTime = nextWord.start - clipStartTime;
+              video.currentTime = nextWord.start - nextClipStartTime;
               return; // Exit early to avoid duplicate processing
+            }
+          }
+        }
+
+        // Check for trailing pause at clip end (after last word)
+        if (clipWords && clipWords.length > 0) {
+          const lastWord = clipWords[clipWords.length - 1];
+          const clipEndTime = clipStartTime + clips[activeClipIndex].duration;
+          const trailingGap = clipEndTime - lastWord.end;
+          if (trailingGap >= pauseThreshold) {
+            const trailingPauseId = `pause-after-clip-${activeClipIndex}-last-word`;
+            if (deletedPauseIds.has(trailingPauseId) && globalTime >= lastWord.end && globalTime < clipEndTime) {
+              // Jump to next clip or end
+              if (activeClipIndex < clips.length - 1) {
+                setActiveClipIndex(activeClipIndex + 1);
+                const nextClipWords = wordsByClip.get(activeClipIndex + 1);
+                if (nextClipWords && nextClipWords.length > 0) {
+                  // Jump to first word of next clip
+                  const nextClipStartTime = clipEndTime;
+                  video.currentTime = nextClipWords[0].start - nextClipStartTime;
+                } else {
+                  video.currentTime = 0;
+                }
+              }
+              return;
             }
           }
         }
@@ -1146,10 +1517,10 @@ function EditStep({
             const clipStartTime = clips
               .slice(0, nextWord.clipIndex)
               .reduce((acc, clip) => acc + clip.duration, 0);
-            videoRef.current.currentTime = nextWord.start - clipStartTime;
+            video.currentTime = nextWord.start - clipStartTime;
           } else {
             // No more words, end playback
-            videoRef.current.pause();
+            video.pause();
             setIsPlaying(false);
           }
         }
@@ -1176,16 +1547,16 @@ function EditStep({
             const clipStartTime = clips
               .slice(0, nextSegment.clipIndex)
               .reduce((acc, clip) => acc + clip.duration, 0);
-            videoRef.current.currentTime = nextSegment.start - clipStartTime;
+            video.currentTime = nextSegment.start - clipStartTime;
           } else {
             // No more segments, end playback
-            videoRef.current.pause();
+            video.pause();
             setIsPlaying(false);
           }
         }
       }
     }
-  }, [clips, activeClipIndex, isPlaying, deletedSegments, allSegments, deletedWordIds, deletedPauseIds, allWords]);
+  }, [clips, activeClipIndex, isPlaying, deletedSegments, allSegments, deletedWordIds, deletedPauseIds, allWords, getActiveVideoRef]);
 
   const handleVideoEnded = () => {
     if (activeClipIndex < clips.length - 1) {
@@ -1197,15 +1568,16 @@ function EditStep({
   };
 
   useEffect(() => {
-    if (isPlaying && videoRef.current) {
-      videoRef.current.play().catch((e) => {
+    const video = getActiveVideoRef();
+    if (isPlaying && video) {
+      video.play().catch((e) => {
         // Ignore AbortError - happens when play() is interrupted by pause()
         if (e.name !== 'AbortError') {
           console.error('Video play error:', e);
         }
       });
     }
-  }, [activeClipIndex, isPlaying]);
+  }, [activeClipIndex, isPlaying, getActiveVideoRef]);
 
   // Keyboard handler for Delete key
   useEffect(() => {
@@ -1320,24 +1692,26 @@ function EditStep({
   const handleSegmentClick = (segment: TranscriptSegment, index: number) => {
     setSelectedSegmentIndex(index);
     setActiveClipIndex(segment.clipIndex);
-    if (videoRef.current) {
+    const video = getActiveVideoRef();
+    if (video) {
       const clipStartTime = clips
         .slice(0, segment.clipIndex)
         .reduce((acc, clip) => acc + clip.duration, 0);
-      videoRef.current.currentTime = segment.start - clipStartTime;
+      video.currentTime = segment.start - clipStartTime;
     }
   };
 
   // Jump to word when clicked (for ScriptEditor)
   const handleWordClick = useCallback((word: TranscriptWord) => {
     setActiveClipIndex(word.clipIndex);
-    if (videoRef.current) {
+    const video = getActiveVideoRef();
+    if (video) {
       const clipStartTime = clips
         .slice(0, word.clipIndex)
         .reduce((acc, clip) => acc + clip.duration, 0);
-      videoRef.current.currentTime = word.start - clipStartTime;
+      video.currentTime = word.start - clipStartTime;
     }
-  }, [clips]);
+  }, [clips, getActiveVideoRef]);
 
   // Handle timeline item select (for seeking on script items)
   const handleTimelineItemSelect = useCallback((itemId: string) => {
@@ -1369,33 +1743,57 @@ function EditStep({
     <>
     <div className="w-full max-w-6xl mx-auto flex flex-col gap-6 sm:gap-8 animate-fade-in-up pb-[220px]">
       {/* Mobile Tab Header */}
-      <div className="lg:hidden flex items-center justify-center gap-1 bg-[#1C1C1E] p-1 rounded-xl mx-4">
+      <div className="lg:hidden flex items-center justify-center gap-1 bg-white/5 backdrop-blur-xl border border-white/10 p-1.5 rounded-full mx-4 shadow-lg">
         <button
           onClick={() => setMobileTab('video')}
-          className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
-            mobileTab === 'video'
-              ? 'bg-[#4A8FE7] text-white'
-              : 'text-[#8E8E93] hover:text-white'
-          }`}
+          className="relative flex-1 py-2.5 px-6 rounded-full text-sm font-medium transition-colors duration-200"
         >
-          Video
+          {mobileTab === 'video' && (
+            <motion.div
+              layoutId="activeTab"
+              className="absolute inset-0 bg-[#4A8FE7]/90 rounded-full shadow-lg shadow-[#4A8FE7]/25"
+              transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
+            />
+          )}
+          <span className={`relative z-10 ${mobileTab === 'video' ? 'text-white' : 'text-[#8E8E93]'}`}>
+            Video
+          </span>
         </button>
         <button
           onClick={() => setMobileTab('transcript')}
-          className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
-            mobileTab === 'transcript'
-              ? 'bg-[#4A8FE7] text-white'
-              : 'text-[#8E8E93] hover:text-white'
-          }`}
+          className="relative flex-1 py-2.5 px-6 rounded-full text-sm font-medium transition-colors duration-200"
         >
-          Transcript
+          {mobileTab === 'transcript' && (
+            <motion.div
+              layoutId="activeTab"
+              className="absolute inset-0 bg-[#4A8FE7]/90 rounded-full shadow-lg shadow-[#4A8FE7]/25"
+              transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
+            />
+          )}
+          <span className={`relative z-10 ${mobileTab === 'transcript' ? 'text-white' : 'text-[#8E8E93]'}`}>
+            Transcript
+          </span>
         </button>
       </div>
 
       {/* Mobile Swipe Indicator */}
       <div className="lg:hidden flex justify-center gap-2 pb-2">
-        <div className={`w-2 h-2 rounded-full transition-colors ${mobileTab === 'video' ? 'bg-[#4A8FE7]' : 'bg-[#3A3A3C]'}`} />
-        <div className={`w-2 h-2 rounded-full transition-colors ${mobileTab === 'transcript' ? 'bg-[#4A8FE7]' : 'bg-[#3A3A3C]'}`} />
+        <motion.div
+          className="w-2 h-2 rounded-full bg-[#3A3A3C]"
+          animate={{
+            backgroundColor: mobileTab === 'video' ? '#4A8FE7' : '#3A3A3C',
+            scale: mobileTab === 'video' ? 1.2 : 1
+          }}
+          transition={{ type: "spring", bounce: 0.3, duration: 0.4 }}
+        />
+        <motion.div
+          className="w-2 h-2 rounded-full bg-[#3A3A3C]"
+          animate={{
+            backgroundColor: mobileTab === 'transcript' ? '#4A8FE7' : '#3A3A3C',
+            scale: mobileTab === 'transcript' ? 1.2 : 1
+          }}
+          transition={{ type: "spring", bounce: 0.3, duration: 0.4 }}
+        />
       </div>
 
       {/* Mobile Swipeable Content */}
@@ -1405,15 +1803,16 @@ function EditStep({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div
-          className="flex transition-transform duration-300 ease-out"
-          style={{ transform: mobileTab === 'video' ? 'translateX(0)' : 'translateX(-100%)' }}
+        <motion.div
+          className="flex"
+          animate={{ x: mobileTab === 'video' ? '0%' : '-100%' }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
         >
           {/* Mobile Video Tab */}
           <div className="w-full flex-shrink-0 px-4">
             <MobileVideoPanel
               activeClip={clips[activeClipIndex]}
-              videoRef={videoRef}
+              videoRef={mobileVideoRef}
               filterStyle={overlayState.filterId ? getFilterById(overlayState.filterId)?.filter : undefined}
               handleTimeUpdate={handleTimeUpdate}
               handleVideoEnded={handleVideoEnded}
@@ -1454,7 +1853,7 @@ function EditStep({
               handleRestoreAll={handleRestoreAll}
             />
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Desktop Layout */}
@@ -1467,7 +1866,7 @@ function EditStep({
               {activeClip && (
                 <>
                   <video
-                    ref={videoRef}
+                    ref={desktopVideoRef}
                     src={activeClip.url}
                     className="w-full h-full object-cover"
                     style={{ filter: filterStyle && filterStyle !== 'none' ? filterStyle : undefined }}
@@ -1652,16 +2051,18 @@ function EditStep({
           showPlaybackControls
           isPlaying={isPlaying}
           onPlay={() => {
-            if (videoRef.current) {
-              videoRef.current.play().catch((e) => {
+            const video = getActiveVideoRef();
+            if (video) {
+              video.play().catch((e) => {
                 if (e.name !== 'AbortError') console.error('Video play error:', e);
               });
               setIsPlaying(true);
             }
           }}
           onPause={() => {
-            if (videoRef.current) {
-              videoRef.current.pause();
+            const video = getActiveVideoRef();
+            if (video) {
+              video.pause();
               setIsPlaying(false);
             }
           }}

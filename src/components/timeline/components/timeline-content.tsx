@@ -46,6 +46,7 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
   const { ghostElement, isValidDrop, isDragging } = useTimelineStore();
   const isScrubbing = useRef(false);
   const autoScrollRef = useRef<number | null>(null);
+  const scrubRafRef = useRef<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentTimeInSeconds = currentFrame / fps;
@@ -111,14 +112,24 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!isScrubbing.current) return;
 
-      const currentScrollLeft = scrollContainer?.scrollLeft || 0;
-      const x = moveEvent.clientX - rect.left + currentScrollLeft;
-      const dragPercentage = Math.max(0, Math.min(1, x / totalWidth));
-      const dragTime = dragPercentage * viewportDuration;
-      const dragFrame = Math.round(dragTime * fps);
-      onFrameChange(dragFrame);
+      // Cancel any pending frame update
+      if (scrubRafRef.current) {
+        cancelAnimationFrame(scrubRafRef.current);
+      }
 
-      // Auto-scroll near edges
+      const clientX = moveEvent.clientX;
+
+      // Throttle frame changes to animation frame rate
+      scrubRafRef.current = requestAnimationFrame(() => {
+        const currentScrollLeft = scrollContainer?.scrollLeft || 0;
+        const x = clientX - rect.left + currentScrollLeft;
+        const dragPercentage = Math.max(0, Math.min(1, x / totalWidth));
+        const dragTime = dragPercentage * viewportDuration;
+        const dragFrame = Math.round(dragTime * fps);
+        onFrameChange(dragFrame);
+      });
+
+      // Auto-scroll near edges (keep outside RAF for responsiveness)
       const edgeThreshold = 50;
       const containerRect = scrollContainer?.getBoundingClientRect();
       if (containerRect) {
@@ -136,6 +147,10 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
     const handleMouseUp = () => {
       isScrubbing.current = false;
       stopAutoScroll();
+      if (scrubRafRef.current) {
+        cancelAnimationFrame(scrubRafRef.current);
+        scrubRafRef.current = null;
+      }
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
@@ -144,11 +159,14 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
     document.addEventListener('mouseup', handleMouseUp);
   }, [viewportDuration, fps, onFrameChange, startAutoScroll, stopAutoScroll]);
 
-  // Cleanup auto-scroll on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (autoScrollRef.current) {
         cancelAnimationFrame(autoScrollRef.current);
+      }
+      if (scrubRafRef.current) {
+        cancelAnimationFrame(scrubRafRef.current);
       }
     };
   }, []);

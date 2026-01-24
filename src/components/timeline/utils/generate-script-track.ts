@@ -9,11 +9,16 @@ interface TranscriptWord {
   clipIndex: number;
 }
 
+interface ClipInfo {
+  duration: number;
+}
+
 interface GenerateScriptTrackOptions {
   words: TranscriptWord[];
   deletedWordIds: Set<string>;
   deletedPauseIds: Set<string>;
   pauseThreshold?: number;
+  clips?: ClipInfo[];  // Clip durations for detecting boundary silence
 }
 
 /**
@@ -26,11 +31,60 @@ export function generateScriptTrack({
   deletedWordIds,
   deletedPauseIds,
   pauseThreshold = SCRIPT_TRACK_CONSTANTS.PAUSE_THRESHOLD_SECONDS,
+  clips,
 }: GenerateScriptTrackOptions): TimelineTrack {
   const items: TimelineItem[] = [];
 
+  // Group words by clipIndex
+  const wordsByClip = new Map<number, TranscriptWord[]>();
+  for (const word of words) {
+    const clipWords = wordsByClip.get(word.clipIndex) || [];
+    clipWords.push(word);
+    wordsByClip.set(word.clipIndex, clipWords);
+  }
+
+  // Calculate clip start times (cumulative duration of previous clips)
+  const clipStartTimes: number[] = [];
+  if (clips) {
+    let cumulativeTime = 0;
+    for (const clip of clips) {
+      clipStartTimes.push(cumulativeTime);
+      cumulativeTime += clip.duration;
+    }
+  }
+
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
+    const clipIndex = word.clipIndex;
+
+    // Check for leading silence at clip boundary (before first word of this clip)
+    if (clips && clipStartTimes.length > clipIndex) {
+      const clipWords = wordsByClip.get(clipIndex);
+      const isFirstWordOfClip = clipWords && clipWords[0]?.id === word.id;
+
+      if (isFirstWordOfClip) {
+        const clipStartTime = clipStartTimes[clipIndex];
+        const leadingGap = word.start - clipStartTime;
+
+        if (leadingGap >= pauseThreshold) {
+          const pauseId = `pause-before-clip-${clipIndex}-first-word`;
+          items.push({
+            id: pauseId,
+            trackId: 'script-track',
+            start: clipStartTime,
+            end: word.start,
+            type: TrackItemType.PAUSE,
+            label: '...',
+            data: {
+              isPause: true,
+              duration: leadingGap,
+              isDeleted: deletedPauseIds.has(pauseId),
+              isBoundaryPause: true,
+            },
+          });
+        }
+      }
+    }
 
     // Add word item
     items.push({
@@ -66,6 +120,35 @@ export function generateScriptTrack({
             isDeleted: deletedPauseIds.has(pauseId),
           },
         });
+      }
+    }
+
+    // Check for trailing silence at clip boundary (after last word of this clip)
+    if (clips && clipStartTimes.length > clipIndex) {
+      const clipWords = wordsByClip.get(clipIndex);
+      const isLastWordOfClip = clipWords && clipWords[clipWords.length - 1]?.id === word.id;
+
+      if (isLastWordOfClip) {
+        const clipEndTime = clipStartTimes[clipIndex] + clips[clipIndex].duration;
+        const trailingGap = clipEndTime - word.end;
+
+        if (trailingGap >= pauseThreshold) {
+          const pauseId = `pause-after-clip-${clipIndex}-last-word`;
+          items.push({
+            id: pauseId,
+            trackId: 'script-track',
+            start: word.end,
+            end: clipEndTime,
+            type: TrackItemType.PAUSE,
+            label: '...',
+            data: {
+              isPause: true,
+              duration: trailingGap,
+              isDeleted: deletedPauseIds.has(pauseId),
+              isBoundaryPause: true,
+            },
+          });
+        }
       }
     }
   }

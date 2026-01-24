@@ -25,6 +25,7 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const autoScrollRef = useRef<number | null>(null);
+  const scrubRafRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const currentTimeInSeconds = currentFrame / fps;
@@ -63,6 +64,9 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
     return () => {
       if (autoScrollRef.current) {
         cancelAnimationFrame(autoScrollRef.current);
+      }
+      if (scrubRafRef.current) {
+        cancelAnimationFrame(scrubRafRef.current);
       }
     };
   }, []);
@@ -110,14 +114,23 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
         setIsDragging(true);
       }
 
-      // Update position during drag
-      const x = moveEvent.clientX - rect.left;
-      const dragPercentage = Math.max(0, Math.min(1, x / rect.width));
-      const dragTime = dragPercentage * viewportDuration;
-      const dragFrame = Math.round(dragTime * fps);
-      onFrameChange(dragFrame);
+      // Cancel any pending frame update
+      if (scrubRafRef.current) {
+        cancelAnimationFrame(scrubRafRef.current);
+      }
 
-      // Auto-scroll near edges
+      // Throttle frame changes to animation frame rate
+      scrubRafRef.current = requestAnimationFrame(() => {
+        // Update position during drag
+        const x = moveEvent.clientX - rect.left;
+        const dragPercentage = Math.max(0, Math.min(1, x / rect.width));
+        const dragTime = dragPercentage * viewportDuration;
+        const dragFrame = Math.round(dragTime * fps);
+        onFrameChange(dragFrame);
+      });
+
+      // Auto-scroll near edges (keep outside RAF for responsiveness)
+      const x = moveEvent.clientX - rect.left;
       const edgeThreshold = 50;
       if (x < edgeThreshold) {
         startAutoScroll('left');
@@ -133,6 +146,10 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
       document.removeEventListener('mouseup', handleMouseUp);
       setIsDragging(false);
       stopAutoScroll();
+      if (scrubRafRef.current) {
+        cancelAnimationFrame(scrubRafRef.current);
+        scrubRafRef.current = null;
+      }
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -171,13 +188,24 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
       const moveTouch = moveEvent.touches[0];
       if (!moveTouch) return;
 
-      const x = moveTouch.clientX - rect.left;
-      const dragPercentage = Math.max(0, Math.min(1, x / rect.width));
-      const dragTime = dragPercentage * viewportDuration;
-      const dragFrame = Math.round(dragTime * fps);
-      onFrameChange(dragFrame);
+      // Cancel any pending frame update
+      if (scrubRafRef.current) {
+        cancelAnimationFrame(scrubRafRef.current);
+      }
 
-      // Auto-scroll near edges
+      const touchX = moveTouch.clientX;
+
+      // Throttle frame changes to animation frame rate
+      scrubRafRef.current = requestAnimationFrame(() => {
+        const x = touchX - rect.left;
+        const dragPercentage = Math.max(0, Math.min(1, x / rect.width));
+        const dragTime = dragPercentage * viewportDuration;
+        const dragFrame = Math.round(dragTime * fps);
+        onFrameChange(dragFrame);
+      });
+
+      // Auto-scroll near edges (keep outside RAF for responsiveness)
+      const x = moveTouch.clientX - rect.left;
       const edgeThreshold = 50;
       if (x < edgeThreshold) {
         startAutoScroll('left');
@@ -193,6 +221,10 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
       document.removeEventListener('touchend', handleTouchEnd);
       setIsDragging(false);
       stopAutoScroll();
+      if (scrubRafRef.current) {
+        cancelAnimationFrame(scrubRafRef.current);
+        scrubRafRef.current = null;
+      }
     };
 
     document.addEventListener('touchmove', handleTouchMove, { passive: false });
