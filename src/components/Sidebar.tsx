@@ -4,17 +4,32 @@ import { useState } from 'react'
 import { useUser, useSignOut } from '@/lib/supabase'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useOverlay } from '@/components/overlays/OverlayContext'
 
 interface SidebarProps {
   onOpenUploads?: () => void;
   onNavigateHome?: () => void;
   onCreateProject?: () => void;
+  // Overlay drawer callbacks
+  onOpenTextDrawer?: () => void;
+  onOpenStickerDrawer?: () => void;
+  onOpenFilterDrawer?: () => void;
 }
 
-export function Sidebar({ onOpenUploads, onNavigateHome, onCreateProject }: SidebarProps) {
+export function Sidebar({
+  onOpenUploads,
+  onNavigateHome,
+  onCreateProject,
+  onOpenTextDrawer,
+  onOpenStickerDrawer,
+  onOpenFilterDrawer,
+}: SidebarProps) {
   const { user, loading } = useUser()
   const signOut = useSignOut()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
+
+  // Get overlay context for captions (safe to use since Sidebar is always inside OverlayProvider)
+  const { state: overlayState, toggleCaptionPreview } = useOverlay()
 
   return (
     <>
@@ -56,6 +71,35 @@ export function Sidebar({ onOpenUploads, onNavigateHome, onCreateProject }: Side
             icon={<CreateIcon />}
             label="Create"
             onClick={() => onCreateProject?.()}
+          />
+
+          {/* Divider */}
+          <div className="w-8 h-px bg-[var(--border-subtle)] my-2" />
+
+          {/* Overlay Tools */}
+          <NavButton
+            icon={<TextIcon />}
+            label="Text"
+            onClick={() => onOpenTextDrawer?.()}
+          />
+
+          <NavButton
+            icon={<StickerIcon />}
+            label="Stickers"
+            onClick={() => onOpenStickerDrawer?.()}
+          />
+
+          <NavButton
+            icon={<FilterIcon />}
+            label="Filters"
+            onClick={() => onOpenFilterDrawer?.()}
+          />
+
+          <NavButton
+            icon={<CaptionIcon />}
+            label="Captions"
+            onClick={toggleCaptionPreview}
+            active={overlayState.showCaptionPreview}
           />
         </nav>
 
@@ -378,6 +422,41 @@ function LogoutIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4m7 14l5-5-5-5m5 5H9" />
+    </svg>
+  )
+}
+
+// Overlay Tool Icons
+function TextIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16m-7 6h7" />
+    </svg>
+  )
+}
+
+function StickerIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" />
+    </svg>
+  )
+}
+
+function FilterIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+    </svg>
+  )
+}
+
+function CaptionIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path strokeLinecap="round" d="M6 12h4M14 12h4M6 16h8" />
     </svg>
   )
 }
