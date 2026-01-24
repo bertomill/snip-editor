@@ -395,3 +395,48 @@ textarea:focus-visible {
   pointer-events: none;
   z-index: -1;
 }
+
+/* Canva-style grainy gradient background */
+.bg-canva-gradient {
+  position: relative;
+  background: var(--background-content);
+}
+
+.bg-canva-gradient::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 500px;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 0%, rgba(139, 92, 246, 0.25) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 80% 0%, rgba(34, 211, 238, 0.2) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 30% at 50% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+  mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+}
+
+/* Grain texture overlay */
+.bg-canva-gradient::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 500px;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 1;
+  mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+}
+
+/* Ensure content is above the gradient */
+.bg-canva-gradient > * {
+  position: relative;
+  z-index: 2;
+}

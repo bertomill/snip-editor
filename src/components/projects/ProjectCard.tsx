@@ -109,7 +109,7 @@ export function ProjectCard({ project, onClick, onDelete, onShowActions, variant
     <div className="relative">
       <button
         onClick={onClick}
-        className="w-full flex items-center gap-3 p-3 hover:bg-[var(--background-card)] rounded-xl transition-all text-left group"
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#3A3A3C] transition-all text-left group"
       >
         {/* Thumbnail */}
         <div className="w-16 h-16 rounded-lg flex-shrink-0 overflow-hidden">

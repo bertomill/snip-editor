@@ -887,31 +887,31 @@ function HomeContent() {
                     className="fixed inset-0 z-40"
                     onClick={() => setShowFeedMenu(false)}
                   />
-                  <div className="absolute right-0 top-full mt-2 w-56 bg-[#2C2C2E] border border-[var(--border)] rounded-xl shadow-2xl z-50 overflow-hidden animate-scale-in">
+                  <div className="absolute right-0 top-full mt-2 w-60 bg-[#1C1C1E]/70 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl shadow-black/60 z-50 overflow-hidden animate-scale-in">
                     {/* View as Gallery / List */}
                     <button
                       onClick={() => {
                         setFeedViewMode(feedViewMode === 'list' ? 'gallery' : 'list');
                         setShowFeedMenu(false);
                       }}
-                      className="w-full flex items-center gap-3 px-4 py-3.5 text-white hover:bg-white/5 transition-colors"
+                      className="w-full flex items-center gap-3 px-4 py-4 text-white hover:bg-white/10 active:bg-white/15 transition-colors"
                     >
                       {feedViewMode === 'list' ? (
-                        <svg className="w-5 h-5 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
                         </svg>
                       ) : (
-                        <svg className="w-5 h-5 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
                         </svg>
                       )}
-                      <span className="text-[15px]">
+                      <span className="text-[15px] font-medium">
                         {feedViewMode === 'list' ? 'View as Gallery' : 'View as List'}
                       </span>
                     </button>
 
                     {/* Divider */}
-                    <div className="border-t border-[var(--border)]" />
+                    <div className="mx-4 border-t border-white/10" />
 
                     {/* Select Projects */}
                     <button
@@ -919,12 +919,12 @@ function HomeContent() {
                         // TODO: Implement select mode
                         setShowFeedMenu(false);
                       }}
-                      className="w-full flex items-center gap-3 px-4 py-3.5 text-white hover:bg-white/5 transition-colors"
+                      className="w-full flex items-center gap-3 px-4 py-4 text-white hover:bg-white/10 active:bg-white/15 transition-colors"
                     >
-                      <svg className="w-5 h-5 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <span className="text-[15px]">Select Projects</span>
+                      <span className="text-[15px] font-medium">Select Projects</span>
                     </button>
                   </div>
                 </>
@@ -2527,7 +2527,7 @@ function EditStep({
   return (
     <>
     {/* Mobile Tab Header - Fixed below main header */}
-    <div className="lg:hidden sticky top-[65px] z-40 bg-[var(--background-content)] pt-3 pb-2 px-4">
+    <div className="lg:hidden sticky top-[65px] z-40 bg-[var(--background-content)] pt-2 pb-1 px-4">
       <div className="flex items-center justify-center gap-1 bg-white/5 backdrop-blur-xl border border-white/10 p-1.5 rounded-full shadow-lg">
         <button
           onClick={() => setMobileTab('video')}
@@ -2562,7 +2562,7 @@ function EditStep({
       </div>
     </div>
 
-    <div className="w-full max-w-6xl mx-auto flex flex-col gap-4 sm:gap-8 animate-fade-in-up pb-[220px]">
+    <div className="w-full max-w-6xl mx-auto flex flex-col gap-2 sm:gap-8 animate-fade-in-up pb-[240px]">
 
       {/* Mobile Swipeable Content */}
       <div
@@ -2801,7 +2801,7 @@ function EditStep({
     <ResizableBottomPanel
       minHeight={120}
       maxHeight={400}
-      defaultHeight={180}
+      defaultHeight={220}
     >
       <div className="h-full px-4">
         <Timeline
@@ -2899,7 +2899,7 @@ function MobileVideoPanel({
   return (
     <div className="flex flex-col items-center">
       <div className="overflow-hidden rounded-md border border-[var(--border-subtle)] relative">
-        <div className="aspect-[9/16] bg-black relative max-h-[55vh]">
+        <div className="aspect-[9/16] bg-black relative max-h-[62vh]">
           {activeClip && (
           <>
             <video
@@ -2998,7 +2998,7 @@ function MobileVideoPanel({
           </button>
         </div>
         </div>
-        <div className="p-3 text-center text-sm text-[#8E8E93] bg-[#111111]">
+        <div className="py-2 px-3 text-center text-sm text-[#8E8E93] bg-[#111111]">
           {formatTime(currentTime)} / {formatTime(activeDuration)}
           {deletedSegments.size > 0 && (
             <span className="text-[#636366] ml-1">

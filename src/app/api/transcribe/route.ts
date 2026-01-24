@@ -6,6 +6,7 @@ import { tmpdir } from "os";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { cleanupVoice, VoiceCleanupOptions } from "@/lib/audio/voice-cleanup";
+import { downloadFromStorage, deleteFromStorage } from "@/lib/supabase/download";
 
 const execAsync = promisify(exec);
 
@@ -31,23 +32,90 @@ interface GroqTranscriptionResponse {
   segments?: GroqSegment[];
 }
 
+// JSON body interface for storage-based transcription
+interface StorageTranscribeRequest {
+  storagePath: string;
+  enhanceAudio?: boolean;
+  noiseReduction?: boolean;
+  noiseReductionStrength?: 'light' | 'medium' | 'strong';
+  loudnessNormalization?: boolean;
+}
+
 export async function POST(request: NextRequest) {
   let tempFilePath: string | null = null;
   let audioFilePath: string | null = null;
   let cleanedAudioPath: string | null = null;
+  let storagePathToCleanup: string | null = null;
 
   try {
     console.log("Transcribe API called (Groq Whisper)");
 
-    const formData = await request.formData();
-    const videoFile = formData.get("video") as File;
-    const audioFile = formData.get("audio") as File;
+    // Check content type to determine request format
+    const contentType = request.headers.get("content-type") || "";
+    const isJsonRequest = contentType.includes("application/json");
 
-    // Parse audio enhancement options
-    const enhanceAudio = formData.get("enhanceAudio") === "true";
-    const noiseReduction = formData.get("noiseReduction") !== "false"; // Default true
-    const noiseReductionStrength = (formData.get("noiseReductionStrength") as 'light' | 'medium' | 'strong') || "medium";
-    const loudnessNormalization = formData.get("loudnessNormalization") !== "false"; // Default true
+    let videoFile: File | null = null;
+    let audioFile: File | null = null;
+    let enhanceAudio = false;
+    let noiseReduction = true;
+    let noiseReductionStrength: 'light' | 'medium' | 'strong' = "medium";
+    let loudnessNormalization = true;
+
+    if (isJsonRequest) {
+      // New: JSON body with storage path
+      const body = await request.json() as StorageTranscribeRequest;
+
+      if (!body.storagePath) {
+        return NextResponse.json(
+          { error: "No storagePath provided" },
+          { status: 400 }
+        );
+      }
+
+      console.log(`[Transcribe] Downloading video from storage: ${body.storagePath}`);
+
+      // Download video from Supabase Storage
+      const videoBuffer = await downloadFromStorage(body.storagePath);
+      storagePathToCleanup = body.storagePath;
+
+      // Extract filename from storage path
+      const filename = body.storagePath.split('/').pop() || 'video.mp4';
+
+      // Determine content type from filename
+      const ext = filename.split('.').pop()?.toLowerCase();
+      const mimeMap: Record<string, string> = {
+        'mp4': 'video/mp4',
+        'mov': 'video/quicktime',
+        'webm': 'video/webm',
+        'm4v': 'video/x-m4v',
+        'avi': 'video/x-msvideo',
+      };
+      const mimeType = mimeMap[ext || ''] || 'video/mp4';
+
+      // Create a File object from the buffer (convert to Uint8Array for type compatibility)
+      const uint8Array = new Uint8Array(videoBuffer);
+      videoFile = new File([uint8Array], filename, { type: mimeType });
+
+      console.log(`[Transcribe] Downloaded video: ${filename}, size: ${(videoBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+
+      // Parse audio enhancement options from JSON
+      enhanceAudio = body.enhanceAudio ?? false;
+      noiseReduction = body.noiseReduction ?? true;
+      noiseReductionStrength = body.noiseReductionStrength ?? "medium";
+      loudnessNormalization = body.loudnessNormalization ?? true;
+
+    } else {
+      // Existing: FormData with video/audio file
+      const formData = await request.formData();
+      videoFile = formData.get("video") as File;
+      audioFile = formData.get("audio") as File;
+
+      // Parse audio enhancement options from FormData
+      enhanceAudio = formData.get("enhanceAudio") === "true";
+      noiseReduction = formData.get("noiseReduction") !== "false";
+      noiseReductionStrength = (formData.get("noiseReductionStrength") as 'light' | 'medium' | 'strong') || "medium";
+      loudnessNormalization = formData.get("loudnessNormalization") !== "false";
+    }
 
     // Check if we received pre-extracted audio (from client-side FFmpeg)
     const hasPreExtractedAudio = audioFile && audioFile.size > 0;
@@ -60,7 +128,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (hasPreExtractedAudio) {
+    if (hasPreExtractedAudio && audioFile) {
       // Client already extracted audio - use it directly
       console.log(`Using pre-extracted audio: ${audioFile.name}, size: ${audioFile.size} bytes, type: ${audioFile.type}`);
 
@@ -222,6 +290,15 @@ export async function POST(request: NextRequest) {
       try {
         await unlink(cleanedAudioPath);
         console.log(`Cleaned up cleaned audio file: ${cleanedAudioPath}`);
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+    // Clean up storage file (from JSON body requests)
+    if (storagePathToCleanup) {
+      try {
+        await deleteFromStorage(storagePathToCleanup);
+        console.log(`Cleaned up storage file: ${storagePathToCleanup}`);
       } catch {
         // Ignore cleanup errors
       }
