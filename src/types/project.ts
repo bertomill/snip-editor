@@ -18,6 +18,7 @@ export interface ProjectData {
     captionPositionY: number;
   };
   deletedWordIds?: string[];
+  deletedPauseIds?: string[];
   clipCount?: number;
 }
 

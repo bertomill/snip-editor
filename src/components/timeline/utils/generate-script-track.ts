@@ -12,6 +12,7 @@ interface TranscriptWord {
 interface GenerateScriptTrackOptions {
   words: TranscriptWord[];
   deletedWordIds: Set<string>;
+  deletedPauseIds: Set<string>;
   pauseThreshold?: number;
 }
 
@@ -23,6 +24,7 @@ interface GenerateScriptTrackOptions {
 export function generateScriptTrack({
   words,
   deletedWordIds,
+  deletedPauseIds,
   pauseThreshold = SCRIPT_TRACK_CONSTANTS.PAUSE_THRESHOLD_SECONDS,
 }: GenerateScriptTrackOptions): TimelineTrack {
   const items: TimelineItem[] = [];
@@ -50,8 +52,9 @@ export function generateScriptTrack({
       const gap = nextWord.start - word.end;
 
       if (gap >= pauseThreshold) {
+        const pauseId = `pause-after-${word.id}`;
         items.push({
-          id: `pause-after-${word.id}`,
+          id: pauseId,
           trackId: 'script-track',
           start: word.end,
           end: nextWord.start,
@@ -60,6 +63,7 @@ export function generateScriptTrack({
           data: {
             isPause: true,
             duration: gap,
+            isDeleted: deletedPauseIds.has(pauseId),
           },
         });
       }

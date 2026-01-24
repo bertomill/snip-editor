@@ -23,6 +23,7 @@ import { CaptionPreview } from "@/components/CaptionPreview";
 import { ProjectsProvider, useProjects } from "@/contexts/ProjectsContext";
 import { ProjectFeed } from "@/components/projects";
 import { ProjectData } from "@/types/project";
+import { ResizableBottomPanel } from "@/components/ResizableBottomPanel";
 
 type AppView = "feed" | "editor";
 type EditorStep = "upload" | "edit" | "export";
@@ -63,6 +64,7 @@ function HomeContent() {
   const [clips, setClips] = useState<VideoClip[]>([]);
   const [deletedSegments, setDeletedSegments] = useState<Set<number>>(new Set());
   const [deletedWordIds, setDeletedWordIds] = useState<Set<string>>(new Set());
+  const [deletedPauseIds, setDeletedPauseIds] = useState<Set<string>>(new Set());
   const [showUploads, setShowUploads] = useState(false);
   const [projectName, setProjectName] = useState("Untitled Project");
   const [isEditingName, setIsEditingName] = useState(false);
@@ -72,10 +74,10 @@ function HomeContent() {
 
   // Track changes
   useEffect(() => {
-    if (view === "editor" && (clips.length > 0 || deletedWordIds.size > 0)) {
+    if (view === "editor" && (clips.length > 0 || deletedWordIds.size > 0 || deletedPauseIds.size > 0)) {
       setHasUnsavedChanges(true);
     }
-  }, [clips.length, deletedWordIds.size, view]);
+  }, [clips.length, deletedWordIds.size, deletedPauseIds.size, view]);
 
   // Handle creating a new project
   const handleCreateProject = useCallback(async () => {
@@ -87,6 +89,7 @@ function HomeContent() {
       setClips([]);
       setDeletedSegments(new Set());
       setDeletedWordIds(new Set());
+      setDeletedPauseIds(new Set());
       setHasUnsavedChanges(false);
       setView("editor");
     }
@@ -99,6 +102,7 @@ function HomeContent() {
     setClips([]);
     setDeletedSegments(new Set());
     setDeletedWordIds(new Set());
+    setDeletedPauseIds(new Set());
     setHasUnsavedChanges(false);
     setView("editor");
 
@@ -113,6 +117,10 @@ function HomeContent() {
           // Restore deleted word IDs
           if (projectData.deletedWordIds) {
             setDeletedWordIds(new Set(projectData.deletedWordIds));
+          }
+          // Restore deleted pause IDs
+          if (projectData.deletedPauseIds) {
+            setDeletedPauseIds(new Set(projectData.deletedPauseIds));
           }
           // Note: Overlays are restored via OverlayContext when we implement that
         }
@@ -135,6 +143,7 @@ function HomeContent() {
         captionPositionY: 75,
       },
       deletedWordIds: Array.from(deletedWordIds),
+      deletedPauseIds: Array.from(deletedPauseIds),
       clipCount: clips.length,
     };
 
@@ -151,7 +160,7 @@ function HomeContent() {
     } catch (error) {
       console.error('Failed to save project:', error);
     }
-  }, [currentProjectId, clips.length, deletedWordIds]);
+  }, [currentProjectId, clips.length, deletedWordIds, deletedPauseIds]);
 
   // Handle going back to feed - show dialog if unsaved changes
   const handleBackToFeed = useCallback(() => {
@@ -444,6 +453,8 @@ function HomeContent() {
               setDeletedSegments={setDeletedSegments}
               deletedWordIds={deletedWordIds}
               setDeletedWordIds={setDeletedWordIds}
+              deletedPauseIds={deletedPauseIds}
+              setDeletedPauseIds={setDeletedPauseIds}
               allWords={allWords}
             />
           )}
@@ -454,6 +465,7 @@ function HomeContent() {
               deletedSegmentIndices={Array.from(deletedSegments)}
               words={allWords}
               deletedWordIds={Array.from(deletedWordIds)}
+              deletedPauseIds={Array.from(deletedPauseIds)}
               onBack={() => setStep("edit")}
             />
           )}
@@ -553,6 +565,8 @@ function EditStep({
   setDeletedSegments,
   deletedWordIds,
   setDeletedWordIds,
+  deletedPauseIds,
+  setDeletedPauseIds,
   allWords,
 }: {
   clips: VideoClip[];
@@ -561,6 +575,8 @@ function EditStep({
   setDeletedSegments: React.Dispatch<React.SetStateAction<Set<number>>>;
   deletedWordIds: Set<string>;
   setDeletedWordIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  deletedPauseIds: Set<string>;
+  setDeletedPauseIds: React.Dispatch<React.SetStateAction<Set<string>>>;
   allWords: TranscriptWord[];
 }) {
   const [activeClipIndex, setActiveClipIndex] = useState(0);
@@ -651,6 +667,7 @@ function EditStep({
       ? generateScriptTrack({
           words: allWords,
           deletedWordIds,
+          deletedPauseIds,
         })
       : { id: 'script-track', name: 'Script', items: [] };
 
@@ -685,7 +702,7 @@ function EditStep({
     };
 
     return [videoTrack, scriptTrack, textTrack, stickerTrack];
-  }, [clips, allWords, deletedWordIds, overlayState.textOverlays, overlayState.stickers]);
+  }, [clips, allWords, deletedWordIds, deletedPauseIds, overlayState.textOverlays, overlayState.stickers]);
 
   // Handle timeline item move
   const handleTimelineItemMove = useCallback((itemId: string, newStart: number, newEnd: number, trackId: string) => {
@@ -726,6 +743,23 @@ function EditStep({
 
   // Handle timeline item delete
   const handleTimelineItemDelete = useCallback((itemIds: string[]) => {
+    // Check for pause deletions (IDs start with "pause-after-")
+    const pauseIds = itemIds.filter(id => id.startsWith('pause-after-'));
+    if (pauseIds.length > 0) {
+      setDeletedPauseIds(prev => {
+        const next = new Set(prev);
+        pauseIds.forEach(id => {
+          // Toggle deletion state
+          if (next.has(id)) {
+            next.delete(id);
+          } else {
+            next.add(id);
+          }
+        });
+        return next;
+      });
+    }
+
     // Check for script word deletions
     const wordIds = itemIds.filter(id => allWords.some(w => w.id === id));
     if (wordIds.length > 0) {
@@ -757,7 +791,7 @@ function EditStep({
       }
     });
     setSelectedTimelineItems([]);
-  }, [allWords, overlayState.textOverlays, overlayState.stickers, removeTextOverlay, removeSticker, setDeletedWordIds]);
+  }, [allWords, overlayState.textOverlays, overlayState.stickers, removeTextOverlay, removeSticker, setDeletedWordIds, setDeletedPauseIds]);
 
   // Handle timeline frame change (seek)
   const handleTimelineFrameChange = useCallback((frame: number) => {
@@ -797,6 +831,33 @@ function EditStep({
         .reduce((acc, clip) => acc + clip.duration, 0);
       const globalTime = previousClipsDuration + videoRef.current.currentTime;
       setCurrentTime(globalTime);
+
+      // Skip deleted pauses during playback (jump cuts)
+      if (isPlaying && deletedPauseIds.size > 0 && allWords.length > 0) {
+        // Check if we're in a deleted pause
+        const pauseThreshold = 0.3; // Same threshold as generate-script-track
+        for (let i = 0; i < allWords.length - 1; i++) {
+          const word = allWords[i];
+          const nextWord = allWords[i + 1];
+          const gap = nextWord.start - word.end;
+
+          if (gap >= pauseThreshold) {
+            const pauseId = `pause-after-${word.id}`;
+            // Check if current time is within this pause and it's deleted
+            if (deletedPauseIds.has(pauseId) && globalTime >= word.end && globalTime < nextWord.start) {
+              // Jump to the next word (end of pause)
+              if (nextWord.clipIndex !== activeClipIndex) {
+                setActiveClipIndex(nextWord.clipIndex);
+              }
+              const clipStartTime = clips
+                .slice(0, nextWord.clipIndex)
+                .reduce((acc, clip) => acc + clip.duration, 0);
+              videoRef.current.currentTime = nextWord.start - clipStartTime;
+              return; // Exit early to avoid duplicate processing
+            }
+          }
+        }
+      }
 
       // Skip deleted words during playback (word-level granularity)
       if (isPlaying && deletedWordIds.size > 0 && allWords.length > 0) {
@@ -863,7 +924,7 @@ function EditStep({
         }
       }
     }
-  }, [clips, activeClipIndex, isPlaying, deletedSegments, allSegments, deletedWordIds, allWords]);
+  }, [clips, activeClipIndex, isPlaying, deletedSegments, allSegments, deletedWordIds, deletedPauseIds, allWords]);
 
   const handleVideoEnded = () => {
     if (activeClipIndex < clips.length - 1) {
@@ -911,7 +972,8 @@ function EditStep({
   const handleRestoreAll = useCallback(() => {
     setDeletedSegments(new Set());
     setDeletedWordIds(new Set());
-  }, [setDeletedWordIds]);
+    setDeletedPauseIds(new Set());
+  }, [setDeletedWordIds, setDeletedPauseIds]);
 
   // Handle video error (unsupported format)
   const handleVideoError = useCallback(() => {
@@ -935,6 +997,7 @@ function EditStep({
     setTranscribeProgress(0);
 
     const updatedClips = [...clips];
+    const { audioSettings } = overlayState;
 
     for (let i = 0; i < clips.length; i++) {
       const clip = clips[i];
@@ -943,6 +1006,14 @@ function EditStep({
       try {
         const formData = new FormData();
         formData.append("video", clip.file);
+
+        // Add audio enhancement settings
+        if (audioSettings.enhanceAudio) {
+          formData.append("enhanceAudio", "true");
+          formData.append("noiseReduction", String(audioSettings.noiseReduction));
+          formData.append("noiseReductionStrength", audioSettings.noiseReductionStrength);
+          formData.append("loudnessNormalization", String(audioSettings.loudnessNormalization));
+        }
 
         const response = await fetch("/api/transcribe", {
           method: "POST",
@@ -974,7 +1045,7 @@ function EditStep({
 
     setClips(updatedClips);
     setIsTranscribing(false);
-  }, [clips, setClips]);
+  }, [clips, setClips, overlayState.audioSettings]);
 
   // Auto-transcribe clips that don't have transcripts yet
   useEffect(() => {
@@ -1034,7 +1105,8 @@ function EditStep({
     : undefined;
 
   return (
-    <div className="w-full max-w-6xl mx-auto flex flex-col gap-6 sm:gap-8 animate-fade-in-up">
+    <>
+    <div className="w-full max-w-6xl mx-auto flex flex-col gap-6 sm:gap-8 animate-fade-in-up pb-[220px]">
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Preview Panel - Fixed width on desktop */}
         <div className="w-full lg:w-[340px] flex-shrink-0">
@@ -1203,49 +1275,53 @@ function EditStep({
         </div>
       </div>
 
-      {/* Multi-Track Timeline */}
-      <div>
-        <p className="label mb-4">Timeline</p>
-        <div className="h-[200px]">
-          <Timeline
-            tracks={timelineTracks}
-            totalDuration={totalDuration}
-            currentFrame={Math.round(currentTime * 30)}
-            fps={30}
-            onFrameChange={handleTimelineFrameChange}
-            onItemMove={handleTimelineItemMove}
-            onItemResize={handleTimelineItemResize}
-            onItemSelect={handleTimelineItemSelect}
-            onDeleteItems={handleTimelineItemDelete}
-            selectedItemIds={selectedTimelineItems}
-            onSelectedItemsChange={setSelectedTimelineItems}
-            showZoomControls
-            showPlaybackControls
-            isPlaying={isPlaying}
-            onPlay={() => {
-              if (videoRef.current) {
-                videoRef.current.play().catch((e) => {
-                  if (e.name !== 'AbortError') console.error('Video play error:', e);
-                });
-                setIsPlaying(true);
-              }
-            }}
-            onPause={() => {
-              if (videoRef.current) {
-                videoRef.current.pause();
-                setIsPlaying(false);
-              }
-            }}
-            onAddContent={() => {
-              // TODO: Open add content menu (clips, text, stickers, etc.)
-              console.log('Add content clicked');
-            }}
-          />
-        </div>
-      </div>
-
       {/* Overlay panels are now in the Sidebar */}
     </div>
+
+    {/* Fixed Bottom Timeline - Descript Style */}
+    <ResizableBottomPanel
+      minHeight={120}
+      maxHeight={400}
+      defaultHeight={180}
+    >
+      <div className="h-full px-4">
+        <Timeline
+          tracks={timelineTracks}
+          totalDuration={totalDuration}
+          currentFrame={Math.round(currentTime * 30)}
+          fps={30}
+          onFrameChange={handleTimelineFrameChange}
+          onItemMove={handleTimelineItemMove}
+          onItemResize={handleTimelineItemResize}
+          onItemSelect={handleTimelineItemSelect}
+          onDeleteItems={handleTimelineItemDelete}
+          selectedItemIds={selectedTimelineItems}
+          onSelectedItemsChange={setSelectedTimelineItems}
+          showZoomControls
+          showPlaybackControls
+          isPlaying={isPlaying}
+          onPlay={() => {
+            if (videoRef.current) {
+              videoRef.current.play().catch((e) => {
+                if (e.name !== 'AbortError') console.error('Video play error:', e);
+              });
+              setIsPlaying(true);
+            }
+          }}
+          onPause={() => {
+            if (videoRef.current) {
+              videoRef.current.pause();
+              setIsPlaying(false);
+            }
+          }}
+          onAddContent={() => {
+            // TODO: Open add content menu (clips, text, stickers, etc.)
+            console.log('Add content clicked');
+          }}
+        />
+      </div>
+    </ResizableBottomPanel>
+    </>
   );
 }
 
@@ -1255,6 +1331,7 @@ function ExportStep({
   deletedSegmentIndices,
   words,
   deletedWordIds,
+  deletedPauseIds,
   onBack,
 }: {
   clips: VideoClip[];
@@ -1262,6 +1339,7 @@ function ExportStep({
   deletedSegmentIndices: number[];
   words: TranscriptWord[];
   deletedWordIds: string[];
+  deletedPauseIds: string[];
   onBack: () => void;
 }) {
   const { state: overlayState } = useOverlay();
@@ -1365,6 +1443,7 @@ function ExportStep({
           deletedSegmentIndices,
           words,  // Word-level timestamps for accurate captions
           deletedWordIds,  // Word-level deletions
+          deletedPauseIds,  // Pause deletions (jump cuts)
           captionTemplateId: selectedTemplate.id,
           width: 1080,
           height: 1920,
