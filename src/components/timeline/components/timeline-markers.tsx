@@ -71,8 +71,20 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
     };
   }, []);
 
-  // Calculate marker intervals based on zoom
+  // Calculate marker intervals based on zoom and screen width
   const getMarkerInterval = () => {
+    // Check if we're on mobile (< 768px)
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+    if (isMobile) {
+      // Larger intervals for mobile to prevent cramping
+      if (zoomScale < 1) return 15;
+      if (zoomScale < 2) return 10;
+      if (zoomScale < 5) return 5;
+      return 2;
+    }
+
+    // Desktop intervals
     if (zoomScale < 1) return 5;
     if (zoomScale < 2) return 2;
     if (zoomScale < 5) return 1;
