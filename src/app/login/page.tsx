@@ -223,11 +223,11 @@ export default function LoginPage() {
         {/* Header area with headline */}
         <div className="flex-1 flex flex-col items-center justify-center px-8 pt-16 pb-8">
           <Image
-            src="/branding/snip-logo-gradient.svg"
+            src="/branding/icon-transparent.png"
             alt="Snip"
-            width={140}
-            height={50}
-            className="h-12 w-auto mb-10"
+            width={160}
+            height={160}
+            className="w-40 h-40 mb-8"
             priority
           />
           <h1 className="text-4xl md:text-5xl font-bold text-white text-center leading-tight mb-4">
