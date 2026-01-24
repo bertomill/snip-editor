@@ -2465,13 +2465,26 @@ function EditStep({
     setIsTranscribing(false);
   }, [clips, setClips, overlayState.audioSettings]);
 
-  // Auto-transcribe clips that don't have transcripts yet
+  // Check if any clips are still uploading to storage
+  const isUploading = useMemo(() => {
+    return clips.some(clip => clip.uploadStatus === 'pending' || clip.uploadStatus === 'uploading');
+  }, [clips]);
+
+  // Calculate upload progress for UI
+  const uploadProgress = useMemo(() => {
+    const clipsNeedingUpload = clips.filter(clip => clip.uploadStatus !== undefined);
+    if (clipsNeedingUpload.length === 0) return 100;
+    const completed = clipsNeedingUpload.filter(clip => clip.uploadStatus === 'complete' || clip.uploadStatus === 'error').length;
+    return Math.round((completed / clipsNeedingUpload.length) * 100);
+  }, [clips]);
+
+  // Auto-transcribe clips that don't have transcripts yet (wait for uploads to complete)
   useEffect(() => {
     const hasUntranscribedClips = clips.some(clip => !clip.transcript && !clip.words);
-    if (clips.length > 0 && hasUntranscribedClips && !isTranscribing) {
+    if (clips.length > 0 && hasUntranscribedClips && !isTranscribing && !isUploading) {
       handleTranscribe();
     }
-  }, [clips.length]); // Only trigger when clip count changes, not on every clips update
+  }, [clips.length, isUploading]); // Trigger when clips change or upload completes
 
   // Jump to segment when clicked and select it
   const handleSegmentClick = (segment: TranscriptSegment, index: number) => {
@@ -2598,6 +2611,8 @@ function EditStep({
               deletedSegments={deletedSegments}
               totalDuration={totalDuration}
               onToggleCaptions={toggleCaptionPreview}
+              isUploading={isUploading}
+              uploadProgress={uploadProgress}
             />
           </div>
 
@@ -2606,6 +2621,8 @@ function EditStep({
             <MobileTranscriptPanel
               isTranscribing={isTranscribing}
               transcribeProgress={transcribeProgress}
+              isUploading={isUploading}
+              uploadProgress={uploadProgress}
               clips={clips}
               allWords={allWords}
               currentTime={currentTime}
@@ -2632,7 +2649,9 @@ function EditStep({
           <p className="label mb-4">Preview</p>
           <div className="card-glow overflow-hidden">
             <div className="aspect-[9/16] bg-black relative">
-              {activeClip && (
+              {/* Upload Progress Overlay */}
+              {isUploading && <UploadingOverlay progress={uploadProgress} />}
+              {activeClip && !isUploading && (
                 <>
                   <video
                     ref={desktopVideoRef}
@@ -2777,6 +2796,39 @@ function EditStep({
                   );
                 })}
               </div>
+            ) : isUploading ? (
+              <div className="flex flex-col items-center justify-center h-full text-center px-6">
+                <div className="w-16 h-16 rounded-full bg-[#181818] flex items-center justify-center mb-5 relative">
+                  <svg className="w-16 h-16 absolute -rotate-90">
+                    <circle
+                      cx="32"
+                      cy="32"
+                      r="28"
+                      fill="none"
+                      stroke="#242430"
+                      strokeWidth="4"
+                    />
+                    <circle
+                      cx="32"
+                      cy="32"
+                      r="28"
+                      fill="none"
+                      stroke="#4A8FE7"
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                      strokeDasharray={`${uploadProgress * 1.76} 176`}
+                      className="transition-all duration-300"
+                    />
+                  </svg>
+                  <svg className="w-7 h-7 text-[#4A8FE7]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                </div>
+                <p className="text-white font-medium mb-2">Uploading video...</p>
+                <p className="text-[#636366] text-sm leading-relaxed">
+                  {uploadProgress}% complete • Transcription will begin automatically
+                </p>
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center px-6">
                 <div className="w-16 h-16 rounded-full bg-[#181818] flex items-center justify-center mb-5">
@@ -2846,6 +2898,104 @@ function EditStep({
   );
 }
 
+// Uploading Overlay Component - CapCut-style loading animation
+function UploadingOverlay({ progress }: { progress: number }) {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10">
+      {/* Animated Video Icon with Gradient */}
+      <motion.div
+        className="relative mb-8"
+        animate={{ y: [0, -6, 0] }}
+        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+      >
+        {/* Glow effect behind icon */}
+        <div
+          className="absolute inset-0 blur-xl opacity-40 rounded-xl"
+          style={{
+            background: 'linear-gradient(135deg, #6366f1 0%, #4A8FE7 50%, #22d3bb 100%)',
+            transform: 'scale(1.5)',
+          }}
+        />
+
+        {/* Main video icon container */}
+        <div className="relative w-24 h-16">
+          {/* Gradient video frame */}
+          <div
+            className="absolute inset-0 rounded-xl shadow-lg"
+            style={{
+              background: 'linear-gradient(135deg, #6366f1 0%, #4A8FE7 50%, #22d3bb 100%)',
+            }}
+          />
+          {/* Inner dark area with subtle gradient */}
+          <div
+            className="absolute inset-1.5 rounded-lg"
+            style={{
+              background: 'linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.4) 100%)',
+            }}
+          />
+          {/* Play button triangle */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <svg className="w-7 h-7 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Sparkle effect - top right with rotation */}
+        <motion.div
+          className="absolute -top-3 -right-3"
+          animate={{ rotate: [0, 15, 0], scale: [1, 1.2, 1] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <svg className="w-6 h-6 text-white drop-shadow-md" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0L14.59 8.41L23 11L14.59 13.59L12 22L9.41 13.59L1 11L9.41 8.41L12 0Z" />
+          </svg>
+        </motion.div>
+
+        {/* Small sparkle - top */}
+        <motion.div
+          className="absolute -top-1 right-4"
+          animate={{ opacity: [0, 1, 0], scale: [0.5, 1, 0.5] }}
+          transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }}
+        >
+          <div className="w-1.5 h-1.5 bg-white rounded-full" />
+        </motion.div>
+      </motion.div>
+
+      {/* Animated timeline bars */}
+      <div className="flex items-center gap-1 mb-8">
+        {/* Left circle */}
+        <motion.div
+          className="w-2 h-2 bg-[#4a4a4f] rounded-full"
+          animate={{ scale: [1, 1.2, 1] }}
+          transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+        />
+        {/* Timeline bars */}
+        {[0, 0.15, 0.3, 0.45].map((delay, i) => (
+          <motion.div
+            key={i}
+            className="h-2 bg-[#4a4a4f] rounded-full"
+            style={{ width: i === 1 ? '48px' : i === 2 ? '32px' : '24px' }}
+            animate={{ opacity: [0.4, 1, 0.4] }}
+            transition={{ duration: 1.2, repeat: Infinity, delay }}
+          />
+        ))}
+        {/* Right circle */}
+        <motion.div
+          className="w-2 h-2 bg-[#4a4a4f] rounded-full"
+          animate={{ scale: [1, 1.2, 1] }}
+          transition={{ duration: 1, repeat: Infinity, delay: 0.5 }}
+        />
+      </div>
+
+      {/* Progress text */}
+      <p className="text-white text-base font-medium">
+        Uploading your media... {progress}%
+      </p>
+    </div>
+  );
+}
+
 // Mobile Video Panel Component
 function MobileVideoPanel({
   activeClip,
@@ -2871,6 +3021,8 @@ function MobileVideoPanel({
   onOpenFilterDrawer,
   onOpenCaptionsDrawer,
   onToggleCaptions,
+  isUploading,
+  uploadProgress,
 }: {
   activeClip: { url: string } | undefined;
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -2895,12 +3047,16 @@ function MobileVideoPanel({
   onOpenFilterDrawer?: () => void;
   onOpenCaptionsDrawer?: () => void;
   onToggleCaptions?: () => void;
+  isUploading?: boolean;
+  uploadProgress?: number;
 }) {
   return (
     <div className="flex flex-col items-center">
       <div className="overflow-hidden rounded-md border border-[var(--border-subtle)] relative">
         <div className="aspect-[9/16] bg-black relative max-h-[62vh]">
-          {activeClip && (
+          {/* Upload Progress Overlay */}
+          {isUploading && <UploadingOverlay progress={uploadProgress ?? 0} />}
+          {activeClip && !isUploading && (
           <>
             <video
               ref={videoRef}
@@ -3015,6 +3171,8 @@ function MobileVideoPanel({
 function MobileTranscriptPanel({
   isTranscribing,
   transcribeProgress,
+  isUploading,
+  uploadProgress,
   clips,
   allWords,
   currentTime,
@@ -3032,6 +3190,8 @@ function MobileTranscriptPanel({
 }: {
   isTranscribing: boolean;
   transcribeProgress: number;
+  isUploading: boolean;
+  uploadProgress: number;
   clips: { file: File | null }[];
   allWords: TranscriptWord[];
   currentTime: number;
@@ -3110,6 +3270,30 @@ function MobileTranscriptPanel({
                 </button>
               );
             })}
+          </div>
+        ) : isUploading ? (
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+            <div className="w-12 h-12 rounded-full bg-[#181818] flex items-center justify-center mb-4 relative">
+              <svg className="w-12 h-12 absolute -rotate-90">
+                <circle cx="24" cy="24" r="20" fill="none" stroke="#242430" strokeWidth="3" />
+                <circle
+                  cx="24"
+                  cy="24"
+                  r="20"
+                  fill="none"
+                  stroke="#4A8FE7"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeDasharray={`${uploadProgress * 1.26} 126`}
+                  className="transition-all duration-300"
+                />
+              </svg>
+              <svg className="w-5 h-5 text-[#4A8FE7]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+            </div>
+            <p className="text-white font-medium text-sm mb-1">Uploading video...</p>
+            <p className="text-[#636366] text-xs">{uploadProgress}% • Transcription starts after upload</p>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">

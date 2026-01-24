@@ -98,9 +98,9 @@ export default function LoginPage() {
           <Image
             src="/branding/icon-transparent.png"
             alt="Snip"
-            width={100}
-            height={100}
-            className="w-24 h-24 mb-6"
+            width={200}
+            height={200}
+            className="w-48 h-48 mb-6"
             priority
           />
           <h1 className="text-3xl sm:text-4xl font-bold text-white text-center leading-tight mb-4">
@@ -259,9 +259,9 @@ export default function LoginPage() {
           <Image
             src="/branding/icon-transparent.png"
             alt="Snip"
-            width={160}
-            height={160}
-            className="w-40 h-40 mb-8"
+            width={280}
+            height={280}
+            className="w-64 h-64 mb-8"
             priority
           />
           <h1 className="text-4xl md:text-5xl font-bold text-white text-center leading-tight mb-4">
