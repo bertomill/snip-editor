@@ -9,6 +9,7 @@ import Image from 'next/image'
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showEmailForm, setShowEmailForm] = useState(false)
   const [isSignUp, setIsSignUp] = useState(false)
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
@@ -69,94 +70,66 @@ export default function LoginPage() {
       setError(error.message)
       setGoogleLoading(false)
     }
-    // Note: Loading stays true during redirect to Google
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left side - Image */}
-      <div className="hidden lg:flex lg:w-1/2 relative">
-        <Image
-          src="/login-bg.png"
-          alt="Serene mountain landscape at sunset"
-          fill
-          className="object-cover"
-          priority
-        />
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[var(--background)]/50" />
-
-        {/* Text overlay */}
-        <div className="absolute bottom-12 left-12 right-12">
-          <h2 className="text-4xl font-bold text-white mb-4 drop-shadow-lg">
-            Create stunning videos in minutes
-          </h2>
-          <p className="text-xl text-white/90 drop-shadow-md">
-            AI-powered editing that feels like magic
-          </p>
+    <>
+      {/* Mobile View - Calm Style */}
+      <div className="lg:hidden min-h-screen bg-gradient-to-b from-[#1a1a2e] via-[#16213e] to-[#1a1a2e] flex flex-col">
+        {/* Header area with headline */}
+        <div className="flex-1 flex flex-col items-center justify-center px-8 pt-16 pb-8">
+          <Image
+            src="/branding/snip-logo-gradient.svg"
+            alt="Snip"
+            width={120}
+            height={40}
+            className="h-10 w-auto mb-8"
+            priority
+          />
+          <h1 className="text-3xl sm:text-4xl font-bold text-white text-center leading-tight mb-4">
+            {showEmailForm
+              ? (isSignUp ? 'Create your account' : 'Welcome back')
+              : 'Sign up or log in to save your projects'
+            }
+          </h1>
+          {!showEmailForm && (
+            <p className="text-white/60 text-center text-lg">
+              AI-powered video editing
+            </p>
+          )}
         </div>
-      </div>
 
-      {/* Right side - Login form */}
-      <div className="w-full lg:w-1/2 bg-[var(--background)] flex items-center justify-center p-8">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <Image
-              src="/branding/snip-logo-gradient.svg"
-              alt="Snip"
-              width={140}
-              height={50}
-              className="h-12 w-auto mx-auto mb-2"
-              priority
-            />
-            <p className="text-gray-400">AI-powered video editor</p>
-          </div>
-
-          <div className="bg-[var(--background-card)]/80 backdrop-blur-sm rounded-2xl p-8 border border-[var(--border)]">
-            <h2 className="text-xl font-semibold text-white mb-6">
-              {isSignUp ? 'Create an account' : 'Welcome back'}
-            </h2>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label htmlFor="email" className="block text-sm text-gray-400 mb-2">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 bg-[var(--background-input)] border border-[var(--border)] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#4A8FE7] focus:ring-1 focus:ring-[#4A8FE7] transition-all"
-                  placeholder="you@example.com"
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm text-gray-400 mb-2">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 bg-[var(--background-input)] border border-[var(--border)] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#4A8FE7] focus:ring-1 focus:ring-[#4A8FE7] transition-all"
-                  placeholder="••••••••"
-                  required
-                  minLength={6}
-                />
-              </div>
+        {/* Buttons area */}
+        <div className="px-6 pb-8 space-y-3">
+          {showEmailForm ? (
+            // Email form
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-5 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full text-white placeholder-white/50 focus:outline-none focus:border-white/40 transition-all text-center"
+                placeholder="Email address"
+                required
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-5 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full text-white placeholder-white/50 focus:outline-none focus:border-white/40 transition-all text-center"
+                placeholder="Password"
+                required
+                minLength={6}
+              />
 
               {error && (
-                <div className="text-red-400 text-sm bg-red-400/10 p-3 rounded-xl border border-red-400/20">
+                <div className="text-red-300 text-sm text-center bg-red-500/20 p-3 rounded-2xl">
                   {error}
                 </div>
               )}
 
               {message && (
-                <div className="text-green-400 text-sm bg-green-400/10 p-3 rounded-xl border border-green-400/20">
+                <div className="text-green-300 text-sm text-center bg-green-500/20 p-3 rounded-2xl">
                   {message}
                 </div>
               )}
@@ -164,76 +137,231 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 bg-gradient-to-r from-[#4A8FE7] to-[#6366F1] hover:from-[#3A7FD7] hover:to-[#5558E3] text-white font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#4A8FE7]/20"
+                className="w-full py-4 bg-white text-gray-900 font-semibold rounded-full transition-all disabled:opacity-70 active:scale-[0.98] shadow-lg"
               >
-                {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
+                {loading ? 'Loading...' : isSignUp ? 'Create Account' : 'Sign In'}
               </button>
-            </form>
 
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[#2A2A2A]"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-[#1A1A1A] text-gray-500">or continue with</span>
-              </div>
-            </div>
-
-            <button
-              onClick={handleGoogleSignIn}
-              disabled={googleLoading}
-              className="w-full py-3 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg disabled:opacity-70 disabled:cursor-wait"
-            >
-              {googleLoading ? (
-                <>
-                  <span className="w-5 h-5 border-2 border-gray-400 border-t-gray-900 rounded-full animate-spin" />
-                  Connecting...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    />
-                  </svg>
-                  Google
-                </>
-              )}
-            </button>
-
-            <p className="mt-6 text-center text-gray-400 text-sm">
-              {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
               <button
-                onClick={() => {
-                  setIsSignUp(!isSignUp)
-                  setError(null)
-                  setMessage(null)
-                }}
-                className="text-[#4A8FE7] hover:text-[#6366F1] font-medium transition-colors"
+                type="button"
+                onClick={() => setShowEmailForm(false)}
+                className="w-full py-4 bg-white/10 backdrop-blur-sm text-white font-medium rounded-full transition-all active:scale-[0.98] border border-white/20"
               >
-                {isSignUp ? 'Sign In' : 'Sign Up'}
+                Back
               </button>
-            </p>
-          </div>
 
-          <p className="mt-8 text-center text-gray-600 text-xs">
-            By signing in, you agree to our Terms of Service and Privacy Policy
+              <p className="text-center text-white/60 text-sm pt-2">
+                {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignUp(!isSignUp)
+                    setError(null)
+                    setMessage(null)
+                  }}
+                  className="text-white font-medium"
+                >
+                  {isSignUp ? 'Sign In' : 'Sign Up'}
+                </button>
+              </p>
+            </form>
+          ) : (
+            // Social buttons - Calm style
+            <>
+              <button
+                onClick={() => setShowEmailForm(true)}
+                className="w-full py-4 bg-white/95 backdrop-blur-sm text-gray-900 font-semibold rounded-full transition-all flex items-center justify-start px-6 gap-4 active:scale-[0.98] shadow-lg"
+              >
+                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Continue with Email
+              </button>
+
+              <button
+                onClick={handleGoogleSignIn}
+                disabled={googleLoading}
+                className="w-full py-4 bg-white/95 backdrop-blur-sm text-gray-900 font-semibold rounded-full transition-all flex items-center justify-start px-6 gap-4 active:scale-[0.98] disabled:opacity-70 shadow-lg"
+              >
+                {googleLoading ? (
+                  <>
+                    <span className="w-6 h-6 border-2 border-gray-400 border-t-gray-900 rounded-full animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-6 h-6" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    </svg>
+                    Continue with Google
+                  </>
+                )}
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Legal text at bottom */}
+        <div className="px-8 pb-8 pt-4">
+          <p className="text-white/40 text-xs text-center leading-relaxed">
+            By signing in, you agree to our{' '}
+            <span className="text-white/60">Terms of Service</span> and{' '}
+            <span className="text-white/60">Privacy Policy</span>
           </p>
         </div>
       </div>
-    </div>
+
+      {/* Desktop View - Original Split Screen */}
+      <div className="hidden lg:flex min-h-screen">
+        {/* Left side - Image */}
+        <div className="w-1/2 relative">
+          <Image
+            src="/login-bg.png"
+            alt="Serene mountain landscape at sunset"
+            fill
+            className="object-cover"
+            priority
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[var(--background)]/50" />
+          <div className="absolute bottom-12 left-12 right-12">
+            <h2 className="text-4xl font-bold text-white mb-4 drop-shadow-lg">
+              Create stunning videos in minutes
+            </h2>
+            <p className="text-xl text-white/90 drop-shadow-md">
+              AI-powered editing that feels like magic
+            </p>
+          </div>
+        </div>
+
+        {/* Right side - Login form */}
+        <div className="w-1/2 bg-[var(--background)] flex items-center justify-center p-8">
+          <div className="w-full max-w-md">
+            <div className="text-center mb-8">
+              <Image
+                src="/branding/snip-logo-gradient.svg"
+                alt="Snip"
+                width={140}
+                height={50}
+                className="h-12 w-auto mx-auto mb-2"
+                priority
+              />
+              <p className="text-gray-400">AI-powered video editor</p>
+            </div>
+
+            <div className="bg-[var(--background-card)]/80 backdrop-blur-sm rounded-2xl p-8 border border-[var(--border)]">
+              <h2 className="text-xl font-semibold text-white mb-6">
+                {isSignUp ? 'Create an account' : 'Welcome back'}
+              </h2>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="email-desktop" className="block text-sm text-gray-400 mb-2">
+                    Email
+                  </label>
+                  <input
+                    id="email-desktop"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-4 py-3 bg-[var(--background-input)] border border-[var(--border)] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#4A8FE7] focus:ring-1 focus:ring-[#4A8FE7] transition-all"
+                    placeholder="you@example.com"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="password-desktop" className="block text-sm text-gray-400 mb-2">
+                    Password
+                  </label>
+                  <input
+                    id="password-desktop"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-3 bg-[var(--background-input)] border border-[var(--border)] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#4A8FE7] focus:ring-1 focus:ring-[#4A8FE7] transition-all"
+                    placeholder="••••••••"
+                    required
+                    minLength={6}
+                  />
+                </div>
+
+                {error && (
+                  <div className="text-red-400 text-sm bg-red-400/10 p-3 rounded-xl border border-red-400/20">
+                    {error}
+                  </div>
+                )}
+
+                {message && (
+                  <div className="text-green-400 text-sm bg-green-400/10 p-3 rounded-xl border border-green-400/20">
+                    {message}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 bg-gradient-to-r from-[#4A8FE7] to-[#6366F1] hover:from-[#3A7FD7] hover:to-[#5558E3] text-white font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#4A8FE7]/20"
+                >
+                  {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
+                </button>
+              </form>
+
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-[#2A2A2A]"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-[#1A1A1A] text-gray-500">or continue with</span>
+                </div>
+              </div>
+
+              <button
+                onClick={handleGoogleSignIn}
+                disabled={googleLoading}
+                className="w-full py-3 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg disabled:opacity-70 disabled:cursor-wait"
+              >
+                {googleLoading ? (
+                  <>
+                    <span className="w-5 h-5 border-2 border-gray-400 border-t-gray-900 rounded-full animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    </svg>
+                    Google
+                  </>
+                )}
+              </button>
+
+              <p className="mt-6 text-center text-gray-400 text-sm">
+                {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+                <button
+                  onClick={() => {
+                    setIsSignUp(!isSignUp)
+                    setError(null)
+                    setMessage(null)
+                  }}
+                  className="text-[#4A8FE7] hover:text-[#6366F1] font-medium transition-colors"
+                >
+                  {isSignUp ? 'Sign In' : 'Sign Up'}
+                </button>
+              </p>
+            </div>
+
+            <p className="mt-8 text-center text-gray-600 text-xs">
+              By signing in, you agree to our Terms of Service and Privacy Policy
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
