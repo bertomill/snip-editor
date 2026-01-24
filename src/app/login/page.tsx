@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false)
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [appleLoading, setAppleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
@@ -69,6 +70,22 @@ export default function LoginPage() {
     if (error) {
       setError(error.message)
       setGoogleLoading(false)
+    }
+  }
+
+  const handleAppleSignIn = async () => {
+    if (!supabase) return
+    setAppleLoading(true)
+    setError(null)
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'apple',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+    if (error) {
+      setError(error.message)
+      setAppleLoading(false)
     }
   }
 
@@ -172,13 +189,10 @@ export default function LoginPage() {
                 onClick={() => setShowEmailForm(true)}
                 className="w-full py-4 bg-white/95 backdrop-blur-sm text-gray-900 font-semibold rounded-full transition-all flex items-center justify-start px-6 gap-4 active:scale-[0.98] shadow-lg"
               >
-                <Image
-                  src="/branding/apple-touch-icon.png"
-                  alt=""
-                  width={24}
-                  height={24}
-                  className="w-6 h-6 rounded-md"
-                />
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2"/>
+                  <path d="M22 6L12 13L2 6"/>
+                </svg>
                 Continue with Email
               </button>
 
@@ -201,6 +215,26 @@ export default function LoginPage() {
                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                     </svg>
                     Continue with Google
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleAppleSignIn}
+                disabled={appleLoading}
+                className="w-full py-4 bg-black text-white font-semibold rounded-full transition-all flex items-center justify-start px-6 gap-4 active:scale-[0.98] disabled:opacity-70 shadow-lg"
+              >
+                {appleLoading ? (
+                  <>
+                    <span className="w-6 h-6 border-2 border-gray-600 border-t-white rounded-full animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+                    </svg>
+                    Continue with Apple
                   </>
                 )}
               </button>
@@ -311,13 +345,10 @@ export default function LoginPage() {
                 onClick={() => setShowEmailForm(true)}
                 className="w-full py-4 bg-white/95 backdrop-blur-sm text-gray-900 font-semibold rounded-full transition-all flex items-center justify-start px-6 gap-4 hover:bg-white shadow-lg text-lg"
               >
-                <Image
-                  src="/branding/apple-touch-icon.png"
-                  alt=""
-                  width={28}
-                  height={28}
-                  className="w-7 h-7 rounded-md"
-                />
+                <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2"/>
+                  <path d="M22 6L12 13L2 6"/>
+                </svg>
                 Continue with Email
               </button>
 
@@ -340,6 +371,26 @@ export default function LoginPage() {
                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                     </svg>
                     Continue with Google
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleAppleSignIn}
+                disabled={appleLoading}
+                className="w-full py-4 bg-black text-white font-semibold rounded-full transition-all flex items-center justify-start px-6 gap-4 hover:bg-gray-900 disabled:opacity-70 shadow-lg text-lg"
+              >
+                {appleLoading ? (
+                  <>
+                    <span className="w-7 h-7 border-2 border-gray-600 border-t-white rounded-full animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+                    </svg>
+                    Continue with Apple
                   </>
                 )}
               </button>
