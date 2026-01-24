@@ -8,6 +8,7 @@ const initialState: OverlayState = {
   stickers: [],
   filterId: null,
   showCaptionPreview: true,
+  captionPositionY: 75, // Default near bottom (75% from top)
 };
 
 function overlayReducer(state: OverlayState, action: OverlayAction): OverlayState {
@@ -70,6 +71,12 @@ function overlayReducer(state: OverlayState, action: OverlayAction): OverlayStat
         showCaptionPreview: !state.showCaptionPreview,
       };
 
+    case 'SET_CAPTION_POSITION':
+      return {
+        ...state,
+        captionPositionY: Math.max(10, Math.min(90, action.payload)), // Clamp between 10-90%
+      };
+
     case 'RESET_OVERLAYS':
       return initialState;
 
@@ -89,6 +96,7 @@ interface OverlayContextValue {
   removeSticker: (id: string) => void;
   setFilter: (filterId: string | null) => void;
   toggleCaptionPreview: () => void;
+  setCaptionPosition: (positionY: number) => void;
   resetOverlays: () => void;
 }
 
@@ -108,6 +116,7 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
     removeSticker: (id) => dispatch({ type: 'REMOVE_STICKER', payload: id }),
     setFilter: (filterId) => dispatch({ type: 'SET_FILTER', payload: filterId }),
     toggleCaptionPreview: () => dispatch({ type: 'TOGGLE_CAPTION_PREVIEW' }),
+    setCaptionPosition: (positionY) => dispatch({ type: 'SET_CAPTION_POSITION', payload: positionY }),
     resetOverlays: () => dispatch({ type: 'RESET_OVERLAYS' }),
   };
 

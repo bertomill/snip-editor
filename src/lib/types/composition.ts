@@ -60,6 +60,8 @@ export interface SnipCompositionProps {
   filterId?: string;
   textOverlays?: TextOverlay[];
   stickers?: StickerOverlay[];
+  // Caption position (percentage from top, 0-100)
+  captionPositionY?: number;
 }
 
 export interface TranscriptSegment {

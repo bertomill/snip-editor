@@ -17,6 +17,7 @@ import { TextOverlay, StickerOverlay } from "@/types/overlays";
 import { Sidebar } from "@/components/Sidebar";
 import { useUser } from "@/lib/supabase/hooks";
 import { Timeline, TimelineTrack, TrackItemType } from "@/components/timeline";
+import { generateScriptTrack } from "@/components/timeline/utils/generate-script-track";
 import { ScriptEditor } from "@/components/script-editor";
 import { TranscriptWord } from "@/lib/types/composition";
 import { MediaLibraryPanel } from "@/components/media-library";
@@ -326,7 +327,7 @@ function EditStep({
   // Timeline selection state
   const [selectedTimelineItems, setSelectedTimelineItems] = useState<string[]>([]);
 
-  const { state: overlayState, updateTextOverlay, updateSticker, removeTextOverlay, removeSticker } = useOverlay();
+  const { state: overlayState, updateTextOverlay, updateSticker, removeTextOverlay, removeSticker, setCaptionPosition } = useOverlay();
 
   const activeClip = clips[activeClipIndex];
 
@@ -396,6 +397,14 @@ function EditStep({
       }),
     };
 
+    // Script track (words from transcript)
+    const scriptTrack = allWords.length > 0
+      ? generateScriptTrack({
+          words: allWords,
+          deletedWordIds,
+        })
+      : { id: 'script-track', name: 'Script', items: [] };
+
     // Text track
     const textTrack: TimelineTrack = {
       id: 'text-track',
@@ -426,8 +435,8 @@ function EditStep({
       })),
     };
 
-    return [videoTrack, textTrack, stickerTrack];
-  }, [clips, overlayState.textOverlays, overlayState.stickers]);
+    return [videoTrack, scriptTrack, textTrack, stickerTrack];
+  }, [clips, allWords, deletedWordIds, overlayState.textOverlays, overlayState.stickers]);
 
   // Handle timeline item move
   const handleTimelineItemMove = useCallback((itemId: string, newStart: number, newEnd: number, trackId: string) => {
@@ -468,6 +477,24 @@ function EditStep({
 
   // Handle timeline item delete
   const handleTimelineItemDelete = useCallback((itemIds: string[]) => {
+    // Check for script word deletions
+    const wordIds = itemIds.filter(id => allWords.some(w => w.id === id));
+    if (wordIds.length > 0) {
+      setDeletedWordIds(prev => {
+        const next = new Set(prev);
+        wordIds.forEach(id => {
+          // Toggle deletion state
+          if (next.has(id)) {
+            next.delete(id);
+          } else {
+            next.add(id);
+          }
+        });
+        return next;
+      });
+    }
+
+    // Handle overlay deletions
     itemIds.forEach(itemId => {
       const textItem = overlayState.textOverlays.find(o => o.id === itemId);
       if (textItem) {
@@ -481,7 +508,7 @@ function EditStep({
       }
     });
     setSelectedTimelineItems([]);
-  }, [overlayState.textOverlays, overlayState.stickers, removeTextOverlay, removeSticker]);
+  }, [allWords, overlayState.textOverlays, overlayState.stickers, removeTextOverlay, removeSticker, setDeletedWordIds]);
 
   // Handle timeline frame change (seek)
   const handleTimelineFrameChange = useCallback((frame: number) => {
@@ -506,7 +533,9 @@ function EditStep({
       if (isPlaying) {
         videoRef.current.pause();
       } else {
-        videoRef.current.play();
+        videoRef.current.play().catch((e) => {
+          if (e.name !== 'AbortError') console.error('Video play error:', e);
+        });
       }
       setIsPlaying(!isPlaying);
     }
@@ -598,7 +627,12 @@ function EditStep({
 
   useEffect(() => {
     if (isPlaying && videoRef.current) {
-      videoRef.current.play();
+      videoRef.current.play().catch((e) => {
+        // Ignore AbortError - happens when play() is interrupted by pause()
+        if (e.name !== 'AbortError') {
+          console.error('Video play error:', e);
+        }
+      });
     }
   }, [activeClipIndex, isPlaying]);
 
@@ -759,6 +793,8 @@ function EditStep({
                     deletedWordIds={deletedWordIds}
                     currentTime={currentTime}
                     showCaptions={overlayState.showCaptionPreview}
+                    positionY={overlayState.captionPositionY}
+                    onPositionChange={setCaptionPosition}
                   />
                 </>
               )}
@@ -931,6 +967,7 @@ function EditStep({
             onFrameChange={handleTimelineFrameChange}
             onItemMove={handleTimelineItemMove}
             onItemResize={handleTimelineItemResize}
+            onItemSelect={handleTimelineItemSelect}
             onDeleteItems={handleTimelineItemDelete}
             selectedItemIds={selectedTimelineItems}
             onSelectedItemsChange={setSelectedTimelineItems}
@@ -939,7 +976,9 @@ function EditStep({
             isPlaying={isPlaying}
             onPlay={() => {
               if (videoRef.current) {
-                videoRef.current.play();
+                videoRef.current.play().catch((e) => {
+                  if (e.name !== 'AbortError') console.error('Video play error:', e);
+                });
                 setIsPlaying(true);
               }
             }}
@@ -1098,6 +1137,7 @@ function ExportStep({
           filterId: overlayState.filterId,
           textOverlays: overlayState.textOverlays,
           stickers: overlayState.stickers,
+          captionPositionY: overlayState.captionPositionY,
           // Include userId for Supabase storage
           userId: user?.id,
           // Request conversion for MOV/HEVC files

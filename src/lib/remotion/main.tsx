@@ -21,6 +21,7 @@ export const SnipMain: React.FC<SnipCompositionProps> = ({
   filterId,
   textOverlays = [],
   stickers = [],
+  captionPositionY = 75,
 }) => {
   const frame = useCurrentFrame();
 
@@ -67,12 +68,12 @@ export const SnipMain: React.FC<SnipCompositionProps> = ({
         <TextLayer textOverlays={textOverlays} fps={fps} />
       )}
 
-      {/* Caption Layer - positioned at bottom */}
+      {/* Caption Layer - positioned based on captionPositionY */}
       <AbsoluteFill
         style={{
-          top: "auto",
-          bottom: 0,
-          height: "30%",
+          top: `${captionPositionY}%`,
+          transform: "translateY(-50%)",
+          height: "auto",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

@@ -67,6 +67,7 @@ export interface OverlayState {
   stickers: StickerOverlay[];
   filterId: string | null;
   showCaptionPreview: boolean;
+  captionPositionY: number; // Percentage from top (0-100), default ~75 (bottom area)
 }
 
 // Overlay Actions
@@ -79,6 +80,7 @@ export type OverlayAction =
   | { type: 'REMOVE_STICKER'; payload: string }
   | { type: 'SET_FILTER'; payload: string | null }
   | { type: 'TOGGLE_CAPTION_PREVIEW' }
+  | { type: 'SET_CAPTION_POSITION'; payload: number }
   | { type: 'RESET_OVERLAYS' };
 
 // Render API extended types

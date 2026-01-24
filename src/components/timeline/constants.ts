@@ -32,3 +32,8 @@ export const SNAPPING_CONFIG = {
   edgeSnapTolerance: 0.05,
   prioritizeEdgeSnap: true,
 };
+
+export const SCRIPT_TRACK_CONSTANTS = {
+  PAUSE_THRESHOLD_SECONDS: 0.3,  // Minimum gap to show as pause
+  MIN_WORD_WIDTH_PX: 12,         // Minimum visual width for a word
+};

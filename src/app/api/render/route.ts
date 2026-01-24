@@ -33,6 +33,8 @@ interface RenderRequestBody {
   filterId?: string;
   textOverlays?: TextOverlay[];
   stickers?: StickerOverlay[];
+  // Caption position (percentage from top)
+  captionPositionY?: number;
   // User ID for Supabase storage
   userId?: string;
   // Convert MOV/HEVC files to MP4 before rendering
@@ -237,6 +239,8 @@ export async function POST(request: NextRequest) {
       filterId: body.filterId,
       textOverlays: body.textOverlays || [],
       stickers: body.stickers || [],
+      // Caption position
+      captionPositionY: body.captionPositionY ?? 75,
     };
 
     // Start the render (pass renderId so it matches the temp folder)

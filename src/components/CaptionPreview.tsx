@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useRef, useCallback, useState } from "react";
 import { TranscriptWord, SnipCaption } from "@/lib/types/composition";
 import { captionTemplates } from "@/lib/caption-templates";
 
@@ -10,11 +10,14 @@ interface CaptionPreviewProps {
   currentTime: number; // seconds
   templateId?: string;
   showCaptions?: boolean;
+  positionY: number; // 0-100 percentage from top
+  onPositionChange: (positionY: number) => void;
 }
 
 /**
  * Real-time caption preview for the editor
  * Shows word-by-word highlighting synced with video playback
+ * Draggable vertically to reposition
  */
 export function CaptionPreview({
   words,
@@ -22,7 +25,14 @@ export function CaptionPreview({
   currentTime,
   templateId = "classic",
   showCaptions = true,
+  positionY,
+  onPositionChange,
 }: CaptionPreviewProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartY = useRef<number>(0);
+  const dragStartPosition = useRef<number>(0);
+
   // Get template styles
   const template = captionTemplates.find((t) => t.id === templateId) || captionTemplates[0];
   const styles = template.styles;
@@ -58,6 +68,77 @@ export function CaptionPreview({
     return result;
   }, [words, deletedWordIds]);
 
+  // Handle drag start
+  const handleDragStart = useCallback((clientY: number) => {
+    setIsDragging(true);
+    dragStartY.current = clientY;
+    dragStartPosition.current = positionY;
+  }, [positionY]);
+
+  // Handle drag move
+  const handleDragMove = useCallback((clientY: number) => {
+    if (!isDragging || !containerRef.current) return;
+
+    const parent = containerRef.current.parentElement;
+    if (!parent) return;
+
+    const parentRect = parent.getBoundingClientRect();
+    const deltaY = clientY - dragStartY.current;
+    const deltaPercent = (deltaY / parentRect.height) * 100;
+    const newPosition = dragStartPosition.current + deltaPercent;
+
+    onPositionChange(newPosition);
+  }, [isDragging, onPositionChange]);
+
+  // Handle drag end
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Mouse events
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    handleDragStart(e.clientY);
+  }, [handleDragStart]);
+
+  // Touch events
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      handleDragStart(e.touches[0].clientY);
+    }
+  }, [handleDragStart]);
+
+  // Global event listeners for drag
+  React.useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      handleDragMove(e.clientY);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        handleDragMove(e.touches[0].clientY);
+      }
+    };
+
+    const handleEnd = () => {
+      handleDragEnd();
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleEnd);
+    window.addEventListener("touchmove", handleTouchMove);
+    window.addEventListener("touchend", handleEnd);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleEnd);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleEnd);
+    };
+  }, [isDragging, handleDragMove, handleDragEnd]);
+
   // Don't render if captions are hidden or no words
   if (!showCaptions || captions.length === 0) {
     return null;
@@ -78,13 +159,29 @@ export function CaptionPreview({
 
   return (
     <div
-      className="absolute bottom-12 left-0 right-0 px-3 pointer-events-none z-10"
+      ref={containerRef}
+      className={`absolute left-0 right-0 px-3 z-10 select-none ${
+        isDragging ? "cursor-grabbing" : "cursor-grab"
+      }`}
       style={{
+        top: `${positionY}%`,
+        transform: "translateY(-50%)",
         fontFamily: styles.fontFamily,
         fontSize: "clamp(0.9rem, 4vw, 1.1rem)",
         lineHeight: styles.lineHeight || 1.4,
       }}
+      onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
     >
+      {/* Drag handle indicator */}
+      <div className="flex justify-center mb-1">
+        <div
+          className={`w-8 h-1 rounded-full transition-opacity ${
+            isDragging ? "bg-white/60" : "bg-white/30"
+          }`}
+        />
+      </div>
+
       <div className="flex flex-wrap justify-center items-center gap-1">
         {currentCaption.words.map((word, index) => {
           const isHighlighted = currentMs >= word.startMs && currentMs <= word.endMs;

@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { TimelineItem, TimelineTrack } from '../types';
+import { TimelineItem, TimelineTrack, TrackItemType } from '../types';
 import { TIMELINE_CONSTANTS, SNAPPING_CONFIG } from '../constants';
 import useTimelineStore, { DragInfoState, DraggedItemSnapshot, GhostInstanceData } from '../stores/use-timeline-store';
 
@@ -88,6 +88,11 @@ export const useTimelineDragAndDrop = ({
 
   const handleDragStart = useCallback(
     (item: TimelineItem, clientX: number, clientY: number, action: "move" | "resize-start" | "resize-end") => {
+      // Prevent dragging script/pause items
+      if (item.type === TrackItemType.SCRIPT || item.type === TrackItemType.PAUSE) {
+        return;
+      }
+
       if (!timelineRef.current) return;
 
       const itemTrackIndex = tracks.findIndex(track => track.id === item.trackId);

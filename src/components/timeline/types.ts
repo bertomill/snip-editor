@@ -4,6 +4,8 @@ export enum TrackItemType {
   TEXT = "text",
   VIDEO = "video",
   STICKER = "sticker",
+  SCRIPT = "script",   // Individual word from transcript
+  PAUSE = "pause",     // Gap/pause between words
 }
 
 // A single timeline item (e.g., a clip, text overlay, etc.)
