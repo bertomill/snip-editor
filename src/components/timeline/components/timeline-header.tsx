@@ -47,7 +47,7 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
 
   return (
     <div
-      className="flex items-center justify-between px-3 bg-[#0A0A0A] border-b border-[#282828]"
+      className="flex items-center justify-between px-3 bg-[var(--background)] border-b border-[var(--border)]"
       style={{ height: `${TIMELINE_CONSTANTS.HEADER_HEIGHT}px` }}
     >
       {/* Left: Playback controls */}

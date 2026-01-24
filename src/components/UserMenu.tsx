@@ -11,7 +11,7 @@ export function UserMenu() {
 
   if (loading) {
     return (
-      <div className="w-8 h-8 rounded-full bg-[#2A2A2A] animate-pulse" />
+      <div className="w-8 h-8 rounded-full bg-[var(--background-card)] animate-pulse" />
     )
   }
 
@@ -41,8 +41,8 @@ export function UserMenu() {
             className="fixed inset-0 z-40"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute right-0 mt-2 w-48 bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg shadow-lg z-50 overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#2A2A2A]">
+          <div className="absolute right-0 mt-2 w-48 bg-[var(--background-card)] border border-[var(--border)] rounded-xl shadow-lg z-50 overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--border)]">
               <p className="text-sm text-white truncate">{user.email}</p>
             </div>
             <button
@@ -50,7 +50,7 @@ export function UserMenu() {
                 setIsOpen(false)
                 signOut()
               }}
-              className="w-full px-4 py-2 text-left text-sm text-gray-400 hover:bg-[#2A2A2A] hover:text-white transition-colors"
+              className="w-full px-4 py-2 text-left text-sm text-gray-400 hover:bg-[var(--background-card-hover)] hover:text-white transition-colors"
             >
               Sign Out
             </button>

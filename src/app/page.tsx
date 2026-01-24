@@ -26,6 +26,7 @@ import { MediaFile } from "@/types/media";
 import { CaptionPreview } from "@/components/CaptionPreview";
 import { ProjectsProvider, useProjects } from "@/contexts/ProjectsContext";
 import { ProjectFeed } from "@/components/projects";
+import { ProjectData } from "@/types/project";
 
 type AppView = "feed" | "editor";
 type EditorStep = "upload" | "edit" | "export";
@@ -58,6 +59,8 @@ function HomeContent() {
   // View switching state
   const [view, setView] = useState<AppView>("feed");
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [showExitDialog, setShowExitDialog] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Editor state
   const [step, setStep] = useState<EditorStep>("upload");
@@ -65,41 +68,138 @@ function HomeContent() {
   const [deletedSegments, setDeletedSegments] = useState<Set<number>>(new Set());
   const [deletedWordIds, setDeletedWordIds] = useState<Set<string>>(new Set());
   const [showUploads, setShowUploads] = useState(false);
+  const [projectName, setProjectName] = useState("Untitled Project");
+  const [isEditingName, setIsEditingName] = useState(false);
 
-  const { createProject, updateProject } = useProjects();
+  const { createProject, updateProject, projects } = useProjects();
+
+  // Track changes
+  useEffect(() => {
+    if (view === "editor" && (clips.length > 0 || deletedWordIds.size > 0)) {
+      setHasUnsavedChanges(true);
+    }
+  }, [clips.length, deletedWordIds.size, view]);
 
   // Handle creating a new project
   const handleCreateProject = useCallback(async () => {
     const project = await createProject(`Untitled Project`);
     if (project) {
       setCurrentProjectId(project.id);
+      setProjectName(project.name);
       setStep("upload");
       setClips([]);
       setDeletedSegments(new Set());
       setDeletedWordIds(new Set());
+      setHasUnsavedChanges(false);
       setView("editor");
     }
   }, [createProject]);
 
   // Handle selecting a project from feed
-  const handleSelectProject = useCallback((projectId: string) => {
+  const handleSelectProject = useCallback(async (projectId: string) => {
     setCurrentProjectId(projectId);
-    setStep("upload"); // For now, start fresh - future: load project data
+    setStep("upload");
     setClips([]);
     setDeletedSegments(new Set());
     setDeletedWordIds(new Set());
+    setHasUnsavedChanges(false);
     setView("editor");
+
+    // Load project data
+    try {
+      const response = await fetch(`/api/projects/${projectId}`);
+      const data = await response.json();
+      if (response.ok && data.project) {
+        setProjectName(data.project.name || "Untitled Project");
+        if (data.project.data) {
+          const projectData = data.project.data as ProjectData;
+          // Restore deleted word IDs
+          if (projectData.deletedWordIds) {
+            setDeletedWordIds(new Set(projectData.deletedWordIds));
+          }
+          // Note: Overlays are restored via OverlayContext when we implement that
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load project data:', error);
+    }
   }, []);
 
-  // Handle going back to feed
-  const handleBackToFeed = useCallback(() => {
-    // Update project clip count before leaving
-    if (currentProjectId && clips.length > 0) {
-      updateProject(currentProjectId, { clipCount: clips.length });
+  // Save project data
+  const saveProject = useCallback(async () => {
+    if (!currentProjectId) return;
+
+    // Get overlay state from the context - we'll need to pass this in
+    const projectData: ProjectData = {
+      overlays: {
+        textOverlays: [],
+        stickers: [],
+        filterId: null,
+        captionPositionY: 75,
+      },
+      deletedWordIds: Array.from(deletedWordIds),
+      clipCount: clips.length,
+    };
+
+    try {
+      await fetch(`/api/projects/${currentProjectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clipCount: clips.length,
+          data: projectData,
+        }),
+      });
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error('Failed to save project:', error);
     }
+  }, [currentProjectId, clips.length, deletedWordIds]);
+
+  // Handle going back to feed - show dialog if unsaved changes
+  const handleBackToFeed = useCallback(() => {
+    if (hasUnsavedChanges) {
+      setShowExitDialog(true);
+    } else {
+      setView("feed");
+      setCurrentProjectId(null);
+    }
+  }, [hasUnsavedChanges]);
+
+  // Save and exit
+  const handleSaveAndExit = useCallback(async () => {
+    await saveProject();
+    setShowExitDialog(false);
     setView("feed");
     setCurrentProjectId(null);
-  }, [currentProjectId, clips.length, updateProject]);
+  }, [saveProject]);
+
+  // Discard and exit
+  const handleDiscardAndExit = useCallback(() => {
+    setShowExitDialog(false);
+    setHasUnsavedChanges(false);
+    setView("feed");
+    setCurrentProjectId(null);
+  }, []);
+
+  // Save project name
+  const handleSaveProjectName = useCallback(async (newName: string) => {
+    const trimmedName = newName.trim() || "Untitled Project";
+    setProjectName(trimmedName);
+    setIsEditingName(false);
+
+    if (currentProjectId) {
+      try {
+        await fetch(`/api/projects/${currentProjectId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: trimmedName }),
+        });
+      } catch (error) {
+        console.error('Failed to save project name:', error);
+      }
+    }
+  }, [currentProjectId]);
 
   // Handle adding media from library to timeline
   const handleAddMediaToTimeline = useCallback(async (mediaFile: MediaFile) => {
@@ -218,8 +318,8 @@ function HomeContent() {
             onClose={() => setShowUploads(false)}
             onSelectMedia={handleAddMediaToTimeline}
           />
-          <div className="min-h-screen flex flex-col bg-[#0A0A0A] md:pl-[72px] pb-24 md:pb-0">
-            <header className="flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[#1C1C1E]">
+          <div className="min-h-screen flex flex-col bg-[var(--background)] md:pl-[72px] pb-24 md:pb-0">
+            <header className="flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[var(--border-subtle)]">
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-semibold tracking-tight text-white">
                   Snip
@@ -252,8 +352,41 @@ function HomeContent() {
           onClose={() => setShowUploads(false)}
           onSelectMedia={handleAddMediaToTimeline}
         />
-        <div className="min-h-screen flex flex-col bg-[#0A0A0A] md:pl-[72px] pb-24 md:pb-0">
-        <header className="flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[#1C1C1E]">
+
+        {/* Exit confirmation dialog */}
+        {showExitDialog && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-6 max-w-sm mx-4 shadow-2xl">
+              <h3 className="text-lg font-semibold text-white mb-2">Save changes?</h3>
+              <p className="text-[#8E8E93] text-sm mb-6">
+                You have unsaved changes to this project. Would you like to save them before leaving?
+              </p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={handleSaveAndExit}
+                  className="btn-primary w-full py-2.5"
+                >
+                  Save & Exit
+                </button>
+                <button
+                  onClick={handleDiscardAndExit}
+                  className="w-full py-2.5 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors"
+                >
+                  Discard Changes
+                </button>
+                <button
+                  onClick={() => setShowExitDialog(false)}
+                  className="w-full py-2.5 text-[#8E8E93] hover:bg-[#2A2A2A] rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="min-h-screen flex flex-col bg-[var(--background)] md:pl-[72px] pb-24 md:pb-0">
+        <header className="flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[var(--border-subtle)]">
           <div className="flex items-center gap-3">
             {/* Back button */}
             <button
@@ -264,9 +397,33 @@ function HomeContent() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <h1 className="text-2xl font-semibold tracking-tight text-white">
-              Snip
-            </h1>
+            {/* Editable project name */}
+            {isEditingName ? (
+              <input
+                type="text"
+                defaultValue={projectName}
+                autoFocus
+                onBlur={(e) => handleSaveProjectName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSaveProjectName(e.currentTarget.value);
+                  } else if (e.key === 'Escape') {
+                    setIsEditingName(false);
+                  }
+                }}
+                className="text-xl font-semibold tracking-tight text-white bg-transparent border-b-2 border-[#4A8FE7] outline-none px-1 max-w-[200px]"
+              />
+            ) : (
+              <button
+                onClick={() => setIsEditingName(true)}
+                className="text-xl font-semibold tracking-tight text-white hover:text-[#4A8FE7] transition-colors flex items-center gap-2 group"
+              >
+                {projectName}
+                <svg className="w-4 h-4 text-[#636366] opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
+            )}
           </div>
           {step === "edit" && (
             <button
@@ -891,7 +1048,7 @@ function EditStep({
         <div className="w-full lg:w-[340px] flex-shrink-0">
           <p className="label mb-4">Preview</p>
           <div className="card-glow overflow-hidden">
-            <div className="aspect-[9/16] bg-[#0A0A0A] relative">
+            <div className="aspect-[9/16] bg-black relative">
               {activeClip && (
                 <>
                   <video
@@ -950,14 +1107,7 @@ function EditStep({
                 </div>
               </button>
 
-              {/* Overlay Toolbar */}
-              {!videoError && (
-                <OverlayToolbar
-                  onOpenTextDrawer={() => setTextDrawerOpen(true)}
-                  onOpenStickerDrawer={() => setStickerDrawerOpen(true)}
-                  onOpenFilterDrawer={() => setFilterDrawerOpen(true)}
-                />
-              )}
+              {/* Overlay Toolbar - moved to sidebar (TODO) */}
             </div>
             <div className="p-4 text-center text-sm text-[#8E8E93] bg-[#111111]">
               {formatTime(currentTime)} / {formatTime(activeDuration)}
@@ -1093,6 +1243,10 @@ function EditStep({
                 videoRef.current.pause();
                 setIsPlaying(false);
               }
+            }}
+            onAddContent={() => {
+              // TODO: Open add content menu (clips, text, stickers, etc.)
+              console.log('Add content clicked');
             }}
           />
         </div>
@@ -1405,7 +1559,7 @@ function ExportStep({
             onClick={() => setSelectedTemplate(template)}
             className={`card p-4 text-left transition-all duration-300 ${
               selectedTemplate.id === template.id
-                ? "ring-2 ring-[#4A8FE7] ring-offset-2 ring-offset-[#0A0A0A] scale-[1.02]"
+                ? "ring-2 ring-[#4A8FE7] ring-offset-2 ring-offset-[var(--background)] scale-[1.02]"
                 : "hover:bg-[#242430] hover:scale-[1.01]"
             }`}
           >

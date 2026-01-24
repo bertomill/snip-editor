@@ -50,6 +50,8 @@ export interface TimelineProps {
   onPlay?: () => void;
   onPause?: () => void;
   showPlaybackControls?: boolean;
+  // Add content button
+  onAddContent?: () => void;
 }
 
 // Timeline content area props

@@ -7,6 +7,18 @@ export interface Project {
   thumbnailUrl?: string;
   clipCount: number;
   latestRenderStatus?: 'pending' | 'processing' | 'completed' | 'failed';
+  data?: ProjectData;
+}
+
+export interface ProjectData {
+  overlays?: {
+    textOverlays: unknown[];
+    stickers: unknown[];
+    filterId: string | null;
+    captionPositionY: number;
+  };
+  deletedWordIds?: string[];
+  clipCount?: number;
 }
 
 export interface ProjectWithClips extends Project {

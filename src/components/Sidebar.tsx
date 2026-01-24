@@ -19,7 +19,7 @@ export function Sidebar({ onOpenUploads, onNavigateHome, onCreateProject }: Side
   return (
     <>
       {/* Desktop Sidebar - hidden on mobile */}
-      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[72px] bg-[#0A0A0A] border-r border-[#1C1C1E] flex-col items-center py-4 z-50">
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[72px] bg-[var(--background)] border-r border-[var(--border-subtle)] flex-col items-center py-4 z-50">
         {/* Logo */}
         <Link href="/" className="mb-8">
           <Image
@@ -79,9 +79,9 @@ export function Sidebar({ onOpenUploads, onNavigateHome, onCreateProject }: Side
                     className="fixed inset-0 z-40"
                     onClick={() => setShowProfileMenu(false)}
                   />
-                  <div className="absolute bottom-0 left-full ml-2 w-64 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl shadow-2xl z-50 overflow-hidden">
+                  <div className="absolute bottom-0 left-full ml-2 w-64 bg-[var(--background-card)] border border-[var(--border)] rounded-xl shadow-2xl z-50 overflow-hidden">
                     {/* Profile Header */}
-                    <div className="p-4 border-b border-[#2A2A2A]">
+                    <div className="p-4 border-b border-[var(--border)]">
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center text-white font-semibold text-lg">
                           {user.email?.[0].toUpperCase()}
@@ -105,7 +105,7 @@ export function Sidebar({ onOpenUploads, onNavigateHome, onCreateProject }: Side
                         onNavigateHome?.();
                       }} />
                       <MenuItem icon={<SettingsIcon />} label="Settings" />
-                      <div className="border-t border-[#2A2A2A] my-2" />
+                      <div className="border-t border-[var(--border)] my-2" />
                       <button
                         onClick={() => {
                           setShowProfileMenu(false)
@@ -124,7 +124,7 @@ export function Sidebar({ onOpenUploads, onNavigateHome, onCreateProject }: Side
           ) : (
             <Link
               href="/login"
-              className="w-10 h-10 rounded-full bg-[#1C1C1E] flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#2A2A2A] transition-colors"
+              className="w-10 h-10 rounded-full bg-[var(--background-elevated)] flex items-center justify-center text-gray-400 hover:text-white hover:bg-[var(--background-card)] transition-colors"
             >
               <ProfileIcon />
             </Link>
@@ -132,44 +132,77 @@ export function Sidebar({ onOpenUploads, onNavigateHome, onCreateProject }: Side
         </div>
       </aside>
 
-      {/* Mobile Bottom Nav Bar - Shop app style */}
-      <MobileBottomNav />
+      {/* Mobile Bottom Nav Bar - Liquid glass style */}
+      <MobileBottomNav
+        onNavigateHome={onNavigateHome}
+        onCreateProject={onCreateProject}
+      />
     </>
   )
 }
 
-function MobileBottomNav() {
+function MobileBottomNav({
+  onNavigateHome,
+  onCreateProject,
+}: {
+  onNavigateHome?: () => void
+  onCreateProject?: () => void
+}) {
   return (
     <nav className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-      <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow-lg shadow-black/20">
-        <MobileNavItem href="/" icon={<HomeIconFilled />} active />
-        <MobileNavItem href="/" icon={<SearchIcon />} />
-        <MobileNavItem href="/" icon={<CreateIconMobile />} />
+      <div className="flex items-center gap-1 bg-white/10 backdrop-blur-xl rounded-full px-2 py-2 shadow-lg shadow-black/20 border border-white/20">
+        <MobileNavButton
+          icon={<HomeIconFilled />}
+          onClick={onNavigateHome}
+          active
+        />
+        <MobileNavButton
+          icon={<SearchIcon />}
+          onClick={() => {}}
+        />
+        <MobileNavButton
+          icon={<PlusIcon />}
+          onClick={onCreateProject}
+          accent
+        />
       </div>
     </nav>
   )
 }
 
-function MobileNavItem({
-  href,
+function MobileNavButton({
   icon,
+  onClick,
   active = false,
+  accent = false,
 }: {
-  href: string
   icon: React.ReactNode
+  onClick?: () => void
   active?: boolean
+  accent?: boolean
 }) {
+  if (accent) {
+    return (
+      <button
+        onClick={onClick}
+        className="p-3 rounded-full bg-[#4A8FE7] text-white transition-all hover:bg-[#5A9FF7] active:scale-95"
+      >
+        {icon}
+      </button>
+    )
+  }
+
   return (
-    <Link
-      href={href}
+    <button
+      onClick={onClick}
       className={`p-3 rounded-full transition-colors ${
         active
-          ? 'text-black'
-          : 'text-gray-400 hover:text-gray-600'
+          ? 'text-white'
+          : 'text-white/60 hover:text-white'
       }`}
     >
       {icon}
-    </Link>
+    </button>
   )
 }
 
@@ -237,7 +270,7 @@ function MenuItem({ icon, label, onClick }: { icon: React.ReactNode; label: stri
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:bg-[#2A2A2A] rounded-lg transition-colors"
+      className="w-full flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:bg-[var(--background-card-hover)] rounded-lg transition-colors"
     >
       {icon}
       <span className="text-sm">{label}</span>
@@ -304,6 +337,14 @@ function CreateIconMobile() {
     <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <rect x="4" y="4" width="16" height="16" rx="2" />
       <path d="M9 12h6m-3-3v6" />
+    </svg>
+  )
+}
+
+function PlusIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
     </svg>
   )
 }

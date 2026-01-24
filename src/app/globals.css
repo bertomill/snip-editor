@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  /* Calm Sleep inspired - true deep black */
-  --background: #0A0A0A;
-  --background-elevated: #111111;
-  --background-card: #181818;
-  --background-card-hover: #1F1F1F;
-  --background-input: #141414;
+  /* Calm Sleep inspired - dark charcoal with navy tint */
+  --background: #101318;
+  --background-elevated: #14181F;
+  --background-card: #1A1F28;
+  --background-card-hover: #1F2530;
+  --background-input: #161B22;
 
   /* Calm blue accent - matches their UI */
   --accent: #4A8FE7;
@@ -21,9 +21,9 @@
   --text-muted: #636366;
   --text-hint: #48484A;
 
-  /* Borders - barely visible */
-  --border: #2C2C2E;
-  --border-subtle: #1C1C1E;
+  /* Borders - subtle navy tint */
+  --border: #252A35;
+  --border-subtle: #1A1F28;
 
   /* Status colors */
   --success: #34C759;
@@ -56,12 +56,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Calm card style - subtle, rounded, peaceful */
+/* Calm card style - subtle navy tint, rounded, peaceful */
 .card {
   background: var(--background-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 20px;
-  transition: all 0.3s ease;
+  border-radius: 16px;
+  transition: all 0.25s ease;
 }
 
 .card:hover {
@@ -69,34 +69,83 @@ body {
   border-color: var(--border);
 }
 
-/* Featured card with blue glow aura - like Calm's content cards */
+/* Featured card - Calm style with subtle depth */
 .card-glow {
   background: var(--background-card);
-  border: 1px solid rgba(74, 143, 231, 0.2);
-  border-radius: 24px;
-  transition: all 0.4s ease;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  transition: all 0.3s ease;
   box-shadow:
-    0 0 0 1px rgba(74, 143, 231, 0.1),
-    0 4px 24px -4px rgba(0, 0, 0, 0.5),
-    0 0 40px -8px var(--accent-glow);
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(74, 143, 231, 0.08);
 }
 
 .card-glow:hover {
-  border-color: rgba(74, 143, 231, 0.35);
+  background: var(--background-card-hover);
+  border-color: rgba(74, 143, 231, 0.25);
   box-shadow:
-    0 0 0 1px rgba(74, 143, 231, 0.2),
-    0 8px 32px -4px rgba(0, 0, 0, 0.6),
-    0 0 60px -8px var(--accent-glow-strong);
-  transform: translateY(-2px);
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(74, 143, 231, 0.15),
+    0 0 24px -8px var(--accent-glow);
 }
 
-/* Section labels - uppercase, spaced, subtle */
+/* Section labels - uppercase, spaced, subtle (Calm style) */
 .label {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+/* Category label - like Calm's "MENTAL CLARITY" headers */
+.category-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+/* Content card - Calm style with image and info */
+.card-content {
+  background: var(--background-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+
+.card-content:hover {
+  background: var(--background-card-hover);
+  border-color: var(--border);
+  transform: translateY(-1px);
+}
+
+/* Card with thumbnail - horizontal layout */
+.card-media {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  background: var(--background-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  transition: all 0.25s ease;
+}
+
+.card-media:hover {
+  background: var(--background-card-hover);
+  border-color: var(--border);
+}
+
+.card-media-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--background-elevated);
 }
 
 /* Primary button - Calm style full-width pill */

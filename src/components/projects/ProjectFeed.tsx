@@ -68,11 +68,11 @@ export function ProjectFeed({ onSelectProject, onCreateProject }: ProjectFeedPro
       <div className="w-full max-w-2xl mx-auto px-4">
         <div className="animate-pulse space-y-4">
           {[1, 2, 3].map(i => (
-            <div key={i} className="flex items-center gap-4 p-4 bg-[#1A1A1A] rounded-xl">
-              <div className="w-14 h-14 bg-[#2A2A2A] rounded-lg" />
+            <div key={i} className="flex items-center gap-4 p-4 bg-[var(--background-card)] border border-[var(--border-subtle)] rounded-2xl">
+              <div className="w-14 h-14 bg-[var(--background-elevated)] rounded-lg" />
               <div className="flex-1 space-y-2">
-                <div className="h-4 bg-[#2A2A2A] rounded w-1/3" />
-                <div className="h-3 bg-[#2A2A2A] rounded w-1/4" />
+                <div className="h-4 bg-[var(--background-elevated)] rounded w-1/3" />
+                <div className="h-3 bg-[var(--background-elevated)] rounded w-1/4" />
               </div>
             </div>
           ))}
@@ -85,13 +85,13 @@ export function ProjectFeed({ onSelectProject, onCreateProject }: ProjectFeedPro
   if (projects.length === 0) {
     return (
       <div className="w-full max-w-md mx-auto text-center px-4 py-20">
-        <div className="w-20 h-20 rounded-full bg-[#1A1A1A] flex items-center justify-center mx-auto mb-6">
-          <svg className="w-10 h-10 text-[#636366]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        <div className="w-20 h-20 rounded-full bg-[var(--background-card)] border border-[var(--border-subtle)] flex items-center justify-center mx-auto mb-6">
+          <svg className="w-10 h-10 text-[var(--text-muted)]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
           </svg>
         </div>
         <h2 className="text-2xl font-semibold text-white mb-2">No projects yet</h2>
-        <p className="text-[#8E8E93] mb-8">
+        <p className="text-[var(--text-secondary)] mb-8">
           Create your first video project to get started
         </p>
         <button
@@ -110,7 +110,7 @@ export function ProjectFeed({ onSelectProject, onCreateProject }: ProjectFeedPro
 
     return (
       <div className="mb-6">
-        <h3 className="text-[#636366] text-xs font-semibold uppercase tracking-wider mb-3 px-1">
+        <h3 className="category-label px-1">
           {title}
         </h3>
         <div className="space-y-2">
@@ -128,16 +128,17 @@ export function ProjectFeed({ onSelectProject, onCreateProject }: ProjectFeedPro
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 py-6">
+    <div className="w-full max-w-2xl mx-auto px-4 py-6 pb-24">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-semibold text-white">Projects</h1>
           <p className="text-[#8E8E93] text-sm mt-1">{projects.length} project{projects.length !== 1 ? 's' : ''}</p>
         </div>
+        {/* Desktop only button */}
         <button
           onClick={onCreateProject}
-          className="btn-primary px-4 py-2 text-sm flex items-center gap-2"
+          className="hidden sm:flex btn-primary px-4 py-2 text-sm items-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -152,6 +153,16 @@ export function ProjectFeed({ onSelectProject, onCreateProject }: ProjectFeedPro
       {renderSection('Previous 7 Days', groupedProjects.lastWeek)}
       {renderSection('Previous 30 Days', groupedProjects.lastMonth)}
       {renderSection('Older', groupedProjects.older)}
+
+      {/* Floating Action Button - desktop only (mobile uses bottom nav) */}
+      <button
+        onClick={onCreateProject}
+        className="hidden md:flex fixed bottom-8 right-8 w-14 h-14 bg-[#4A8FE7] hover:bg-[#5A9FF7] rounded-full shadow-lg shadow-[#4A8FE7]/30 items-center justify-center transition-all hover:scale-105 active:scale-95 z-40"
+      >
+        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+      </button>
     </div>
   );
 }

@@ -102,9 +102,9 @@ export function MediaLibraryPanel({ isOpen, onClose, onSelectMedia }: MediaLibra
       />
 
       {/* Panel */}
-      <div className="fixed left-[72px] top-0 bottom-0 w-80 bg-[#0F0F0F] border-r border-[#2A2A2A] z-50 flex flex-col">
+      <div className="fixed left-[72px] top-0 bottom-0 w-80 bg-[var(--background-elevated)] border-r border-[var(--border)] z-50 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[#2A2A2A]">
+        <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
           <h2 className="text-white font-semibold">Uploads</h2>
           <button
             onClick={onClose}
@@ -117,7 +117,7 @@ export function MediaLibraryPanel({ isOpen, onClose, onSelectMedia }: MediaLibra
         </div>
 
         {/* Upload Section */}
-        <div className="p-4 border-b border-[#2A2A2A]">
+        <div className="p-4 border-b border-[var(--border)]">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm text-gray-400">Saved Uploads</span>
             <button
@@ -148,8 +148,8 @@ export function MediaLibraryPanel({ isOpen, onClose, onSelectMedia }: MediaLibra
                 onClick={() => setActiveTab(tab)}
                 className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
                   activeTab === tab
-                    ? 'bg-[#2A2A2A] text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-[#1A1A1A]'
+                    ? 'bg-[var(--background-card)] text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-[var(--background-card-hover)]'
                 }`}
               >
                 {tab === 'all' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -163,7 +163,7 @@ export function MediaLibraryPanel({ isOpen, onClose, onSelectMedia }: MediaLibra
         <div className="flex-1 overflow-y-auto p-4">
           {!user ? (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
-              <div className="w-12 h-12 rounded-full bg-[#1A1A1A] flex items-center justify-center mb-3">
+              <div className="w-12 h-12 rounded-full bg-[var(--background-card)] flex items-center justify-center mb-3">
                 <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
@@ -192,7 +192,7 @@ export function MediaLibraryPanel({ isOpen, onClose, onSelectMedia }: MediaLibra
             </div>
           ) : filteredMedia.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
-              <div className="w-12 h-12 rounded-full bg-[#1A1A1A] flex items-center justify-center mb-3">
+              <div className="w-12 h-12 rounded-full bg-[var(--background-card)] flex items-center justify-center mb-3">
                 <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
@@ -264,11 +264,11 @@ function MediaItem({
 
   return (
     <div
-      className="group relative bg-[#1A1A1A] rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#4A8FE7]/50 transition-all"
+      className="group relative bg-[var(--background-card)] rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#4A8FE7]/50 transition-all"
       onClick={onSelect}
     >
       {/* Thumbnail */}
-      <div className="aspect-video bg-[#0A0A0A] relative">
+      <div className="aspect-video bg-black relative">
         {file.type === 'video' ? (
           <>
             {!videoLoaded && (
@@ -365,9 +365,9 @@ function MediaPreviewModal({
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80" onClick={onClose} />
 
-      <div className="relative bg-[#1A1A1A] rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+      <div className="relative bg-[var(--background-card)] rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[#2A2A2A]">
+        <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
           <h3 className="text-white font-medium truncate">{file.name}</h3>
           <button
             onClick={onClose}
@@ -403,7 +403,7 @@ function MediaPreviewModal({
 
         {/* Footer */}
         {onAdd && (
-          <div className="p-4 border-t border-[#2A2A2A]">
+          <div className="p-4 border-t border-[var(--border)]">
             <button
               onClick={onAdd}
               className="w-full py-2.5 bg-[#4A8FE7] text-white rounded-lg hover:bg-[#3A7FD7] transition-colors text-sm font-medium"
@@ -433,7 +433,7 @@ function DeleteConfirmModal({
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80" onClick={isDeleting ? undefined : onCancel} />
 
-      <div className="relative bg-[#1A1A1A] rounded-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative bg-[var(--background-card)] rounded-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Icon */}
         <div className="pt-6 pb-4 flex justify-center">
           <div className="w-14 h-14 rounded-full bg-red-500/15 flex items-center justify-center">
@@ -462,7 +462,7 @@ function DeleteConfirmModal({
           <button
             onClick={onCancel}
             disabled={isDeleting}
-            className="flex-1 py-2.5 bg-[#2A2A2A] text-white rounded-lg hover:bg-[#3A3A3A] transition-colors text-sm font-medium disabled:opacity-50"
+            className="flex-1 py-2.5 bg-[var(--background-card)] text-white rounded-lg hover:bg-[var(--background-card-hover)] transition-colors text-sm font-medium disabled:opacity-50"
           >
             Cancel
           </button>

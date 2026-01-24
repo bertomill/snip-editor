@@ -45,6 +45,7 @@ export async function GET(
       thumbnailUrl: project.thumbnail_url,
       clipCount: project.clip_count || 0,
       latestRenderStatus: project.latest_render_status,
+      data: project.data,
     };
 
     return NextResponse.json({ project: formattedProject });
@@ -78,7 +79,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { name, clipCount, thumbnailUrl, latestRenderStatus } = body;
+    const { name, clipCount, thumbnailUrl, latestRenderStatus, data } = body;
 
     // Build update object
     const updates: Record<string, unknown> = {
@@ -89,6 +90,7 @@ export async function PATCH(
     if (clipCount !== undefined) updates.clip_count = clipCount;
     if (thumbnailUrl !== undefined) updates.thumbnail_url = thumbnailUrl;
     if (latestRenderStatus !== undefined) updates.latest_render_status = latestRenderStatus;
+    if (data !== undefined) updates.data = data;
 
     // Update project
     const { data: project, error: updateError } = await supabase

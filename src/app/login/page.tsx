@@ -77,7 +77,7 @@ export default function LoginPage() {
           priority
         />
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#0A0A0A]/50" />
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[var(--background)]/50" />
 
         {/* Text overlay */}
         <div className="absolute bottom-12 left-12 right-12">
@@ -91,14 +91,14 @@ export default function LoginPage() {
       </div>
 
       {/* Right side - Login form */}
-      <div className="w-full lg:w-1/2 bg-[#0A0A0A] flex items-center justify-center p-8">
+      <div className="w-full lg:w-1/2 bg-[var(--background)] flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold text-white mb-2">Snip</h1>
             <p className="text-gray-400">AI-powered video editor</p>
           </div>
 
-          <div className="bg-[#1A1A1A]/80 backdrop-blur-sm rounded-2xl p-8 border border-[#2A2A2A]">
+          <div className="bg-[var(--background-card)]/80 backdrop-blur-sm rounded-2xl p-8 border border-[var(--border)]">
             <h2 className="text-xl font-semibold text-white mb-6">
               {isSignUp ? 'Create an account' : 'Welcome back'}
             </h2>
@@ -113,7 +113,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 bg-[#0A0A0A]/80 border border-[#2A2A2A] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#4A8FE7] focus:ring-1 focus:ring-[#4A8FE7] transition-all"
+                  className="w-full px-4 py-3 bg-[var(--background-input)] border border-[var(--border)] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#4A8FE7] focus:ring-1 focus:ring-[#4A8FE7] transition-all"
                   placeholder="you@example.com"
                   required
                 />
@@ -128,7 +128,7 @@ export default function LoginPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 bg-[#0A0A0A]/80 border border-[#2A2A2A] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#4A8FE7] focus:ring-1 focus:ring-[#4A8FE7] transition-all"
+                  className="w-full px-4 py-3 bg-[var(--background-input)] border border-[var(--border)] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#4A8FE7] focus:ring-1 focus:ring-[#4A8FE7] transition-all"
                   placeholder="••••••••"
                   required
                   minLength={6}

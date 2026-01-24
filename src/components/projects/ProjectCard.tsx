@@ -47,7 +47,7 @@ export function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
     <div className="relative">
       <button
         onClick={onClick}
-        className="w-full flex items-center gap-4 p-4 bg-[#1A1A1A] hover:bg-[#222222] rounded-xl transition-colors text-left group"
+        className="w-full flex items-center gap-4 p-4 bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border border-[var(--border-subtle)] hover:border-[var(--border)] rounded-2xl transition-all text-left group"
       >
         {/* Thumbnail or gradient placeholder */}
         <div className="w-14 h-14 rounded-lg flex-shrink-0 overflow-hidden">
@@ -80,7 +80,7 @@ export function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
         {/* Menu button */}
         <div
           onClick={handleMenuClick}
-          className="p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-[#2A2A2A] transition-all"
+          className="p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-[var(--background-elevated)] transition-all"
         >
           <svg className="w-5 h-5 text-[#8E8E93]" fill="currentColor" viewBox="0 0 24 24">
             <circle cx="12" cy="6" r="2" />
@@ -97,7 +97,7 @@ export function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
             className="fixed inset-0 z-40"
             onClick={() => setShowMenu(false)}
           />
-          <div className="absolute right-4 top-14 w-40 bg-[#2A2A2A] border border-[#3A3A3A] rounded-xl shadow-xl z-50 overflow-hidden">
+          <div className="absolute right-4 top-14 w-40 bg-[var(--background-card)] border border-[var(--border)] rounded-xl shadow-xl z-50 overflow-hidden">
             <button
               onClick={handleDelete}
               className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 transition-colors"

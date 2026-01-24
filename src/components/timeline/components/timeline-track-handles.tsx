@@ -13,7 +13,7 @@ export const TimelineTrackHandles: React.FC<TimelineTrackHandlesProps> = ({
 }) => {
   return (
     <div
-      className="track-handles-scroll overflow-hidden bg-[#0A0A0A] border-r border-[#282828]"
+      className="track-handles-scroll overflow-hidden bg-[var(--background)] border-r border-[var(--border)]"
       style={{ width: `${TIMELINE_CONSTANTS.HANDLE_WIDTH}px` }}
     >
       {/* Header spacer */}

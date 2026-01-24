@@ -31,6 +31,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   onPlay,
   onPause,
   showPlaybackControls = false,
+  onAddContent,
 }) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -124,7 +125,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   }, [selectedItemIds, internalItemsDelete, onDeleteItems, onSelectedItemsChange]);
 
   return (
-    <div className="timeline-container bg-[#0A0A0A] flex flex-col h-full overflow-hidden rounded-lg border border-[#282828]">
+    <div className="timeline-container bg-[var(--background)] flex flex-col h-full overflow-hidden rounded-lg border border-[var(--border)]">
       <TimelineHeader
         totalDuration={compositionDuration}
         currentTime={currentTime}
@@ -139,7 +140,7 @@ export const Timeline: React.FC<TimelineProps> = ({
       />
 
       {/* Tracks container - flex layout */}
-      <div className="timeline-tracks-wrapper flex flex-1 overflow-hidden">
+      <div className="timeline-tracks-wrapper flex flex-1 overflow-hidden relative">
         {/* Track handles/labels */}
         <div className="hidden md:block overflow-hidden">
           <TimelineTrackHandles tracks={tracks} />
@@ -164,6 +165,29 @@ export const Timeline: React.FC<TimelineProps> = ({
             onDragEnd={handleDragEnd}
           />
         </div>
+
+        {/* Floating Add Content Button - TikTok style */}
+        {onAddContent && (
+          <button
+            onClick={onAddContent}
+            className="absolute right-4 bottom-4 z-50 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg hover:bg-gray-100 active:scale-95 transition-all"
+            aria-label="Add content"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              className="text-black"
+            >
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   );
