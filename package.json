@@ -23,7 +23,8 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "remotion": "4.0.380",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "zustand": "^5.0.10"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

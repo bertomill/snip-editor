@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { startRendering, saveVideoToTemp } from "@/lib/renderer/remotion-renderer";
-import { transcriptToCaption, SnipCompositionProps, TranscriptSegment } from "@/lib/types/composition";
+import { transcriptToCaption, wordsToCaption, SnipCompositionProps, TranscriptSegment, TranscriptWord } from "@/lib/types/composition";
 import { getCaptionTemplate, getDefaultCaptionTemplate } from "@/lib/caption-templates";
 import { TextOverlay, StickerOverlay } from "@/types/overlays";
 import path from "path";
@@ -13,6 +13,9 @@ interface RenderRequestBody {
   }[];
   segments: TranscriptSegment[];
   deletedSegmentIndices: number[];
+  // Word-level editing
+  words?: TranscriptWord[];
+  deletedWordIds?: string[];
   captionTemplateId: string;
   width?: number;
   height?: number;
@@ -23,6 +26,8 @@ interface RenderRequestBody {
   stickers?: StickerOverlay[];
   // User ID for Supabase storage
   userId?: string;
+  // Convert MOV/HEVC files to MP4 before rendering
+  convertIfNeeded?: boolean;
 }
 
 
@@ -68,7 +73,7 @@ export async function POST(request: NextRequest) {
       // Decode base64 and save to temp
       const buffer = Buffer.from(clip.data, "base64");
       const filename = `clip-${Date.now()}-${i}${path.extname(clip.filename) || ".mp4"}`;
-      const filePath = await saveVideoToTemp(buffer, filename);
+      const filePath = await saveVideoToTemp(buffer, filename, body.convertIfNeeded);
 
       const durationMs = clip.duration * 1000;
       clipInputs.push({
@@ -80,13 +85,23 @@ export async function POST(request: NextRequest) {
       currentTimeMs += durationMs;
     }
 
-    // Filter out deleted segments and convert to captions
-    const activeSegments = body.segments.filter(
-      (_, index) => !body.deletedSegmentIndices.includes(index)
-    );
+    // Generate captions from words (preferred) or segments (fallback)
+    let captions;
 
-    const captions = activeSegments.map(transcriptToCaption);
-    console.log(`📝 ${captions.length} captions to render`);
+    if (body.words && body.words.length > 0) {
+      // Word-level editing: filter deleted words and use actual timestamps
+      const deletedWordIds = new Set(body.deletedWordIds || []);
+      const activeWords = body.words.filter(w => !deletedWordIds.has(w.id));
+      captions = wordsToCaption(activeWords);
+      console.log(`📝 ${captions.length} captions from ${activeWords.length} words (${deletedWordIds.size} deleted)`);
+    } else {
+      // Fallback: segment-based captions
+      const activeSegments = body.segments.filter(
+        (_, index) => !body.deletedSegmentIndices.includes(index)
+      );
+      captions = activeSegments.map(transcriptToCaption);
+      console.log(`📝 ${captions.length} captions from segments`);
+    }
 
     // Calculate total duration and composition props
     const fps = body.fps || 30;

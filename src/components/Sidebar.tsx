@@ -5,7 +5,11 @@ import { useUser, useSignOut } from '@/lib/supabase'
 import Link from 'next/link'
 import Image from 'next/image'
 
-export function Sidebar() {
+interface SidebarProps {
+  onOpenUploads?: () => void;
+}
+
+export function Sidebar({ onOpenUploads }: SidebarProps) {
   const { user, loading } = useUser()
   const signOut = useSignOut()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
@@ -29,6 +33,13 @@ export function Sidebar() {
         <nav className="flex-1 flex flex-col items-center gap-2">
           {/* Home */}
           <NavItem href="/" icon={<HomeIcon />} label="Home" active />
+
+          {/* Uploads */}
+          <NavButton
+            icon={<UploadsIcon />}
+            label="Uploads"
+            onClick={() => onOpenUploads?.()}
+          />
 
           {/* Discover/Explore */}
           <NavItem href="/" icon={<ExploreIcon />} label="Explore" />
@@ -178,6 +189,36 @@ function NavItem({
   )
 }
 
+function NavButton({
+  icon,
+  label,
+  onClick,
+  active = false,
+}: {
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+  active?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`group flex flex-col items-center gap-1 p-2 rounded-xl transition-colors ${
+        active ? 'text-white' : 'text-gray-400 hover:text-white'
+      }`}
+    >
+      <div
+        className={`p-2 rounded-xl transition-colors ${
+          active ? 'bg-[#1C1C1E]' : 'group-hover:bg-[#1C1C1E]'
+        }`}
+      >
+        {icon}
+      </div>
+      <span className="text-[10px] font-medium">{label}</span>
+    </button>
+  )
+}
+
 function MenuItem({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <button className="w-full flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:bg-[#2A2A2A] rounded-lg transition-colors">
@@ -192,6 +233,14 @@ function HomeIcon() {
   return (
     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
       <path d="M12 3L4 9v12h5v-7h6v7h5V9l-8-6z" />
+    </svg>
+  )
+}
+
+function UploadsIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
     </svg>
   )
 }

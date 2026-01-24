@@ -16,6 +16,12 @@ import { getFilterById } from "@/lib/templates/filter-presets";
 import { TextOverlay, StickerOverlay } from "@/types/overlays";
 import { Sidebar } from "@/components/Sidebar";
 import { useUser } from "@/lib/supabase/hooks";
+import { Timeline, TimelineTrack, TrackItemType } from "@/components/timeline";
+import { ScriptEditor } from "@/components/script-editor";
+import { TranscriptWord } from "@/lib/types/composition";
+import { MediaLibraryPanel } from "@/components/media-library";
+import { MediaLibraryProvider } from "@/contexts/MediaLibraryContext";
+import { MediaFile } from "@/types/media";
 
 type EditorStep = "upload" | "edit" | "export";
 
@@ -29,16 +35,55 @@ interface TranscriptSegment {
 interface VideoClip {
   file: File;
   url: string;
-  previewUrl?: string; // Browser-compatible preview URL (for MOV/HEVC files)
   duration: number;
   transcript?: string;
   segments?: TranscriptSegment[];
+  words?: Omit<TranscriptWord, 'clipIndex'>[];  // Words from API (without clipIndex)
 }
 
 export default function Home() {
   const [step, setStep] = useState<EditorStep>("upload");
   const [clips, setClips] = useState<VideoClip[]>([]);
   const [deletedSegments, setDeletedSegments] = useState<Set<number>>(new Set());
+  const [deletedWordIds, setDeletedWordIds] = useState<Set<string>>(new Set());
+  const [showUploads, setShowUploads] = useState(false);
+
+  // Handle adding media from library to timeline
+  const handleAddMediaToTimeline = useCallback(async (mediaFile: MediaFile) => {
+    if (mediaFile.type !== 'video') {
+      alert('Only videos can be added to the timeline');
+      return;
+    }
+
+    try {
+      // Fetch the video file from the URL
+      const response = await fetch(mediaFile.url);
+      const blob = await response.blob();
+      const file = new File([blob], mediaFile.name, { type: blob.type });
+
+      // Get video duration
+      const url = URL.createObjectURL(blob);
+      const duration = await getVideoDuration(url);
+
+      // Add to clips
+      const newClip: VideoClip = {
+        file,
+        url,
+        duration,
+      };
+
+      setClips(prev => [...prev, newClip]);
+      setShowUploads(false);
+
+      // If we're on upload step, move to edit
+      if (step === 'upload') {
+        setStep('edit');
+      }
+    } catch (error) {
+      console.error('Failed to add media to timeline:', error);
+      alert('Failed to add video to timeline');
+    }
+  }, [step]);
 
   useEffect(() => {
     return () => {
@@ -46,50 +91,18 @@ export default function Home() {
     };
   }, [clips]);
 
-  const [isConverting, setIsConverting] = useState(false);
-
   const handleFilesSelected = async (files: File[]) => {
-    setIsConverting(true);
     setStep("edit");
 
     const videoClips: VideoClip[] = await Promise.all(
       files.map(async (file) => {
         const url = URL.createObjectURL(file);
         const duration = await getVideoDuration(url);
-
-        // Check if we need to convert for browser preview
-        const needsConversion =
-          file.type === "video/quicktime" ||
-          file.name.toLowerCase().endsWith(".mov") ||
-          file.name.toLowerCase().endsWith(".hevc");
-
-        let previewUrl: string | undefined;
-
-        if (needsConversion) {
-          try {
-            const formData = new FormData();
-            formData.append("video", file);
-
-            const response = await fetch("/api/convert-preview", {
-              method: "POST",
-              body: formData,
-            });
-
-            if (response.ok) {
-              const data = await response.json();
-              previewUrl = data.url;
-            }
-          } catch (error) {
-            console.error("Preview conversion failed:", error);
-          }
-        }
-
-        return { file, url, previewUrl, duration };
+        return { file, url, duration };
       })
     );
 
     setClips(videoClips);
-    setIsConverting(false);
   };
 
   // All segments with global timestamps
@@ -114,10 +127,39 @@ export default function Home() {
     return segments;
   }, [clips]);
 
+  // All words with global timestamps
+  const allWords = useMemo(() => {
+    const words: TranscriptWord[] = [];
+    let timeOffset = 0;
+
+    clips.forEach((clip, clipIndex) => {
+      if (clip.words) {
+        clip.words.forEach((word) => {
+          words.push({
+            ...word,
+            id: `clip-${clipIndex}-${word.id}`,  // Make ID globally unique across clips
+            start: word.start + timeOffset,
+            end: word.end + timeOffset,
+            clipIndex,
+          });
+        });
+      }
+      timeOffset += clip.duration;
+    });
+
+    return words;
+  }, [clips]);
+
   return (
     <OverlayProvider>
-      <Sidebar />
-      <div className="min-h-screen flex flex-col bg-[#0A0A0A] md:pl-[72px] pb-24 md:pb-0">
+      <MediaLibraryProvider>
+        <Sidebar onOpenUploads={() => setShowUploads(true)} />
+        <MediaLibraryPanel
+          isOpen={showUploads}
+          onClose={() => setShowUploads(false)}
+          onSelectMedia={handleAddMediaToTimeline}
+        />
+        <div className="min-h-screen flex flex-col bg-[#0A0A0A] md:pl-[72px] pb-24 md:pb-0">
         <header className="flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[#1C1C1E]">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight text-white">
@@ -144,7 +186,9 @@ export default function Home() {
               setClips={setClips}
               deletedSegments={deletedSegments}
               setDeletedSegments={setDeletedSegments}
-              isConverting={isConverting}
+              deletedWordIds={deletedWordIds}
+              setDeletedWordIds={setDeletedWordIds}
+              allWords={allWords}
             />
           )}
           {step === "export" && (
@@ -152,11 +196,14 @@ export default function Home() {
               clips={clips}
               segments={allSegments}
               deletedSegmentIndices={Array.from(deletedSegments)}
+              words={allWords}
+              deletedWordIds={Array.from(deletedWordIds)}
               onBack={() => setStep("edit")}
             />
           )}
         </main>
       </div>
+    </MediaLibraryProvider>
     </OverlayProvider>
   );
 }
@@ -248,13 +295,17 @@ function EditStep({
   setClips,
   deletedSegments,
   setDeletedSegments,
-  isConverting,
+  deletedWordIds,
+  setDeletedWordIds,
+  allWords,
 }: {
   clips: VideoClip[];
   setClips: React.Dispatch<React.SetStateAction<VideoClip[]>>;
   deletedSegments: Set<number>;
   setDeletedSegments: React.Dispatch<React.SetStateAction<Set<number>>>;
-  isConverting: boolean;
+  deletedWordIds: Set<string>;
+  setDeletedWordIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  allWords: TranscriptWord[];
 }) {
   const [activeClipIndex, setActiveClipIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -271,7 +322,10 @@ function EditStep({
   const [stickerDrawerOpen, setStickerDrawerOpen] = useState(false);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
-  const { state: overlayState } = useOverlay();
+  // Timeline selection state
+  const [selectedTimelineItems, setSelectedTimelineItems] = useState<string[]>([]);
+
+  const { state: overlayState, updateTextOverlay, updateSticker, removeTextOverlay, removeSticker } = useOverlay();
 
   const activeClip = clips[activeClipIndex];
 
@@ -321,6 +375,131 @@ function EditStep({
     return totalDuration - deletedTime;
   }, [totalDuration, allSegments, deletedSegments]);
 
+  // Convert overlays to timeline tracks
+  const timelineTracks: TimelineTrack[] = useMemo(() => {
+    // Video track
+    const videoTrack: TimelineTrack = {
+      id: 'video-track',
+      name: 'Video',
+      items: clips.map((clip, i) => {
+        const clipStartTime = clips.slice(0, i).reduce((acc, c) => acc + c.duration, 0);
+        return {
+          id: `clip-${i}`,
+          trackId: 'video-track',
+          start: clipStartTime,
+          end: clipStartTime + clip.duration,
+          type: TrackItemType.VIDEO,
+          label: clip.file.name.slice(0, 15),
+          data: { clipIndex: i, url: clip.url },
+        };
+      }),
+    };
+
+    // Text track
+    const textTrack: TimelineTrack = {
+      id: 'text-track',
+      name: 'Text',
+      items: overlayState.textOverlays.map((overlay) => ({
+        id: overlay.id,
+        trackId: 'text-track',
+        start: overlay.startMs / 1000,
+        end: (overlay.startMs + overlay.durationMs) / 1000,
+        type: TrackItemType.TEXT,
+        label: overlay.content.slice(0, 15) || 'Text',
+        data: overlay,
+      })),
+    };
+
+    // Sticker track
+    const stickerTrack: TimelineTrack = {
+      id: 'sticker-track',
+      name: 'Stickers',
+      items: overlayState.stickers.map((sticker) => ({
+        id: sticker.id,
+        trackId: 'sticker-track',
+        start: sticker.startMs / 1000,
+        end: (sticker.startMs + sticker.durationMs) / 1000,
+        type: TrackItemType.STICKER,
+        label: sticker.stickerId,
+        data: sticker,
+      })),
+    };
+
+    return [videoTrack, textTrack, stickerTrack];
+  }, [clips, overlayState.textOverlays, overlayState.stickers]);
+
+  // Handle timeline item move
+  const handleTimelineItemMove = useCallback((itemId: string, newStart: number, newEnd: number, trackId: string) => {
+    if (trackId === 'text-track') {
+      updateTextOverlay(itemId, {
+        startMs: newStart * 1000,
+        durationMs: (newEnd - newStart) * 1000,
+      });
+    } else if (trackId === 'sticker-track') {
+      updateSticker(itemId, {
+        startMs: newStart * 1000,
+        durationMs: (newEnd - newStart) * 1000,
+      });
+    }
+    // Video clips are not moveable (yet)
+  }, [updateTextOverlay, updateSticker]);
+
+  // Handle timeline item resize
+  const handleTimelineItemResize = useCallback((itemId: string, newStart: number, newEnd: number) => {
+    // Find the track containing this item
+    const textItem = overlayState.textOverlays.find(o => o.id === itemId);
+    if (textItem) {
+      updateTextOverlay(itemId, {
+        startMs: newStart * 1000,
+        durationMs: (newEnd - newStart) * 1000,
+      });
+      return;
+    }
+
+    const stickerItem = overlayState.stickers.find(s => s.id === itemId);
+    if (stickerItem) {
+      updateSticker(itemId, {
+        startMs: newStart * 1000,
+        durationMs: (newEnd - newStart) * 1000,
+      });
+    }
+  }, [overlayState.textOverlays, overlayState.stickers, updateTextOverlay, updateSticker]);
+
+  // Handle timeline item delete
+  const handleTimelineItemDelete = useCallback((itemIds: string[]) => {
+    itemIds.forEach(itemId => {
+      const textItem = overlayState.textOverlays.find(o => o.id === itemId);
+      if (textItem) {
+        removeTextOverlay(itemId);
+        return;
+      }
+
+      const stickerItem = overlayState.stickers.find(s => s.id === itemId);
+      if (stickerItem) {
+        removeSticker(itemId);
+      }
+    });
+    setSelectedTimelineItems([]);
+  }, [overlayState.textOverlays, overlayState.stickers, removeTextOverlay, removeSticker]);
+
+  // Handle timeline frame change (seek)
+  const handleTimelineFrameChange = useCallback((frame: number) => {
+    const newTime = frame / 30; // fps = 30
+
+    // Find which clip this time falls into
+    let accumulatedTime = 0;
+    for (let i = 0; i < clips.length; i++) {
+      if (newTime < accumulatedTime + clips[i].duration) {
+        setActiveClipIndex(i);
+        if (videoRef.current) {
+          videoRef.current.currentTime = newTime - accumulatedTime;
+        }
+        return;
+      }
+      accumulatedTime += clips[i].duration;
+    }
+  }, [clips]);
+
   const handlePlayPause = () => {
     if (videoRef.current) {
       if (isPlaying) {
@@ -340,8 +519,42 @@ function EditStep({
       const globalTime = previousClipsDuration + videoRef.current.currentTime;
       setCurrentTime(globalTime);
 
-      // Skip deleted segments during playback
-      if (isPlaying && deletedSegments.size > 0) {
+      // Skip deleted words during playback (word-level granularity)
+      if (isPlaying && deletedWordIds.size > 0 && allWords.length > 0) {
+        const currentWord = allWords.find(
+          (w) => globalTime >= w.start && globalTime < w.end
+        );
+
+        if (currentWord && deletedWordIds.has(currentWord.id)) {
+          // Find next non-deleted word
+          const currentWordIndex = allWords.indexOf(currentWord);
+          let nextWord: TranscriptWord | undefined;
+
+          for (let i = currentWordIndex + 1; i < allWords.length; i++) {
+            if (!deletedWordIds.has(allWords[i].id)) {
+              nextWord = allWords[i];
+              break;
+            }
+          }
+
+          if (nextWord) {
+            // Jump to next non-deleted word
+            if (nextWord.clipIndex !== activeClipIndex) {
+              setActiveClipIndex(nextWord.clipIndex);
+            }
+            const clipStartTime = clips
+              .slice(0, nextWord.clipIndex)
+              .reduce((acc, clip) => acc + clip.duration, 0);
+            videoRef.current.currentTime = nextWord.start - clipStartTime;
+          } else {
+            // No more words, end playback
+            videoRef.current.pause();
+            setIsPlaying(false);
+          }
+        }
+      }
+      // Fallback: Skip deleted segments during playback (if no words available)
+      else if (isPlaying && deletedSegments.size > 0 && allWords.length === 0) {
         const currentSegmentIndex = allSegments.findIndex(
           (seg) => globalTime >= seg.start && globalTime < seg.end
         );
@@ -371,7 +584,7 @@ function EditStep({
         }
       }
     }
-  }, [clips, activeClipIndex, isPlaying, deletedSegments, allSegments]);
+  }, [clips, activeClipIndex, isPlaying, deletedSegments, allSegments, deletedWordIds, allWords]);
 
   const handleVideoEnded = () => {
     if (activeClipIndex < clips.length - 1) {
@@ -410,10 +623,11 @@ function EditStep({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedSegmentIndex]);
 
-  // Restore all deleted segments
+  // Restore all deleted segments and words
   const handleRestoreAll = useCallback(() => {
     setDeletedSegments(new Set());
-  }, []);
+    setDeletedWordIds(new Set());
+  }, [setDeletedWordIds]);
 
   // Handle video error (unsupported format)
   const handleVideoError = useCallback(() => {
@@ -460,6 +674,7 @@ function EditStep({
               ...seg,
               clipIndex: i,
             })),
+            words: data.words,  // Word-level timestamps for script-driven editing
           };
         } else {
           console.error(`Clip ${i + 1} error:`, data.error, data.details);
@@ -489,6 +704,22 @@ function EditStep({
     }
   };
 
+  // Jump to word when clicked (for ScriptEditor)
+  const handleWordClick = useCallback((word: TranscriptWord) => {
+    setActiveClipIndex(word.clipIndex);
+    if (videoRef.current) {
+      const clipStartTime = clips
+        .slice(0, word.clipIndex)
+        .reduce((acc, clip) => acc + clip.duration, 0);
+      videoRef.current.currentTime = word.start - clipStartTime;
+    }
+  }, [clips]);
+
+  // Handle deleted words change from ScriptEditor
+  const handleDeletedWordsChange = useCallback((newDeletedWordIds: Set<string>) => {
+    setDeletedWordIds(newDeletedWordIds);
+  }, [setDeletedWordIds]);
+
   // Find active segment based on current time
   const activeSegmentIndex = useMemo(() => {
     return allSegments.findIndex(
@@ -512,7 +743,7 @@ function EditStep({
               {activeClip && (
                 <video
                   ref={videoRef}
-                  src={activeClip.previewUrl || activeClip.url}
+                  src={activeClip.url}
                   className="w-full h-full object-cover"
                   style={{ filter: filterStyle && filterStyle !== 'none' ? filterStyle : undefined }}
                   onTimeUpdate={handleTimeUpdate}
@@ -521,13 +752,7 @@ function EditStep({
                   playsInline
                 />
               )}
-              {isConverting && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 p-4 text-center">
-                  <div className="w-10 h-10 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin mb-3" />
-                  <p className="text-[#8E8E93] text-sm">Converting for preview...</p>
-                </div>
-              )}
-              {!isConverting && videoError && (
+              {videoError && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 p-4 text-center">
                   <svg className="w-12 h-12 text-[#636366] mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -563,7 +788,7 @@ function EditStep({
               </button>
 
               {/* Overlay Toolbar */}
-              {!isConverting && !videoError && (
+              {!videoError && (
                 <OverlayToolbar
                   onOpenTextDrawer={() => setTextDrawerOpen(true)}
                   onOpenStickerDrawer={() => setStickerDrawerOpen(true)}
@@ -612,7 +837,7 @@ function EditStep({
             </div>
           </div>
 
-          <div className="card p-5 h-[520px] overflow-y-auto">
+          <div className="card p-5 h-[520px]">
             {isTranscribing ? (
               <div className="flex flex-col items-center justify-center h-full gap-5">
                 <div className="w-14 h-14 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin" />
@@ -623,8 +848,16 @@ function EditStep({
                   </p>
                 </div>
               </div>
+            ) : allWords.length > 0 ? (
+              <ScriptEditor
+                words={allWords}
+                currentTime={currentTime}
+                onWordClick={handleWordClick}
+                onDeletedWordsChange={handleDeletedWordsChange}
+              />
             ) : allSegments.length > 0 ? (
-              <div className="space-y-1" ref={transcriptRef}>
+              /* Fallback: segment-based editing if no words available */
+              <div className="space-y-1 overflow-y-auto h-full" ref={transcriptRef}>
                 {allSegments.map((segment, i) => {
                   const isDeleted = deletedSegments.has(i);
                   const isSelected = selectedSegmentIndex === i;
@@ -673,50 +906,40 @@ function EditStep({
               </div>
             )}
           </div>
-          <p className="text-[#45454F] text-xs mt-4 text-center">
-            Click to select • Delete to remove • Removed segments are skipped during playback
-          </p>
         </div>
       </div>
 
-      {/* Timeline */}
+      {/* Multi-Track Timeline */}
       <div>
         <p className="label mb-4">Timeline</p>
-        <div className="card p-4 sm:p-5">
-          <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-hide">
-            {clips.map((clip, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  setActiveClipIndex(i);
-                  setIsPlaying(false);
-                  if (videoRef.current) {
-                    videoRef.current.currentTime = 0;
-                  }
-                }}
-                className={`flex-shrink-0 w-24 sm:w-28 h-16 sm:h-18 rounded-xl overflow-hidden relative transition-all duration-300 ${
-                  activeClipIndex === i
-                    ? "ring-2 ring-[#4A8FE7] ring-offset-2 ring-offset-[#181818] scale-[1.02]"
-                    : "opacity-50 hover:opacity-90 hover:scale-[1.01]"
-                }`}
-              >
-                <video src={clip.url} className="w-full h-full object-cover" muted />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                <div className="absolute bottom-1.5 right-1.5 bg-black/70 px-1.5 py-0.5 rounded-md text-[10px] font-medium text-white">
-                  {formatTime(clip.duration)}
-                </div>
-                {clip.transcript && (
-                  <div className="absolute top-1.5 left-1.5 w-2.5 h-2.5 rounded-full bg-[#4A8FE7] shadow-lg shadow-[#4A8FE7]/30" />
-                )}
-              </button>
-            ))}
-          </div>
-          <div className="mt-4 sm:mt-5 h-1.5 bg-[#181818] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-[#4A8FE7] to-[#5F7BFD] rounded-full transition-all duration-150 progress-glow"
-              style={{ width: `${(currentTime / totalDuration) * 100}%` }}
-            />
-          </div>
+        <div className="h-[200px]">
+          <Timeline
+            tracks={timelineTracks}
+            totalDuration={totalDuration}
+            currentFrame={Math.round(currentTime * 30)}
+            fps={30}
+            onFrameChange={handleTimelineFrameChange}
+            onItemMove={handleTimelineItemMove}
+            onItemResize={handleTimelineItemResize}
+            onDeleteItems={handleTimelineItemDelete}
+            selectedItemIds={selectedTimelineItems}
+            onSelectedItemsChange={setSelectedTimelineItems}
+            showZoomControls
+            showPlaybackControls
+            isPlaying={isPlaying}
+            onPlay={() => {
+              if (videoRef.current) {
+                videoRef.current.play();
+                setIsPlaying(true);
+              }
+            }}
+            onPause={() => {
+              if (videoRef.current) {
+                videoRef.current.pause();
+                setIsPlaying(false);
+              }
+            }}
+          />
         </div>
       </div>
 
@@ -745,25 +968,45 @@ function ExportStep({
   clips,
   segments,
   deletedSegmentIndices,
+  words,
+  deletedWordIds,
   onBack,
 }: {
   clips: VideoClip[];
   segments: TranscriptSegment[];
   deletedSegmentIndices: number[];
+  words: TranscriptWord[];
+  deletedWordIds: string[];
   onBack: () => void;
 }) {
   const { state: overlayState } = useOverlay();
   const { user } = useUser();
   const [selectedTemplate, setSelectedTemplate] = useState<CaptionTemplate>(captionTemplates[0]);
-  const [renderState, setRenderState] = useState<"idle" | "rendering" | "done" | "error">("idle");
+  const [renderState, setRenderState] = useState<"idle" | "converting" | "rendering" | "done" | "error">("idle");
   const [renderProgress, setRenderProgress] = useState(0);
   const [renderId, setRenderId] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Check if any clips need conversion (MOV/HEVC formats)
+  const clipsNeedingConversion = useMemo(() => {
+    return clips.filter(clip => {
+      const filename = clip.file.name.toLowerCase();
+      const type = clip.file.type;
+      return filename.endsWith('.mov') ||
+             filename.endsWith('.hevc') ||
+             type === 'video/quicktime';
+    });
+  }, [clips]);
+
+  const needsConversion = clipsNeedingConversion.length > 0;
+
   // Poll for render progress
   useEffect(() => {
-    if (renderState !== "rendering" || !renderId) return;
+    // Poll during both converting and rendering states
+    if ((renderState !== "rendering" && renderState !== "converting") || !renderId) return;
+
+    const isConverting = renderState === "converting";
 
     const pollProgress = async () => {
       try {
@@ -783,6 +1026,10 @@ function ExportStep({
           setRenderState("error");
           setErrorMessage(data.message);
         } else if (data.type === "progress") {
+          // Switch from converting to rendering once we pass the conversion phase (progress > 5%)
+          if (isConverting && data.progress > 5) {
+            setRenderState("rendering");
+          }
           setRenderProgress(data.progress);
         }
       } catch (error) {
@@ -795,7 +1042,12 @@ function ExportStep({
   }, [renderState, renderId]);
 
   const handleExport = async () => {
-    setRenderState("rendering");
+    // Show converting state if needed
+    if (needsConversion) {
+      setRenderState("converting");
+    } else {
+      setRenderState("rendering");
+    }
     setRenderProgress(0);
     setErrorMessage(null);
 
@@ -826,6 +1078,8 @@ function ExportStep({
           clips: clipData,
           segments,
           deletedSegmentIndices,
+          words,  // Word-level timestamps for accurate captions
+          deletedWordIds,  // Word-level deletions
           captionTemplateId: selectedTemplate.id,
           width: 1080,
           height: 1920,
@@ -836,6 +1090,8 @@ function ExportStep({
           stickers: overlayState.stickers,
           // Include userId for Supabase storage
           userId: user?.id,
+          // Request conversion for MOV/HEVC files
+          convertIfNeeded: needsConversion,
         }),
       });
 
@@ -930,6 +1186,28 @@ function ExportStep({
     );
   }
 
+  // Converting state (for MOV/HEVC files)
+  if (renderState === "converting") {
+    return (
+      <div className="text-center px-4 max-w-md mx-auto animate-fade-in">
+        <div className="w-20 h-20 rounded-full bg-amber-500/15 flex items-center justify-center mx-auto mb-6">
+          <div className="w-10 h-10 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+        <h2 className="text-3xl font-semibold mb-3 tracking-tight">Converting video</h2>
+        <p className="text-[#8E8E93] mb-8 text-base">
+          Converting MOV/HEVC to MP4 for rendering...
+        </p>
+        <div className="w-full h-2 bg-[#181818] rounded-full overflow-hidden mb-3">
+          <div
+            className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-300"
+            style={{ width: `${Math.min(renderProgress * 2, 100)}%` }}
+          />
+        </div>
+        <p className="text-[#45454F] text-sm">This ensures compatibility with the renderer</p>
+      </div>
+    );
+  }
+
   // Rendering state
   if (renderState === "rendering") {
     return (
@@ -992,6 +1270,25 @@ function ExportStep({
         ))}
       </div>
 
+      {/* MOV/HEVC conversion notice */}
+      {needsConversion && (
+        <div className="card p-4 mb-6 text-left border border-amber-500/30 bg-amber-500/5">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-amber-500/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-amber-500 font-medium text-sm mb-1">Format conversion required</p>
+              <p className="text-[#8E8E93] text-xs leading-relaxed">
+                {clipsNeedingConversion.length} clip{clipsNeedingConversion.length > 1 ? 's' : ''} (MOV/HEVC) will be converted to MP4 for rendering. This may add extra processing time.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Export summary */}
       <div className="card p-5 mb-10 text-left">
         <p className="label mb-3">Summary</p>
@@ -1000,16 +1297,35 @@ function ExportStep({
             <span className="text-[#636366]">Clips:</span>{" "}
             <span className="text-white font-medium">{clips.length}</span>
           </div>
-          <div>
-            <span className="text-[#636366]">Segments:</span>{" "}
-            <span className="text-white font-medium">
-              {segments.length - deletedSegmentIndices.length} active
-            </span>
-          </div>
-          <div>
-            <span className="text-[#636366]">Removed:</span>{" "}
-            <span className="text-white font-medium">{deletedSegmentIndices.length}</span>
-          </div>
+          {words.length > 0 ? (
+            <>
+              <div>
+                <span className="text-[#636366]">Words:</span>{" "}
+                <span className="text-white font-medium">
+                  {words.length - deletedWordIds.length} active
+                </span>
+              </div>
+              {deletedWordIds.length > 0 && (
+                <div>
+                  <span className="text-[#636366]">Removed:</span>{" "}
+                  <span className="text-white font-medium">{deletedWordIds.length} words</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div>
+                <span className="text-[#636366]">Segments:</span>{" "}
+                <span className="text-white font-medium">
+                  {segments.length - deletedSegmentIndices.length} active
+                </span>
+              </div>
+              <div>
+                <span className="text-[#636366]">Removed:</span>{" "}
+                <span className="text-white font-medium">{deletedSegmentIndices.length}</span>
+              </div>
+            </>
+          )}
           <div>
             <span className="text-[#636366]">Style:</span>{" "}
             <span className="text-white font-medium">{selectedTemplate.name}</span>

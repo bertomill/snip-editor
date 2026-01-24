@@ -67,6 +67,18 @@ export interface TranscriptSegment {
   start: number;  // seconds
   end: number;    // seconds
   clipIndex: number;
+  words?: TranscriptWord[];  // Word-level timestamps
+}
+
+/**
+ * Word-level timestamp data for script-driven editing
+ */
+export interface TranscriptWord {
+  id: string;           // Unique ID (e.g., "word-0", "word-1")
+  text: string;         // The word
+  start: number;        // Start time (seconds)
+  end: number;          // End time (seconds)
+  clipIndex: number;    // Which clip this belongs to
 }
 
 /**
@@ -88,4 +100,37 @@ export function transcriptToCaption(segment: TranscriptSegment): SnipCaption {
       endMs: segment.start * 1000 + (i + 1) * wordDuration,
     })),
   };
+}
+
+/**
+ * Convert transcript words to captions with actual word timestamps
+ * Groups consecutive words into caption segments (max ~10 words per caption)
+ */
+export function wordsToCaption(words: TranscriptWord[]): SnipCaption[] {
+  if (words.length === 0) return [];
+
+  const captions: SnipCaption[] = [];
+  const WORDS_PER_CAPTION = 8;
+
+  for (let i = 0; i < words.length; i += WORDS_PER_CAPTION) {
+    const chunk = words.slice(i, i + WORDS_PER_CAPTION);
+    if (chunk.length === 0) continue;
+
+    const text = chunk.map(w => w.text).join(' ');
+    const startMs = chunk[0].start * 1000;
+    const endMs = chunk[chunk.length - 1].end * 1000;
+
+    captions.push({
+      text,
+      startMs,
+      endMs,
+      words: chunk.map(w => ({
+        word: w.text,
+        startMs: w.start * 1000,
+        endMs: w.end * 1000,
+      })),
+    });
+  }
+
+  return captions;
 }

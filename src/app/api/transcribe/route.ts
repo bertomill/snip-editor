@@ -129,9 +129,18 @@ export async function POST(request: NextRequest) {
       }];
     }
 
+    // Format words with unique IDs for script-based editing
+    const words = (transcription.words || []).map((w, i) => ({
+      id: `word-${i}`,
+      text: w.word,
+      start: w.start,
+      end: w.end,
+    }));
+
     return NextResponse.json({
       transcript: transcription.text,
       segments,
+      words,  // Word-level timestamps for script-driven editing
     });
   } catch (error) {
     console.error("Transcription error:", error);
