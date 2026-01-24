@@ -24,7 +24,10 @@ import { MediaLibraryPanel } from "@/components/media-library";
 import { MediaLibraryProvider } from "@/contexts/MediaLibraryContext";
 import { MediaFile } from "@/types/media";
 import { CaptionPreview } from "@/components/CaptionPreview";
+import { ProjectsProvider, useProjects } from "@/contexts/ProjectsContext";
+import { ProjectFeed } from "@/components/projects";
 
+type AppView = "feed" | "editor";
 type EditorStep = "upload" | "edit" | "export";
 
 interface TranscriptSegment {
@@ -44,11 +47,59 @@ interface VideoClip {
 }
 
 export default function Home() {
+  return (
+    <ProjectsProvider>
+      <HomeContent />
+    </ProjectsProvider>
+  );
+}
+
+function HomeContent() {
+  // View switching state
+  const [view, setView] = useState<AppView>("feed");
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+
+  // Editor state
   const [step, setStep] = useState<EditorStep>("upload");
   const [clips, setClips] = useState<VideoClip[]>([]);
   const [deletedSegments, setDeletedSegments] = useState<Set<number>>(new Set());
   const [deletedWordIds, setDeletedWordIds] = useState<Set<string>>(new Set());
   const [showUploads, setShowUploads] = useState(false);
+
+  const { createProject, updateProject } = useProjects();
+
+  // Handle creating a new project
+  const handleCreateProject = useCallback(async () => {
+    const project = await createProject(`Untitled Project`);
+    if (project) {
+      setCurrentProjectId(project.id);
+      setStep("upload");
+      setClips([]);
+      setDeletedSegments(new Set());
+      setDeletedWordIds(new Set());
+      setView("editor");
+    }
+  }, [createProject]);
+
+  // Handle selecting a project from feed
+  const handleSelectProject = useCallback((projectId: string) => {
+    setCurrentProjectId(projectId);
+    setStep("upload"); // For now, start fresh - future: load project data
+    setClips([]);
+    setDeletedSegments(new Set());
+    setDeletedWordIds(new Set());
+    setView("editor");
+  }, []);
+
+  // Handle going back to feed
+  const handleBackToFeed = useCallback(() => {
+    // Update project clip count before leaving
+    if (currentProjectId && clips.length > 0) {
+      updateProject(currentProjectId, { clipCount: clips.length });
+    }
+    setView("feed");
+    setCurrentProjectId(null);
+  }, [currentProjectId, clips.length, updateProject]);
 
   // Handle adding media from library to timeline
   const handleAddMediaToTimeline = useCallback(async (mediaFile: MediaFile) => {
@@ -152,10 +203,50 @@ export default function Home() {
     return words;
   }, [clips]);
 
+  // Feed view
+  if (view === "feed") {
+    return (
+      <OverlayProvider>
+        <MediaLibraryProvider>
+          <Sidebar
+            onOpenUploads={() => setShowUploads(true)}
+            onNavigateHome={() => setView("feed")}
+            onCreateProject={handleCreateProject}
+          />
+          <MediaLibraryPanel
+            isOpen={showUploads}
+            onClose={() => setShowUploads(false)}
+            onSelectMedia={handleAddMediaToTimeline}
+          />
+          <div className="min-h-screen flex flex-col bg-[#0A0A0A] md:pl-[72px] pb-24 md:pb-0">
+            <header className="flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[#1C1C1E]">
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-semibold tracking-tight text-white">
+                  Snip
+                </h1>
+              </div>
+            </header>
+            <main className="flex-1 p-4 sm:p-6">
+              <ProjectFeed
+                onSelectProject={handleSelectProject}
+                onCreateProject={handleCreateProject}
+              />
+            </main>
+          </div>
+        </MediaLibraryProvider>
+      </OverlayProvider>
+    );
+  }
+
+  // Editor view
   return (
     <OverlayProvider>
       <MediaLibraryProvider>
-        <Sidebar onOpenUploads={() => setShowUploads(true)} />
+        <Sidebar
+          onOpenUploads={() => setShowUploads(true)}
+          onNavigateHome={handleBackToFeed}
+          onCreateProject={handleCreateProject}
+        />
         <MediaLibraryPanel
           isOpen={showUploads}
           onClose={() => setShowUploads(false)}
@@ -164,6 +255,15 @@ export default function Home() {
         <div className="min-h-screen flex flex-col bg-[#0A0A0A] md:pl-[72px] pb-24 md:pb-0">
         <header className="flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[#1C1C1E]">
           <div className="flex items-center gap-3">
+            {/* Back button */}
+            <button
+              onClick={handleBackToFeed}
+              className="p-2 -ml-2 rounded-lg text-[#8E8E93] hover:text-white hover:bg-[#1C1C1E] transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
             <h1 className="text-2xl font-semibold tracking-tight text-white">
               Snip
             </h1>
@@ -727,6 +827,14 @@ function EditStep({
     setIsTranscribing(false);
   }, [clips, setClips]);
 
+  // Auto-transcribe clips that don't have transcripts yet
+  useEffect(() => {
+    const hasUntranscribedClips = clips.some(clip => !clip.transcript && !clip.words);
+    if (clips.length > 0 && hasUntranscribedClips && !isTranscribing) {
+      handleTranscribe();
+    }
+  }, [clips.length]); // Only trigger when clip count changes, not on every clips update
+
   // Jump to segment when clicked and select it
   const handleSegmentClick = (segment: TranscriptSegment, index: number) => {
     setSelectedSegmentIndex(index);
@@ -749,6 +857,15 @@ function EditStep({
       videoRef.current.currentTime = word.start - clipStartTime;
     }
   }, [clips]);
+
+  // Handle timeline item select (for seeking on script items)
+  const handleTimelineItemSelect = useCallback((itemId: string) => {
+    // Check if it's a script word - if so, seek to it
+    const word = allWords.find(w => w.id === itemId);
+    if (word) {
+      handleWordClick(word);
+    }
+  }, [allWords, handleWordClick]);
 
   // Handle deleted words change from ScriptEditor
   const handleDeletedWordsChange = useCallback((newDeletedWordIds: Set<string>) => {
@@ -861,23 +978,12 @@ function EditStep({
           <div className="flex items-center justify-between mb-4 gap-4">
             <p className="label">Transcript</p>
             <div className="flex gap-3">
-              {deletedSegments.size > 0 && (
+              {(deletedSegments.size > 0 || deletedWordIds.size > 0) && (
                 <button
                   onClick={handleRestoreAll}
                   className="btn-secondary text-xs py-2 px-4 whitespace-nowrap"
                 >
-                  Restore All ({deletedSegments.size})
-                </button>
-              )}
-              {!fullTranscript && (
-                <button
-                  onClick={handleTranscribe}
-                  disabled={isTranscribing}
-                  className="btn-primary text-xs py-2.5 px-5 disabled:opacity-50 whitespace-nowrap"
-                >
-                  {isTranscribing
-                    ? `Transcribing... ${Math.round(transcribeProgress)}%`
-                    : "Generate Transcript"}
+                  Restore All ({deletedWordIds.size || deletedSegments.size})
                 </button>
               )}
             </div>
@@ -945,9 +1051,9 @@ function EditStep({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
-                <p className="text-white font-medium mb-2">No transcript yet</p>
+                <p className="text-white font-medium mb-2">Preparing transcript...</p>
                 <p className="text-[#636366] text-sm leading-relaxed">
-                  Click &quot;Generate Transcript&quot; to extract speech from your clips
+                  Transcription will begin automatically
                 </p>
               </div>
             )}

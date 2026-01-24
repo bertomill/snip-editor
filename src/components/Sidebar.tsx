@@ -7,9 +7,11 @@ import Image from 'next/image'
 
 interface SidebarProps {
   onOpenUploads?: () => void;
+  onNavigateHome?: () => void;
+  onCreateProject?: () => void;
 }
 
-export function Sidebar({ onOpenUploads }: SidebarProps) {
+export function Sidebar({ onOpenUploads, onNavigateHome, onCreateProject }: SidebarProps) {
   const { user, loading } = useUser()
   const signOut = useSignOut()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
@@ -32,7 +34,12 @@ export function Sidebar({ onOpenUploads }: SidebarProps) {
         {/* Navigation */}
         <nav className="flex-1 flex flex-col items-center gap-2">
           {/* Home */}
-          <NavItem href="/" icon={<HomeIcon />} label="Home" active />
+          <NavButton
+            icon={<HomeIcon />}
+            label="Home"
+            onClick={() => onNavigateHome?.()}
+            active
+          />
 
           {/* Uploads */}
           <NavButton
@@ -45,7 +52,11 @@ export function Sidebar({ onOpenUploads }: SidebarProps) {
           <NavItem href="/" icon={<ExploreIcon />} label="Explore" />
 
           {/* Create */}
-          <NavItem href="/" icon={<CreateIcon />} label="Create" />
+          <NavButton
+            icon={<CreateIcon />}
+            label="Create"
+            onClick={() => onCreateProject?.()}
+          />
         </nav>
 
         {/* Bottom section - Profile */}
@@ -89,7 +100,10 @@ export function Sidebar({ onOpenUploads }: SidebarProps) {
                     {/* Menu Items */}
                     <div className="p-2">
                       <MenuItem icon={<ProfileIcon />} label="View profile" />
-                      <MenuItem icon={<ProjectsIcon />} label="My projects" />
+                      <MenuItem icon={<ProjectsIcon />} label="My projects" onClick={() => {
+                        setShowProfileMenu(false);
+                        onNavigateHome?.();
+                      }} />
                       <MenuItem icon={<SettingsIcon />} label="Settings" />
                       <div className="border-t border-[#2A2A2A] my-2" />
                       <button
@@ -219,9 +233,12 @@ function NavButton({
   )
 }
 
-function MenuItem({ icon, label }: { icon: React.ReactNode; label: string }) {
+function MenuItem({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick?: () => void }) {
   return (
-    <button className="w-full flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:bg-[#2A2A2A] rounded-lg transition-colors">
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:bg-[#2A2A2A] rounded-lg transition-colors"
+    >
       {icon}
       <span className="text-sm">{label}</span>
     </button>
