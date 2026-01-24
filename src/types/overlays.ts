@@ -7,7 +7,8 @@ export interface TextOverlay {
   id: string;
   content: string;
   templateId: string;      // References text-templates
-  animationId: string;     // References animation-templates
+  enterAnimation: string;  // References animation-templates (enter phase)
+  exitAnimation: string;   // References animation-templates (exit phase)
   position: { x: number; y: number }; // Percentage (0-100), draggable
   startMs: number;
   durationMs: number;
@@ -31,11 +32,20 @@ export interface FilterPreset {
   thumbnail?: string;      // Preview color/gradient
 }
 
-// Animation Template
+// Animation Style returned by animation functions
+export interface AnimationStyle {
+  opacity?: number;
+  transform?: string;
+  filter?: string;
+}
+
+// Animation Template with function-based enter/exit
 export interface AnimationTemplate {
   id: string;
   name: string;
   description: string;
+  enter: (progress: number) => AnimationStyle;
+  exit: (progress: number) => AnimationStyle;
 }
 
 // Text Style Template

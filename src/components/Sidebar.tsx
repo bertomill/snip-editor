@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useOverlay } from '@/components/overlays/OverlayContext'
 import { textStyleTemplates } from '@/lib/templates/text-templates'
-import { animationTemplates } from '@/lib/templates/animation-templates'
+import { animationTemplateList } from '@/lib/templates/animation-templates'
 import { stickerCategories, getStickersByCategory } from '@/lib/templates/sticker-templates'
 import { filterPresets } from '@/lib/templates/filter-presets'
 import { captionTemplates } from '@/lib/caption-templates'
@@ -521,7 +521,8 @@ function TextPanelContent({
 }) {
   const [content, setContent] = useState('')
   const [templateId, setTemplateId] = useState(textStyleTemplates[0].id)
-  const [animationId, setAnimationId] = useState('fade')
+  const [enterAnimation, setEnterAnimation] = useState('fade')
+  const [exitAnimation, setExitAnimation] = useState('fade')
   const [positionPreset, setPositionPreset] = useState<'top' | 'center' | 'bottom'>('center')
   const [durationMs, setDurationMs] = useState(3000)
 
@@ -543,7 +544,8 @@ function TextPanelContent({
       id: `text-${Date.now()}`,
       content: content.trim(),
       templateId,
-      animationId,
+      enterAnimation,
+      exitAnimation,
       position: getPositionFromPreset(positionPreset),
       startMs: currentTimeMs,
       durationMs,
@@ -604,16 +606,36 @@ function TextPanelContent({
         </div>
       </div>
 
-      {/* Animation Picker */}
+      {/* Enter Animation Picker */}
       <div>
-        <label className="block text-xs text-[#8E8E93] mb-2">Animation</label>
+        <label className="block text-xs text-[#8E8E93] mb-2">Enter Animation</label>
         <div className="flex flex-wrap gap-1.5">
-          {animationTemplates.map((anim) => (
+          {animationTemplateList.map((anim) => (
             <button
               key={anim.id}
-              onClick={() => setAnimationId(anim.id)}
+              onClick={() => setEnterAnimation(anim.id)}
               className={`px-2.5 py-1 rounded-full text-[10px] transition-all ${
-                animationId === anim.id
+                enterAnimation === anim.id
+                  ? 'bg-[#4A8FE7] text-white'
+                  : 'bg-[#2C2C2E] text-[#8E8E93] hover:bg-[#3C3C3E]'
+              }`}
+            >
+              {anim.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Exit Animation Picker */}
+      <div>
+        <label className="block text-xs text-[#8E8E93] mb-2">Exit Animation</label>
+        <div className="flex flex-wrap gap-1.5">
+          {animationTemplateList.map((anim) => (
+            <button
+              key={anim.id}
+              onClick={() => setExitAnimation(anim.id)}
+              className={`px-2.5 py-1 rounded-full text-[10px] transition-all ${
+                exitAnimation === anim.id
                   ? 'bg-[#4A8FE7] text-white'
                   : 'bg-[#2C2C2E] text-[#8E8E93] hover:bg-[#3C3C3E]'
               }`}

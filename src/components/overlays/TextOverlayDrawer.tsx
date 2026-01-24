@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useOverlay } from './OverlayContext';
 import { TextOverlay } from '@/types/overlays';
 import { textStyleTemplates } from '@/lib/templates/text-templates';
-import { animationTemplates } from '@/lib/templates/animation-templates';
+import { animationTemplateList } from '@/lib/templates/animation-templates';
 
 interface TextOverlayDrawerProps {
   isOpen: boolean;
@@ -25,7 +25,8 @@ export function TextOverlayDrawer({
   const { state, addTextOverlay } = useOverlay();
   const [content, setContent] = useState('');
   const [templateId, setTemplateId] = useState(textStyleTemplates[0].id);
-  const [animationId, setAnimationId] = useState('fade');
+  const [enterAnimation, setEnterAnimation] = useState('fade');
+  const [exitAnimation, setExitAnimation] = useState('fade');
   const [positionPreset, setPositionPreset] = useState<'top' | 'center' | 'bottom'>('center');
   const [durationMs, setDurationMs] = useState(3000);
 
@@ -47,7 +48,8 @@ export function TextOverlayDrawer({
       id: `text-${Date.now()}`,
       content: content.trim(),
       templateId,
-      animationId,
+      enterAnimation,
+      exitAnimation,
       position: getPositionFromPreset(positionPreset),
       startMs: currentTimeMs,
       durationMs,
@@ -133,16 +135,35 @@ export function TextOverlayDrawer({
           </div>
         </div>
 
-        {/* Animation Picker */}
+        {/* Animation Pickers - Enter and Exit */}
         <div className="mb-5">
-          <label className="block text-xs text-[#8E8E93] mb-2">Animation</label>
+          <label className="block text-xs text-[#8E8E93] mb-2">Enter Animation</label>
           <div className="flex flex-wrap gap-2">
-            {animationTemplates.map((anim) => (
+            {animationTemplateList.map((anim) => (
               <button
                 key={anim.id}
-                onClick={() => setAnimationId(anim.id)}
+                onClick={() => setEnterAnimation(anim.id)}
                 className={`px-3 py-1.5 rounded-full text-xs transition-all ${
-                  animationId === anim.id
+                  enterAnimation === anim.id
+                    ? 'bg-[#4A8FE7] text-white'
+                    : 'bg-[#2C2C2E] text-[#8E8E93] hover:bg-[#3C3C3E]'
+                }`}
+              >
+                {anim.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-5">
+          <label className="block text-xs text-[#8E8E93] mb-2">Exit Animation</label>
+          <div className="flex flex-wrap gap-2">
+            {animationTemplateList.map((anim) => (
+              <button
+                key={anim.id}
+                onClick={() => setExitAnimation(anim.id)}
+                className={`px-3 py-1.5 rounded-full text-xs transition-all ${
+                  exitAnimation === anim.id
                     ? 'bg-[#4A8FE7] text-white'
                     : 'bg-[#2C2C2E] text-[#8E8E93] hover:bg-[#3C3C3E]'
                 }`}

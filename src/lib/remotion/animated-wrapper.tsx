@@ -1,9 +1,15 @@
 import React from 'react';
-import { useCurrentFrame, interpolate, Easing } from 'remotion';
-import { ENTER_DURATION_FRAMES, EXIT_DURATION_FRAMES } from '../templates/animation-templates';
+import { useCurrentFrame, interpolate } from 'remotion';
+import {
+  ENTER_DURATION_FRAMES,
+  EXIT_DURATION_FRAMES,
+  animationTemplates,
+} from '../templates/animation-templates';
+import { AnimationStyle } from '@/types/overlays';
 
 interface AnimatedWrapperProps {
-  animationId: string;
+  enterAnimation: string;
+  exitAnimation: string;
   startFrame: number;
   durationFrames: number;
   fps: number;
@@ -11,11 +17,12 @@ interface AnimatedWrapperProps {
 }
 
 /**
- * Wrapper component that applies enter/exit animations to children
- * Uses Remotion's interpolate for smooth frame-based animations
+ * Wrapper component that applies separate enter/exit animations to children
+ * Uses function-based animation templates for flexibility
  */
 export const AnimatedWrapper: React.FC<AnimatedWrapperProps> = ({
-  animationId,
+  enterAnimation,
+  exitAnimation,
   startFrame,
   durationFrames,
   children,
@@ -24,12 +31,12 @@ export const AnimatedWrapper: React.FC<AnimatedWrapperProps> = ({
   const localFrame = frame - startFrame;
   const endFrame = durationFrames;
 
-  // Calculate progress for enter and exit animations
+  // Calculate progress for enter and exit animations (0 to 1)
   const enterProgress = interpolate(
     localFrame,
     [0, ENTER_DURATION_FRAMES],
     [0, 1],
-    { extrapolateRight: 'clamp' }
+    { extrapolateRight: 'clamp', extrapolateLeft: 'clamp' }
   );
 
   const exitProgress = interpolate(
@@ -39,82 +46,70 @@ export const AnimatedWrapper: React.FC<AnimatedWrapperProps> = ({
     { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
   );
 
-  // Get animation styles based on animation type
+  // Determine if we're in enter, middle, or exit phase
+  const isEntering = localFrame < ENTER_DURATION_FRAMES;
+  const isExiting = localFrame > endFrame - EXIT_DURATION_FRAMES;
+
+  // Get animation templates (fallback to fade if not found)
+  const enterTemplate = animationTemplates[enterAnimation] || animationTemplates.fade;
+  const exitTemplate = animationTemplates[exitAnimation] || animationTemplates.fade;
+
+  // Get animation styles based on phase
   const getAnimationStyles = (): React.CSSProperties => {
-    switch (animationId) {
-      case 'none':
-        return {};
+    let enterStyles: AnimationStyle = { opacity: 1 };
+    let exitStyles: AnimationStyle = { opacity: 1 };
 
-      case 'fade': {
-        const opacity = interpolate(enterProgress, [0, 1], [0, 1]) *
-          interpolate(exitProgress, [0, 1], [1, 0]);
-        return { opacity };
-      }
-
-      case 'scale': {
-        const enterScale = interpolate(enterProgress, [0, 1], [0.5, 1], {
-          easing: Easing.out(Easing.back(1.5)),
-        });
-        const exitScale = interpolate(exitProgress, [0, 1], [1, 0.5]);
-        const opacity = interpolate(enterProgress, [0, 1], [0, 1]) *
-          interpolate(exitProgress, [0, 1], [1, 0]);
-        return {
-          transform: `scale(${enterScale * exitScale})`,
-          opacity,
-        };
-      }
-
-      case 'slide-up': {
-        const enterY = interpolate(enterProgress, [0, 1], [50, 0], {
-          easing: Easing.out(Easing.cubic),
-        });
-        const exitY = interpolate(exitProgress, [0, 1], [0, -50], {
-          easing: Easing.in(Easing.cubic),
-        });
-        const opacity = interpolate(enterProgress, [0, 1], [0, 1]) *
-          interpolate(exitProgress, [0, 1], [1, 0]);
-        return {
-          transform: `translateY(${enterY + exitY}px)`,
-          opacity,
-        };
-      }
-
-      case 'slide-down': {
-        const enterY = interpolate(enterProgress, [0, 1], [-50, 0], {
-          easing: Easing.out(Easing.cubic),
-        });
-        const exitY = interpolate(exitProgress, [0, 1], [0, 50], {
-          easing: Easing.in(Easing.cubic),
-        });
-        const opacity = interpolate(enterProgress, [0, 1], [0, 1]) *
-          interpolate(exitProgress, [0, 1], [1, 0]);
-        return {
-          transform: `translateY(${enterY + exitY}px)`,
-          opacity,
-        };
-      }
-
-      case 'bounce': {
-        const enterScale = interpolate(enterProgress, [0, 0.5, 0.75, 1], [0, 1.2, 0.9, 1], {
-          easing: Easing.out(Easing.cubic),
-        });
-        const exitScale = interpolate(exitProgress, [0, 1], [1, 0], {
-          easing: Easing.in(Easing.cubic),
-        });
-        const opacity = interpolate(enterProgress, [0, 0.2], [0, 1], {
-          extrapolateRight: 'clamp',
-        }) * interpolate(exitProgress, [0.8, 1], [1, 0], {
-          extrapolateLeft: 'clamp',
-        });
-        return {
-          transform: `scale(${enterScale * exitScale})`,
-          opacity,
-        };
-      }
-
-      default:
-        return {};
+    // Apply enter animation during enter phase
+    if (isEntering) {
+      enterStyles = enterTemplate.enter(enterProgress);
     }
+
+    // Apply exit animation during exit phase
+    if (isExiting) {
+      exitStyles = exitTemplate.exit(exitProgress);
+    }
+
+    // If we're in both enter and exit phase (very short duration), combine them
+    if (isEntering && isExiting) {
+      // Multiply opacities
+      const combinedOpacity = (enterStyles.opacity ?? 1) * (exitStyles.opacity ?? 1);
+
+      // Combine transforms
+      const transforms: string[] = [];
+      if (enterStyles.transform) transforms.push(enterStyles.transform);
+      if (exitStyles.transform) transforms.push(exitStyles.transform);
+
+      // Combine filters
+      const filters: string[] = [];
+      if (enterStyles.filter) filters.push(enterStyles.filter);
+      if (exitStyles.filter) filters.push(exitStyles.filter);
+
+      return {
+        opacity: combinedOpacity,
+        transform: transforms.length > 0 ? transforms.join(' ') : undefined,
+        filter: filters.length > 0 ? filters.join(' ') : undefined,
+      };
+    }
+
+    // Return the active phase's styles
+    if (isEntering) {
+      return {
+        opacity: enterStyles.opacity,
+        transform: enterStyles.transform,
+        filter: enterStyles.filter,
+      };
+    }
+
+    if (isExiting) {
+      return {
+        opacity: exitStyles.opacity,
+        transform: exitStyles.transform,
+        filter: exitStyles.filter,
+      };
+    }
+
+    // Middle phase - fully visible
+    return { opacity: 1 };
   };
 
   // Don't render if outside animation window

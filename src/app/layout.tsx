@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Snip - Simple Video Editor",
+  title: "Snip Editor",
   description: "Edit videos as easily as editing text",
   viewport: {
     width: "device-width",

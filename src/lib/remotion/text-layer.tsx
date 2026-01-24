@@ -44,7 +44,8 @@ export const TextLayer: React.FC<TextLayerProps> = ({ textOverlays, fps }) => {
           >
             <div style={positionStyles}>
               <AnimatedWrapper
-                animationId={overlay.animationId}
+                enterAnimation={overlay.enterAnimation}
+                exitAnimation={overlay.exitAnimation}
                 startFrame={startFrame}
                 durationFrames={durationFrames}
                 fps={fps}
