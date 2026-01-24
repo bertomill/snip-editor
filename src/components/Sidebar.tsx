@@ -11,99 +11,140 @@ export function Sidebar() {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
 
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-[72px] bg-[#0A0A0A] border-r border-[#1C1C1E] flex flex-col items-center py-4 z-50">
-      {/* Logo */}
-      <Link href="/" className="mb-8">
-        <Image
-          src="/branding/icon-transparent.png"
-          alt="Snip"
-          width={40}
-          height={40}
-          className="rounded-xl hover:scale-105 transition-transform"
-        />
-      </Link>
+    <>
+      {/* Desktop Sidebar - hidden on mobile */}
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[72px] bg-[#0A0A0A] border-r border-[#1C1C1E] flex-col items-center py-4 z-50">
+        {/* Logo */}
+        <Link href="/" className="mb-8">
+          <Image
+            src="/branding/icon-transparent.png"
+            alt="Snip"
+            width={40}
+            height={40}
+            className="rounded-xl hover:scale-105 transition-transform"
+          />
+        </Link>
 
-      {/* Navigation */}
-      <nav className="flex-1 flex flex-col items-center gap-2">
-        {/* Home */}
-        <NavItem href="/" icon={<HomeIcon />} label="Home" active />
+        {/* Navigation */}
+        <nav className="flex-1 flex flex-col items-center gap-2">
+          {/* Home */}
+          <NavItem href="/" icon={<HomeIcon />} label="Home" active />
 
-        {/* Discover/Explore */}
-        <NavItem href="/" icon={<ExploreIcon />} label="Explore" />
+          {/* Discover/Explore */}
+          <NavItem href="/" icon={<ExploreIcon />} label="Explore" />
 
-        {/* Create */}
-        <NavItem href="/" icon={<CreateIcon />} label="Create" />
-      </nav>
+          {/* Create */}
+          <NavItem href="/" icon={<CreateIcon />} label="Create" />
+        </nav>
 
-      {/* Bottom section - Profile */}
-      <div className="relative">
-        {loading ? (
-          <div className="w-10 h-10 rounded-full bg-[#1C1C1E] animate-pulse" />
-        ) : user ? (
-          <>
-            <button
-              onClick={() => setShowProfileMenu(!showProfileMenu)}
-              className="w-10 h-10 rounded-full bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center text-white font-semibold text-sm hover:scale-105 transition-transform ring-2 ring-transparent hover:ring-[#4A8FE7]/50"
-            >
-              {user.email?.[0].toUpperCase()}
-            </button>
+        {/* Bottom section - Profile */}
+        <div className="relative">
+          {loading ? (
+            <div className="w-10 h-10 rounded-full bg-[#1C1C1E] animate-pulse" />
+          ) : user ? (
+            <>
+              <button
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="w-10 h-10 rounded-full bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center text-white font-semibold text-sm hover:scale-105 transition-transform ring-2 ring-transparent hover:ring-[#4A8FE7]/50"
+              >
+                {user.email?.[0].toUpperCase()}
+              </button>
 
-            {/* Profile Menu */}
-            {showProfileMenu && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setShowProfileMenu(false)}
-                />
-                <div className="absolute bottom-0 left-full ml-2 w-64 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl shadow-2xl z-50 overflow-hidden">
-                  {/* Profile Header */}
-                  <div className="p-4 border-b border-[#2A2A2A]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center text-white font-semibold text-lg">
-                        {user.email?.[0].toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-medium truncate">
-                          {user.user_metadata?.full_name || 'User'}
-                        </p>
-                        <p className="text-gray-400 text-sm truncate">
-                          {user.email}
-                        </p>
+              {/* Profile Menu */}
+              {showProfileMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowProfileMenu(false)}
+                  />
+                  <div className="absolute bottom-0 left-full ml-2 w-64 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl shadow-2xl z-50 overflow-hidden">
+                    {/* Profile Header */}
+                    <div className="p-4 border-b border-[#2A2A2A]">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center text-white font-semibold text-lg">
+                          {user.email?.[0].toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-medium truncate">
+                            {user.user_metadata?.full_name || 'User'}
+                          </p>
+                          <p className="text-gray-400 text-sm truncate">
+                            {user.email}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Menu Items */}
-                  <div className="p-2">
-                    <MenuItem icon={<ProfileIcon />} label="View profile" />
-                    <MenuItem icon={<ProjectsIcon />} label="My projects" />
-                    <MenuItem icon={<SettingsIcon />} label="Settings" />
-                    <div className="border-t border-[#2A2A2A] my-2" />
-                    <button
-                      onClick={() => {
-                        setShowProfileMenu(false)
-                        signOut()
-                      }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                    >
-                      <LogoutIcon />
-                      <span className="text-sm">Log out</span>
-                    </button>
+                    {/* Menu Items */}
+                    <div className="p-2">
+                      <MenuItem icon={<ProfileIcon />} label="View profile" />
+                      <MenuItem icon={<ProjectsIcon />} label="My projects" />
+                      <MenuItem icon={<SettingsIcon />} label="Settings" />
+                      <div className="border-t border-[#2A2A2A] my-2" />
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false)
+                          signOut()
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                      >
+                        <LogoutIcon />
+                        <span className="text-sm">Log out</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
-          </>
-        ) : (
-          <Link
-            href="/login"
-            className="w-10 h-10 rounded-full bg-[#1C1C1E] flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#2A2A2A] transition-colors"
-          >
-            <ProfileIcon />
-          </Link>
-        )}
+                </>
+              )}
+            </>
+          ) : (
+            <Link
+              href="/login"
+              className="w-10 h-10 rounded-full bg-[#1C1C1E] flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#2A2A2A] transition-colors"
+            >
+              <ProfileIcon />
+            </Link>
+          )}
+        </div>
+      </aside>
+
+      {/* Mobile Bottom Nav Bar - Shop app style */}
+      <MobileBottomNav />
+    </>
+  )
+}
+
+function MobileBottomNav() {
+  return (
+    <nav className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+      <div className="flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow-lg shadow-black/20">
+        <MobileNavItem href="/" icon={<HomeIconFilled />} active />
+        <MobileNavItem href="/" icon={<SearchIcon />} />
+        <MobileNavItem href="/" icon={<CreateIconMobile />} />
       </div>
-    </aside>
+    </nav>
+  )
+}
+
+function MobileNavItem({
+  href,
+  icon,
+  active = false,
+}: {
+  href: string
+  icon: React.ReactNode
+  active?: boolean
+}) {
+  return (
+    <Link
+      href={href}
+      className={`p-3 rounded-full transition-colors ${
+        active
+          ? 'text-black'
+          : 'text-gray-400 hover:text-gray-600'
+      }`}
+    >
+      {icon}
+    </Link>
   )
 }
 
@@ -146,7 +187,7 @@ function MenuItem({ icon, label }: { icon: React.ReactNode; label: string }) {
   )
 }
 
-// Icons
+// Desktop Icons
 function HomeIcon() {
   return (
     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -170,6 +211,33 @@ function CreateIcon() {
       <rect x="3" y="3" width="18" height="18" rx="3" />
       <line x1="12" y1="8" x2="12" y2="16" />
       <line x1="8" y1="12" x2="16" y2="12" />
+    </svg>
+  )
+}
+
+// Mobile Icons (Shop app style)
+function HomeIconFilled() {
+  return (
+    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 3L4 9v12h16V9l-8-6z" />
+    </svg>
+  )
+}
+
+function SearchIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.35-4.35" />
+    </svg>
+  )
+}
+
+function CreateIconMobile() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path d="M9 12h6m-3-3v6" />
     </svg>
   )
 }

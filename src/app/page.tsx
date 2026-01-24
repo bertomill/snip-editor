@@ -15,6 +15,7 @@ import {
 import { getFilterById } from "@/lib/templates/filter-presets";
 import { TextOverlay, StickerOverlay } from "@/types/overlays";
 import { Sidebar } from "@/components/Sidebar";
+import { useUser } from "@/lib/supabase/hooks";
 
 type EditorStep = "upload" | "edit" | "export";
 
@@ -116,7 +117,7 @@ export default function Home() {
   return (
     <OverlayProvider>
       <Sidebar />
-      <div className="min-h-screen flex flex-col bg-[#0A0A0A] pl-[72px]">
+      <div className="min-h-screen flex flex-col bg-[#0A0A0A] md:pl-[72px] pb-24 md:pb-0">
         <header className="flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[#1C1C1E]">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight text-white">
@@ -752,6 +753,7 @@ function ExportStep({
   onBack: () => void;
 }) {
   const { state: overlayState } = useOverlay();
+  const { user } = useUser();
   const [selectedTemplate, setSelectedTemplate] = useState<CaptionTemplate>(captionTemplates[0]);
   const [renderState, setRenderState] = useState<"idle" | "rendering" | "done" | "error">("idle");
   const [renderProgress, setRenderProgress] = useState(0);
@@ -832,6 +834,8 @@ function ExportStep({
           filterId: overlayState.filterId,
           textOverlays: overlayState.textOverlays,
           stickers: overlayState.stickers,
+          // Include userId for Supabase storage
+          userId: user?.id,
         }),
       });
 
@@ -851,7 +855,13 @@ function ExportStep({
 
   const handleDownload = () => {
     if (downloadUrl) {
-      window.location.href = `/api/render/download/${renderId}`;
+      // If downloadUrl is a Supabase signed URL (starts with http), open directly
+      // Otherwise use the local download API
+      if (downloadUrl.startsWith('http')) {
+        window.open(downloadUrl, '_blank');
+      } else {
+        window.location.href = `/api/render/download/${renderId}`;
+      }
     }
   };
 
