@@ -1192,12 +1192,12 @@ function EditStep({
           <div className="flex items-center justify-between mb-4 gap-4">
             <p className="label">Transcript</p>
             <div className="flex gap-3">
-              {(deletedSegments.size > 0 || deletedWordIds.size > 0) && (
+              {(deletedSegments.size > 0 || deletedWordIds.size > 0 || deletedPauseIds.size > 0) && (
                 <button
                   onClick={handleRestoreAll}
                   className="btn-secondary text-xs py-2 px-4 whitespace-nowrap"
                 >
-                  Restore All ({deletedWordIds.size || deletedSegments.size})
+                  Restore All ({deletedWordIds.size + deletedPauseIds.size || deletedSegments.size})
                 </button>
               )}
             </div>

@@ -11,7 +11,7 @@ import { stickerCategories, getStickersByCategory } from '@/lib/templates/sticke
 import { filterPresets } from '@/lib/templates/filter-presets'
 import { TextOverlay, StickerOverlay } from '@/types/overlays'
 
-type PanelType = 'text' | 'stickers' | 'filters' | null;
+type PanelType = 'text' | 'stickers' | 'filters' | 'audio' | null;
 
 interface SidebarProps {
   onOpenUploads?: () => void;
@@ -35,7 +35,7 @@ export function Sidebar({
   const [activePanel, setActivePanel] = useState<PanelType>(null)
 
   // Get overlay context for captions and overlays
-  const { state: overlayState, toggleCaptionPreview, addTextOverlay, addSticker, setFilter } = useOverlay()
+  const { state: overlayState, toggleCaptionPreview, addTextOverlay, addSticker, setFilter, setAudioSettings } = useOverlay()
 
   const togglePanel = (panel: PanelType) => {
     setActivePanel(activePanel === panel ? null : panel)
@@ -106,6 +106,13 @@ export function Sidebar({
             label="Filters"
             onClick={() => togglePanel('filters')}
             active={activePanel === 'filters'}
+          />
+
+          <NavButton
+            icon={<AudioEnhanceIcon />}
+            label="Audio"
+            onClick={() => togglePanel('audio')}
+            active={activePanel === 'audio'}
           />
 
           <NavButton
@@ -198,6 +205,7 @@ export function Sidebar({
         addTextOverlay={addTextOverlay}
         addSticker={addSticker}
         setFilter={setFilter}
+        setAudioSettings={setAudioSettings}
         overlayState={overlayState}
       />
 
@@ -208,8 +216,10 @@ export function Sidebar({
         onOpenTextDrawer={() => togglePanel('text')}
         onOpenStickerDrawer={() => togglePanel('stickers')}
         onOpenFilterDrawer={() => togglePanel('filters')}
+        onOpenAudioDrawer={() => togglePanel('audio')}
         onToggleCaptions={toggleCaptionPreview}
         captionsEnabled={overlayState.showCaptionPreview}
+        audioEnabled={overlayState.audioSettings.enhanceAudio}
       />
     </>
   )
@@ -221,16 +231,20 @@ function MobileBottomToolbar({
   onOpenTextDrawer,
   onOpenStickerDrawer,
   onOpenFilterDrawer,
+  onOpenAudioDrawer,
   onToggleCaptions,
   captionsEnabled = false,
+  audioEnabled = false,
 }: {
   onNavigateHome?: () => void
   onCreateProject?: () => void
   onOpenTextDrawer?: () => void
   onOpenStickerDrawer?: () => void
   onOpenFilterDrawer?: () => void
+  onOpenAudioDrawer?: () => void
   onToggleCaptions?: () => void
   captionsEnabled?: boolean
+  audioEnabled?: boolean
 }) {
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#1C1C1E]/95 backdrop-blur-xl border-t border-white/10 safe-area-pb">
@@ -243,7 +257,8 @@ function MobileBottomToolbar({
         <ToolbarButton
           icon={<AudioIcon />}
           label="Audio"
-          onClick={() => {}}
+          onClick={onOpenAudioDrawer}
+          active={audioEnabled}
         />
         <ToolbarButton
           icon={<MobileTextIcon />}
@@ -311,6 +326,7 @@ function SidebarPanel({
   addTextOverlay,
   addSticker,
   setFilter,
+  setAudioSettings,
   overlayState,
 }: {
   activePanel: PanelType
@@ -320,7 +336,8 @@ function SidebarPanel({
   addTextOverlay: (overlay: TextOverlay) => void
   addSticker: (sticker: StickerOverlay) => void
   setFilter: (filterId: string | null) => void
-  overlayState: { textOverlays: TextOverlay[]; stickers: StickerOverlay[]; filterId: string | null }
+  setAudioSettings: (settings: Partial<import('@/types/overlays').AudioSettings>) => void
+  overlayState: { textOverlays: TextOverlay[]; stickers: StickerOverlay[]; filterId: string | null; audioSettings: import('@/types/overlays').AudioSettings }
 }) {
   if (!activePanel) return null
 
@@ -361,6 +378,12 @@ function SidebarPanel({
           <FilterPanelContent
             setFilter={setFilter}
             currentFilterId={overlayState.filterId}
+          />
+        )}
+        {activePanel === 'audio' && (
+          <AudioPanelContent
+            audioSettings={overlayState.audioSettings}
+            setAudioSettings={setAudioSettings}
           />
         )}
       </div>
@@ -672,6 +695,137 @@ function FilterPanelContent({
   )
 }
 
+// Audio Panel Content
+function AudioPanelContent({
+  audioSettings,
+  setAudioSettings,
+}: {
+  audioSettings: import('@/types/overlays').AudioSettings
+  setAudioSettings: (settings: Partial<import('@/types/overlays').AudioSettings>) => void
+}) {
+  const handleToggleEnhance = () => {
+    setAudioSettings({ enhanceAudio: !audioSettings.enhanceAudio })
+  }
+
+  const handleToggleNoiseReduction = () => {
+    setAudioSettings({ noiseReduction: !audioSettings.noiseReduction })
+  }
+
+  const handleToggleLoudness = () => {
+    setAudioSettings({ loudnessNormalization: !audioSettings.loudnessNormalization })
+  }
+
+  const handleStrengthChange = (strength: 'light' | 'medium' | 'strong') => {
+    setAudioSettings({ noiseReductionStrength: strength })
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Main toggle */}
+      <button
+        onClick={handleToggleEnhance}
+        className={`w-full p-3 rounded-xl flex items-center justify-between transition-all ${
+          audioSettings.enhanceAudio
+            ? 'bg-[#4A8FE7]/15 border border-[#4A8FE7]/30'
+            : 'bg-[#2C2C2E] border border-transparent hover:bg-[#333]'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+            audioSettings.enhanceAudio ? 'bg-[#4A8FE7]/20' : 'bg-[#3A3A3C]'
+          }`}>
+            <svg className={`w-4 h-4 ${audioSettings.enhanceAudio ? 'text-[#4A8FE7]' : 'text-[#8E8E93]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+          </div>
+          <div className="text-left">
+            <p className="font-medium text-white text-sm">Enhance Audio</p>
+            <p className="text-[10px] text-[#8E8E93]">Clean up for better transcription</p>
+          </div>
+        </div>
+        <div className={`w-10 h-6 rounded-full p-0.5 transition-colors ${
+          audioSettings.enhanceAudio ? 'bg-[#4A8FE7]' : 'bg-[#3A3A3C]'
+        }`}>
+          <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
+            audioSettings.enhanceAudio ? 'translate-x-4' : 'translate-x-0'
+          }`} />
+        </div>
+      </button>
+
+      {/* Sub-options (only shown when enhance is enabled) */}
+      {audioSettings.enhanceAudio && (
+        <div className="space-y-3 animate-fade-in">
+          {/* Noise Reduction Toggle */}
+          <div className="p-3 rounded-xl bg-[#2C2C2E]">
+            <button
+              onClick={handleToggleNoiseReduction}
+              className="w-full flex items-center justify-between mb-2"
+            >
+              <div>
+                <p className="font-medium text-white text-xs">Noise Reduction</p>
+                <p className="text-[10px] text-[#636366]">Remove background noise</p>
+              </div>
+              <div className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
+                audioSettings.noiseReduction ? 'bg-[#4A8FE7]' : 'bg-[#3A3A3C]'
+              }`}>
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                  audioSettings.noiseReduction ? 'translate-x-4' : 'translate-x-0'
+                }`} />
+              </div>
+            </button>
+
+            {/* Strength selector */}
+            {audioSettings.noiseReduction && (
+              <div className="flex gap-1.5 mt-2 pt-2 border-t border-[#3A3A3C]">
+                {(['light', 'medium', 'strong'] as const).map((strength) => (
+                  <button
+                    key={strength}
+                    onClick={() => handleStrengthChange(strength)}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-medium transition-all ${
+                      audioSettings.noiseReductionStrength === strength
+                        ? 'bg-[#4A8FE7] text-white'
+                        : 'bg-[#3A3A3C] text-[#8E8E93] hover:bg-[#444]'
+                    }`}
+                  >
+                    {strength.charAt(0).toUpperCase() + strength.slice(1)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Loudness Normalization Toggle */}
+          <div className="p-3 rounded-xl bg-[#2C2C2E]">
+            <button
+              onClick={handleToggleLoudness}
+              className="w-full flex items-center justify-between"
+            >
+              <div>
+                <p className="font-medium text-white text-xs">Loudness Leveling</p>
+                <p className="text-[10px] text-[#636366]">Normalize volume</p>
+              </div>
+              <div className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
+                audioSettings.loudnessNormalization ? 'bg-[#4A8FE7]' : 'bg-[#3A3A3C]'
+              }`}>
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                  audioSettings.loudnessNormalization ? 'translate-x-4' : 'translate-x-0'
+                }`} />
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Info footer */}
+      <div className="pt-3 border-t border-[#2C2C2E]">
+        <p className="text-[10px] text-[#636366] text-center leading-relaxed">
+          Audio enhancement cleans up voice recordings before transcription for improved accuracy.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function NavItem({
   href,
   icon,
@@ -879,6 +1033,14 @@ function CaptionIcon() {
     <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <rect x="2" y="4" width="20" height="16" rx="2" />
       <path strokeLinecap="round" d="M6 12h4M14 12h4M6 16h8" />
+    </svg>
+  )
+}
+
+function AudioEnhanceIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
     </svg>
   )
 }

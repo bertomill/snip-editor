@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { OverlayState, OverlayAction, TextOverlay, StickerOverlay } from '@/types/overlays';
+import { OverlayState, OverlayAction, TextOverlay, StickerOverlay, AudioSettings, defaultAudioSettings } from '@/types/overlays';
 
 const initialState: OverlayState = {
   textOverlays: [],
@@ -9,6 +9,7 @@ const initialState: OverlayState = {
   filterId: null,
   showCaptionPreview: true,
   captionPositionY: 75, // Default near bottom (75% from top)
+  audioSettings: defaultAudioSettings,
 };
 
 function overlayReducer(state: OverlayState, action: OverlayAction): OverlayState {
@@ -80,6 +81,12 @@ function overlayReducer(state: OverlayState, action: OverlayAction): OverlayStat
     case 'RESET_OVERLAYS':
       return initialState;
 
+    case 'SET_AUDIO_SETTINGS':
+      return {
+        ...state,
+        audioSettings: { ...state.audioSettings, ...action.payload },
+      };
+
     default:
       return state;
   }
@@ -97,6 +104,7 @@ interface OverlayContextValue {
   setFilter: (filterId: string | null) => void;
   toggleCaptionPreview: () => void;
   setCaptionPosition: (positionY: number) => void;
+  setAudioSettings: (settings: Partial<AudioSettings>) => void;
   resetOverlays: () => void;
 }
 
@@ -117,6 +125,7 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
     setFilter: (filterId) => dispatch({ type: 'SET_FILTER', payload: filterId }),
     toggleCaptionPreview: () => dispatch({ type: 'TOGGLE_CAPTION_PREVIEW' }),
     setCaptionPosition: (positionY) => dispatch({ type: 'SET_CAPTION_POSITION', payload: positionY }),
+    setAudioSettings: (settings) => dispatch({ type: 'SET_AUDIO_SETTINGS', payload: settings }),
     resetOverlays: () => dispatch({ type: 'RESET_OVERLAYS' }),
   };
 

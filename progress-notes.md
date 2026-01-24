@@ -156,6 +156,31 @@ Next.js 14 | TypeScript | Tailwind | Groq Whisper | Supabase | Remotion
   - `main.tsx` positions caption layer using percentage from top
   - Final exported video matches preview position exactly
 
+### Phase 10: Voice Cleanup (Jan 24, 2025)
+- [x] **FFmpeg Audio Enhancement** - `src/lib/audio/voice-cleanup.ts`:
+  - `cleanupVoice(inputPath, options)` - Applies noise reduction + loudness normalization
+  - Uses `afftdn` filter (adaptive FFT denoiser) with 3 strength presets (light/medium/strong)
+  - Uses `loudnorm` filter for broadcast-standard -16 LUFS
+  - Server-only module (uses child_process and fs)
+- [x] **Audio Settings State** - Added to OverlayContext:
+  - `AudioSettings` type with enhanceAudio, noiseReduction, noiseReductionStrength, loudnessNormalization
+  - `SET_AUDIO_SETTINGS` action for updating settings
+  - `defaultAudioSettings` in types/overlays.ts (client-safe)
+- [x] **Transcribe API Integration** - `/api/transcribe`:
+  - Accepts enhanceAudio, noiseReduction, noiseReductionStrength, loudnessNormalization in FormData
+  - Applies voice cleanup after audio extraction, before Groq Whisper
+  - Proper temp file cleanup in finally block
+- [x] **UI Controls** - Audio panel in Sidebar:
+  - Desktop: Audio button (microphone icon) opens slide-out panel
+  - Mobile: Audio button in bottom toolbar
+  - Main toggle: "Enhance Audio" with sub-options
+  - Noise reduction toggle with strength selector (light/medium/strong)
+  - Loudness leveling toggle
+- [x] **AudioDrawer Component** - `src/components/overlays/AudioDrawer.tsx`:
+  - Follows existing drawer pattern (FilterDrawer)
+  - Toggle switches with iOS-style design
+  - Info footer explaining the feature
+
 ## Todo
 - [ ] Trim clips (in-timeline trimming)
 - [ ] Auto-stitching (AI clip ordering)
@@ -202,6 +227,8 @@ Next.js 14 | TypeScript | Tailwind | Groq Whisper | Supabase | Remotion
 │   ├── MediaLibraryContext.tsx # Media library state
 │   └── ProjectsContext.tsx     # Project feed state
 ├── lib/
+│   ├── audio/
+│   │   └── voice-cleanup.ts    # FFmpeg noise reduction + loudnorm
 │   ├── supabase/
 │   ├── remotion/
 │   └── templates/

@@ -5,6 +5,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { cleanupVoice, VoiceCleanupOptions } from "@/lib/audio/voice-cleanup";
 
 const execAsync = promisify(exec);
 
@@ -33,12 +34,19 @@ interface GroqTranscriptionResponse {
 export async function POST(request: NextRequest) {
   let tempFilePath: string | null = null;
   let audioFilePath: string | null = null;
+  let cleanedAudioPath: string | null = null;
 
   try {
     console.log("Transcribe API called (Groq Whisper)");
 
     const formData = await request.formData();
     const videoFile = formData.get("video") as File;
+
+    // Parse audio enhancement options
+    const enhanceAudio = formData.get("enhanceAudio") === "true";
+    const noiseReduction = formData.get("noiseReduction") !== "false"; // Default true
+    const noiseReductionStrength = (formData.get("noiseReductionStrength") as 'light' | 'medium' | 'strong') || "medium";
+    const loudnessNormalization = formData.get("loudnessNormalization") !== "false"; // Default true
 
     if (!videoFile) {
       console.log("No video file in request");
@@ -49,6 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`Processing video: ${videoFile.name}, size: ${videoFile.size} bytes, type: ${videoFile.type}`);
+    console.log(`Audio enhancement: ${enhanceAudio ? "enabled" : "disabled"}`);
 
     // Convert File to buffer
     const bytes = await videoFile.arrayBuffer();
@@ -76,8 +85,22 @@ export async function POST(request: NextRequest) {
       throw new Error("Failed to extract audio from video");
     }
 
+    // Apply voice cleanup if enabled
+    let finalAudioPath = audioFilePath;
+    if (enhanceAudio) {
+      console.log("Applying voice cleanup...");
+      const cleanupOptions: VoiceCleanupOptions = {
+        noiseReduction,
+        noiseReductionStrength,
+        loudnessNormalization,
+      };
+      cleanedAudioPath = await cleanupVoice(audioFilePath, cleanupOptions);
+      finalAudioPath = cleanedAudioPath;
+      console.log(`Voice cleanup complete: ${cleanedAudioPath}`);
+    }
+
     // Check audio file size (Groq limit is 25MB)
-    const audioBuffer = await readFile(audioFilePath);
+    const audioBuffer = await readFile(finalAudioPath);
     const audioSizeMB = audioBuffer.length / (1024 * 1024);
     console.log(`Audio file size: ${audioSizeMB.toFixed(2)} MB`);
 
@@ -169,6 +192,14 @@ export async function POST(request: NextRequest) {
       try {
         await unlink(audioFilePath);
         console.log(`Cleaned up audio file: ${audioFilePath}`);
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+    if (cleanedAudioPath) {
+      try {
+        await unlink(cleanedAudioPath);
+        console.log(`Cleaned up cleaned audio file: ${cleanedAudioPath}`);
       } catch {
         // Ignore cleanup errors
       }

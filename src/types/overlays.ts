@@ -61,6 +61,22 @@ export interface StickerTemplate {
   category: 'reactions' | 'emotions' | 'objects' | 'shapes';
 }
 
+// Audio Settings for voice cleanup
+export interface AudioSettings {
+  enhanceAudio: boolean;
+  noiseReduction: boolean;
+  noiseReductionStrength: 'light' | 'medium' | 'strong';
+  loudnessNormalization: boolean;
+}
+
+// Default audio settings (client-safe)
+export const defaultAudioSettings: AudioSettings = {
+  enhanceAudio: false,
+  noiseReduction: true,
+  noiseReductionStrength: 'medium',
+  loudnessNormalization: true,
+};
+
 // Overlay State for context
 export interface OverlayState {
   textOverlays: TextOverlay[];
@@ -68,6 +84,7 @@ export interface OverlayState {
   filterId: string | null;
   showCaptionPreview: boolean;
   captionPositionY: number; // Percentage from top (0-100), default ~75 (bottom area)
+  audioSettings: AudioSettings;
 }
 
 // Overlay Actions
@@ -81,6 +98,7 @@ export type OverlayAction =
   | { type: 'SET_FILTER'; payload: string | null }
   | { type: 'TOGGLE_CAPTION_PREVIEW' }
   | { type: 'SET_CAPTION_POSITION'; payload: number }
+  | { type: 'SET_AUDIO_SETTINGS'; payload: Partial<AudioSettings> }
   | { type: 'RESET_OVERLAYS' };
 
 // Render API extended types
