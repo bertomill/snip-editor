@@ -4,10 +4,10 @@ export const TIMELINE_CONSTANTS = {
   // Header height
   HEADER_HEIGHT: 48,
 
-  // Track height - smaller for compact UI
-  TRACK_HEIGHT: 40,
+  // Track height - taller for easier interaction
+  TRACK_HEIGHT: 52,
 
-  TRACK_ITEM_HEIGHT: 32,
+  TRACK_ITEM_HEIGHT: 44,
 
   // Row handles width
   HANDLE_WIDTH: 80,

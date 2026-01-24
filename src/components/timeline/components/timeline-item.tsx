@@ -35,21 +35,24 @@ export const TimelineItem: React.FC<TimelineItemProps> = ({
   const isScriptItem = item.type === TrackItemType.SCRIPT || item.type === TrackItemType.PAUSE;
   const isDeleted = item.type === TrackItemType.SCRIPT && item.data?.isDeleted;
 
-  // Get color based on item type
-  const getItemColor = () => {
+  // Get color based on item type - liquid glass style
+  const getItemStyles = () => {
+    const baseGlass = 'backdrop-blur-md border border-white/20 shadow-lg';
     switch (item.type) {
       case TrackItemType.VIDEO:
-        return 'bg-blue-600';
+        return `${baseGlass} bg-gradient-to-r from-blue-500/70 to-blue-600/60`;
       case TrackItemType.TEXT:
-        return 'bg-purple-600';
+        return `${baseGlass} bg-gradient-to-r from-purple-500/70 to-purple-600/60`;
       case TrackItemType.STICKER:
-        return 'bg-yellow-600';
+        return `${baseGlass} bg-gradient-to-r from-amber-500/70 to-yellow-500/60`;
       case TrackItemType.SCRIPT:
-        return isDeleted ? 'bg-red-900/50' : 'bg-sky-800';
+        return isDeleted
+          ? `${baseGlass} bg-gradient-to-r from-red-800/50 to-red-900/40`
+          : `${baseGlass} bg-gradient-to-r from-sky-600/70 to-sky-700/60`;
       case TrackItemType.PAUSE:
-        return 'bg-gray-700/50';
+        return 'bg-gray-700/30 border border-gray-600/30';
       default:
-        return 'bg-gray-600';
+        return `${baseGlass} bg-gradient-to-r from-gray-500/70 to-gray-600/60`;
     }
   };
 
@@ -130,13 +133,13 @@ export const TimelineItem: React.FC<TimelineItemProps> = ({
     <div
       ref={itemRef}
       className={`
-        absolute top-1 bottom-1 rounded
+        absolute top-1 bottom-1 rounded-lg
         ${isScriptItem ? 'cursor-pointer' : 'cursor-grab'}
-        ${getItemColor()}
-        ${isSelected ? 'ring-2 ring-white ring-offset-1 ring-offset-transparent' : ''}
+        ${getItemStyles()}
+        ${isSelected ? 'ring-2 ring-white/80 ring-offset-1 ring-offset-transparent shadow-[0_0_15px_rgba(255,255,255,0.3)]' : ''}
         ${isDeleted ? 'opacity-50' : ''}
-        transition-shadow duration-150
-        hover:brightness-110
+        transition-all duration-150
+        hover:brightness-110 hover:shadow-xl
         group
       `}
       style={{
@@ -153,8 +156,8 @@ export const TimelineItem: React.FC<TimelineItemProps> = ({
       )}
 
       {/* Content */}
-      <div className="flex items-center h-full px-1.5 overflow-hidden">
-        <span className={`text-xs font-medium truncate ${isDeleted ? 'line-through text-gray-400' : 'text-white'}`}>
+      <div className="flex items-center h-full px-2.5 overflow-hidden">
+        <span className={`text-sm font-medium truncate drop-shadow-sm ${isDeleted ? 'line-through text-gray-400' : 'text-white'}`}>
           {icon && `${icon} `}{item.label || item.type || 'Item'}
         </span>
       </div>
