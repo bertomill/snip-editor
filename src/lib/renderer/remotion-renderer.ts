@@ -3,6 +3,10 @@ import { renderMedia, selectComposition, RenderMediaOnProgress } from "@remotion
 import path from "path";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 import {
   saveRenderState,
@@ -11,7 +15,7 @@ import {
   failRender,
 } from "./render-state";
 import { SnipCompositionProps } from "../types/composition";
-import { uploadRenderedVideo } from "../supabase/storage";
+import { uploadRenderedVideo } from "../supabase/storage-server";
 
 // Ensure the videos directory exists
 const VIDEOS_DIR = path.join(process.cwd(), "public", "rendered-videos");
@@ -27,16 +31,52 @@ function ensureDirs() {
 }
 
 /**
+ * Check if a file needs conversion (MOV/HEVC formats)
+ */
+function needsConversion(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return lower.endsWith('.mov') || lower.endsWith('.hevc');
+}
+
+/**
  * Save uploaded video file to temp directory for SSR access
+ * Optionally converts MOV/HEVC files to MP4 for Remotion compatibility
  */
 export async function saveVideoToTemp(
   buffer: Buffer,
-  filename: string
+  filename: string,
+  convertIfNeeded?: boolean
 ): Promise<string> {
   ensureDirs();
-  const filePath = path.join(TEMP_DIR, filename);
-  fs.writeFileSync(filePath, buffer);
-  return filePath;
+
+  const inputPath = path.join(TEMP_DIR, filename);
+  fs.writeFileSync(inputPath, buffer);
+
+  // Convert MOV/HEVC to MP4 if requested and needed
+  if (convertIfNeeded && needsConversion(filename)) {
+    const outputFilename = filename.replace(/\.(mov|hevc)$/i, '.mp4');
+    const outputPath = path.join(TEMP_DIR, outputFilename);
+
+    console.log(`🔄 Converting ${filename} to MP4 for Remotion compatibility...`);
+
+    try {
+      // High quality conversion for final render
+      await execAsync(
+        `ffmpeg -i "${inputPath}" -c:v libx264 -preset medium -crf 18 -c:a aac -b:a 192k -movflags +faststart -y "${outputPath}"`
+      );
+
+      // Remove original MOV file
+      fs.unlinkSync(inputPath);
+
+      console.log(`✅ Converted to ${outputFilename}`);
+      return outputPath;
+    } catch (error) {
+      console.error(`❌ FFmpeg conversion failed:`, error);
+      throw new Error(`Failed to convert ${filename} to MP4. Make sure FFmpeg is installed.`);
+    }
+  }
+
+  return inputPath;
 }
 
 /**
