@@ -476,9 +476,13 @@ function HomeContent() {
         })
       );
 
-      // Get all words and segments
+      // Get all words and segments - transform IDs to match deletedPauseIds format
       const allWords = clips.flatMap((clip, idx) =>
-        (clip.words || []).map(w => ({ ...w, clipIndex: idx }))
+        (clip.words || []).map(w => ({
+          ...w,
+          id: `clip-${idx}-${w.id}`,  // Match the ID format used in deletedPauseIds
+          clipIndex: idx,
+        }))
       );
       const allSegments = clips.flatMap((clip, idx) =>
         (clip.segments || []).map(s => ({ ...s, clipIndex: idx }))
@@ -1644,7 +1648,7 @@ function EditStep({
   // Timeline selection state
   const [selectedTimelineItems, setSelectedTimelineItems] = useState<string[]>([]);
 
-  const { state: overlayState, updateTextOverlay, updateSticker, removeTextOverlay, removeSticker, setCaptionPosition, setTransitions, setFilter } = useOverlay();
+  const { state: overlayState, updateTextOverlay, updateSticker, removeTextOverlay, removeSticker, setCaptionPosition, setTransitions, setFilter, toggleCaptionPreview } = useOverlay();
 
   const activeClip = clips[activeClipIndex];
 
@@ -2431,6 +2435,7 @@ function EditStep({
               activeDuration={activeDuration}
               deletedSegments={deletedSegments}
               totalDuration={totalDuration}
+              onToggleCaptions={toggleCaptionPreview}
             />
           </div>
 
@@ -2699,6 +2704,11 @@ function MobileVideoPanel({
   activeDuration,
   deletedSegments,
   totalDuration,
+  onOpenTextDrawer,
+  onOpenStickerDrawer,
+  onOpenFilterDrawer,
+  onOpenCaptionsDrawer,
+  onToggleCaptions,
 }: {
   activeClip: { url: string } | undefined;
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -2718,10 +2728,15 @@ function MobileVideoPanel({
   activeDuration: number;
   deletedSegments: Set<number>;
   totalDuration: number;
+  onOpenTextDrawer?: () => void;
+  onOpenStickerDrawer?: () => void;
+  onOpenFilterDrawer?: () => void;
+  onOpenCaptionsDrawer?: () => void;
+  onToggleCaptions?: () => void;
 }) {
   return (
     <div className="flex flex-col items-center">
-      <div className="overflow-hidden rounded-md border border-[var(--border-subtle)]">
+      <div className="overflow-hidden rounded-md border border-[var(--border-subtle)] relative">
         <div className="aspect-[9/16] bg-black relative max-h-[55vh]">
           {activeClip && (
           <>
@@ -2771,6 +2786,55 @@ function MobileVideoPanel({
             )}
           </div>
         </button>
+
+        {/* TikTok-style floating icons on right side */}
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-4">
+          {/* Text */}
+          <button
+            onClick={onOpenTextDrawer}
+            className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 active:scale-95 transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M12 6v14M8 6v2M16 6v2" />
+            </svg>
+          </button>
+
+          {/* Stickers */}
+          <button
+            onClick={onOpenStickerDrawer}
+            className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 active:scale-95 transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" />
+            </svg>
+          </button>
+
+          {/* Filters */}
+          <button
+            onClick={onOpenFilterDrawer}
+            className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 active:scale-95 transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+            </svg>
+          </button>
+
+          {/* Captions Toggle */}
+          <button
+            onClick={onToggleCaptions}
+            className={`w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center hover:bg-black/40 active:scale-95 transition-all ${
+              overlayState.showCaptionPreview
+                ? 'bg-white/90 text-black'
+                : 'bg-black/20 text-white'
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path strokeLinecap="round" d="M6 12h4M14 12h4M6 16h8" />
+            </svg>
+          </button>
+        </div>
         </div>
         <div className="p-3 text-center text-sm text-[#8E8E93] bg-[#111111]">
           {formatTime(currentTime)} / {formatTime(activeDuration)}
