@@ -1,52 +1,64 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 60" width="56" height="60">
   <defs>
-    <!-- Mask to create sprocket holes -->
-    <mask id="filmMaskIcon-white">
-      <rect width="64" height="64" fill="white"/>
+    <!-- Mask for sprocket holes -->
+    <mask id="iconMask-white">
+      <rect width="56" height="60" fill="white"/>
 
-      <!-- Outer edge perforations -->
-      <rect x="35" y="5" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="44" y="8" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="51" y="14" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="54" y="23" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="51" y="32" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="44" y="38" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="35" y="42" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="26" y="45" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="17" y="48" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="10" y="53" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="17" y="58" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="26" y="59" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="35" y="59" width="3" height="5" rx="0.5" fill="black"/>
+      <!-- Top curve outer perforations -->
+      <rect x="18" y="3" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="27" y="2" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="36" y="3" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="44" y="6" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="50" y="12" width="3" height="5" rx="0.5" fill="black"/>
 
-      <!-- Inner edge perforations -->
-      <rect x="27" y="9" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="36" y="12" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="43" y="17" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="47" y="25" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="44" y="33" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="37" y="38" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="28" y="42" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="19" y="45" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="18" y="53" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="27" y="55" width="3" height="5" rx="0.5" fill="black"/>
-      <rect x="36" y="55" width="3" height="5" rx="0.5" fill="black"/>
+      <!-- Top curve inner perforations -->
+      <rect x="20" y="11" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="29" y="10" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="38" y="11" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="45" y="16" width="3" height="5" rx="0.5" fill="black"/>
+
+      <!-- Middle section perforations -->
+      <rect x="46" y="24" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="40" y="31" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="31" y="35" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="22" y="35" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="13" y="33" width="3" height="5" rx="0.5" fill="black"/>
+
+      <!-- Middle inner -->
+      <rect x="40" y="26" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="34" y="31" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="25" y="32" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="16" y="30" width="3" height="5" rx="0.5" fill="black"/>
+
+      <!-- Bottom curve outer perforations -->
+      <rect x="6" y="40" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="4" y="49" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="12" y="55" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="21" y="57" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="30" y="57" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="39" y="55" width="3" height="5" rx="0.5" fill="black"/>
+
+      <!-- Bottom curve inner perforations -->
+      <rect x="11" y="43" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="11" y="50" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="20" y="52" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="29" y="52" width="3" height="5" rx="0.5" fill="black"/>
+      <rect x="38" y="50" width="3" height="5" rx="0.5" fill="black"/>
     </mask>
   </defs>
 
   <!-- Film Strip S -->
-  <path d="M 30 3
-           C 56 3, 62 15, 62 28
-           C 62 42, 46 47, 30 51
-           C 14 55, 6 57, 6 61
-           C 6 65, 16 68, 40 68
-           L 44 68
-           L 44 63
-           C 20 63, 12 61, 12 59
-           C 12 55, 24 52, 40 48
-           C 56 44, 68 37, 68 28
-           C 68 12, 52 0, 30 0
+  <path d="M 46 5
+           C 28 5, 12 10, 12 22
+           C 12 34, 28 36, 36 38
+           C 44 40, 52 42, 52 50
+           C 52 60, 36 64, 18 64
+           L 18 56
+           C 32 56, 44 54, 44 50
+           C 44 44, 28 42, 20 40
+           C 12 38, 2 32, 2 22
+           C 2 8, 20 0, 46 0
            Z"
         fill="#ffffff"
-        mask="url(#filmMaskIcon-white)"/>
+        mask="url(#iconMask-white)"/>
 </svg>

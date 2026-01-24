@@ -3,6 +3,8 @@
 :root {
   /* Calm Sleep inspired - dark charcoal with navy tint */
   --background: #101318;
+  --background-sidebar: #0a0d12;
+  --background-content: #13161c;
   --background-elevated: #14181F;
   --background-card: #1A1F28;
   --background-card-hover: #1F2530;

@@ -53,17 +53,108 @@ export function Sidebar({
   return (
     <>
       {/* Desktop Sidebar - hidden on mobile */}
-      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[72px] bg-[var(--background)] border-r border-[var(--border-subtle)] flex-col items-center py-4 z-50">
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[72px] bg-[var(--background-sidebar)] border-r border-[var(--border-subtle)] flex-col items-center py-4 z-50">
         {/* Logo */}
-        <Link href="/" className="mb-8">
+        <Link href="/" className="mb-4">
           <Image
-            src="/branding/snip-icon-gradient.svg"
+            src="/branding/apple-touch-icon.png"
             alt="Snip"
-            width={40}
-            height={40}
-            className="hover:scale-105 transition-transform"
+            width={44}
+            height={44}
+            className="rounded-xl hover:scale-105 transition-transform"
           />
         </Link>
+
+        {/* Profile - moved up below logo */}
+        <div className="relative mb-4">
+          {loading ? (
+            <div className="w-10 h-10 rounded-full bg-[#1C1C1E] animate-pulse" />
+          ) : user ? (
+            <>
+              <button
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center text-white font-semibold text-sm hover:scale-105 transition-transform ring-2 ring-transparent hover:ring-[#4A8FE7]/50"
+              >
+                {user.user_metadata?.avatar_url ? (
+                  <img
+                    src={user.user_metadata.avatar_url}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  user.email?.[0].toUpperCase()
+                )}
+              </button>
+
+              {/* Profile Menu */}
+              {showProfileMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowProfileMenu(false)}
+                  />
+                  <div className="absolute top-0 left-full ml-2 w-64 bg-[var(--background-card)] border border-[var(--border)] rounded-xl shadow-2xl z-50 overflow-hidden">
+                    {/* Profile Header */}
+                    <div className="p-4 border-b border-[var(--border)]">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center text-white font-semibold text-lg">
+                          {user.user_metadata?.avatar_url ? (
+                            <img
+                              src={user.user_metadata.avatar_url}
+                              alt="Profile"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            user.email?.[0].toUpperCase()
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-medium truncate">
+                            {user.user_metadata?.full_name || 'User'}
+                          </p>
+                          <p className="text-gray-400 text-sm truncate">
+                            {user.email}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Menu Items */}
+                    <div className="p-2">
+                      <MenuItem icon={<ProfileIcon />} label="View profile" />
+                      <MenuItem icon={<ProjectsIcon />} label="My projects" onClick={() => {
+                        setShowProfileMenu(false);
+                        onNavigateHome?.();
+                      }} />
+                      <MenuItem icon={<SettingsIcon />} label="Settings" />
+                      <div className="border-t border-[var(--border)] my-2" />
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false)
+                          signOut()
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                      >
+                        <LogoutIcon />
+                        <span className="text-sm">Log out</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
+            <Link
+              href="/login"
+              className="w-10 h-10 rounded-full bg-[var(--background-elevated)] flex items-center justify-center text-gray-400 hover:text-white hover:bg-[var(--background-card)] transition-colors"
+            >
+              <ProfileIcon />
+            </Link>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className="w-8 h-px bg-[var(--border-subtle)] mb-4" />
 
         {/* Navigation */}
         <nav className="flex-1 flex flex-col items-center gap-2">
@@ -150,77 +241,6 @@ export function Sidebar({
           )}
         </nav>
 
-        {/* Bottom section - Profile */}
-        <div className="relative">
-          {loading ? (
-            <div className="w-10 h-10 rounded-full bg-[#1C1C1E] animate-pulse" />
-          ) : user ? (
-            <>
-              <button
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="w-10 h-10 rounded-full bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center text-white font-semibold text-sm hover:scale-105 transition-transform ring-2 ring-transparent hover:ring-[#4A8FE7]/50"
-              >
-                {user.email?.[0].toUpperCase()}
-              </button>
-
-              {/* Profile Menu */}
-              {showProfileMenu && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowProfileMenu(false)}
-                  />
-                  <div className="absolute bottom-0 left-full ml-2 w-64 bg-[var(--background-card)] border border-[var(--border)] rounded-xl shadow-2xl z-50 overflow-hidden">
-                    {/* Profile Header */}
-                    <div className="p-4 border-b border-[var(--border)]">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center text-white font-semibold text-lg">
-                          {user.email?.[0].toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white font-medium truncate">
-                            {user.user_metadata?.full_name || 'User'}
-                          </p>
-                          <p className="text-gray-400 text-sm truncate">
-                            {user.email}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Menu Items */}
-                    <div className="p-2">
-                      <MenuItem icon={<ProfileIcon />} label="View profile" />
-                      <MenuItem icon={<ProjectsIcon />} label="My projects" onClick={() => {
-                        setShowProfileMenu(false);
-                        onNavigateHome?.();
-                      }} />
-                      <MenuItem icon={<SettingsIcon />} label="Settings" />
-                      <div className="border-t border-[var(--border)] my-2" />
-                      <button
-                        onClick={() => {
-                          setShowProfileMenu(false)
-                          signOut()
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                      >
-                        <LogoutIcon />
-                        <span className="text-sm">Log out</span>
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </>
-          ) : (
-            <Link
-              href="/login"
-              className="w-10 h-10 rounded-full bg-[var(--background-elevated)] flex items-center justify-center text-gray-400 hover:text-white hover:bg-[var(--background-card)] transition-colors"
-            >
-              <ProfileIcon />
-            </Link>
-          )}
-        </div>
       </aside>
 
       {/* Secondary Panel - Canva style slide-out */}
