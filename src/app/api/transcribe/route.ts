@@ -1,20 +1,41 @@
-import { GoogleGenAI } from "@google/genai";
+import Groq from "groq-sdk";
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, unlink } from "fs/promises";
+import { writeFile, unlink, readFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { exec } from "child_process";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
-const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
+
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
+
+interface GroqWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
+interface GroqSegment {
+  text: string;
+  start: number;
+  end: number;
+}
+
+interface GroqTranscriptionResponse {
+  text: string;
+  words?: GroqWord[];
+  segments?: GroqSegment[];
+}
 
 export async function POST(request: NextRequest) {
   let tempFilePath: string | null = null;
-  let convertedFilePath: string | null = null;
+  let audioFilePath: string | null = null;
 
   try {
-    console.log("Transcribe API called");
+    console.log("Transcribe API called (Groq Whisper)");
 
     const formData = await request.formData();
     const videoFile = formData.get("video") as File;
@@ -39,138 +60,84 @@ export async function POST(request: NextRequest) {
     await writeFile(tempFilePath, buffer);
     console.log(`Wrote temp file: ${tempFilePath}`);
 
-    // Determine if we need to convert (MOV files often have issues)
-    let uploadFilePath = tempFilePath;
-    let mimeType = videoFile.type || "video/mp4";
+    // Extract audio from video using FFmpeg
+    // Use mp3 format for good compatibility and reasonable file size
+    audioFilePath = join(tmpdir(), `audio-${Date.now()}.mp3`);
+    console.log("Extracting audio from video...");
 
-    if (videoFile.type === "video/quicktime" || videoFile.name.toLowerCase().endsWith(".mov")) {
-      console.log("Converting MOV to MP4...");
-      convertedFilePath = join(tmpdir(), `converted-${Date.now()}.mp4`);
-
-      try {
-        // Convert to MP4 with ffmpeg - fast conversion preserving quality
-        await execAsync(`ffmpeg -i "${tempFilePath}" -c:v libx264 -preset fast -crf 23 -c:a aac -b:a 128k -y "${convertedFilePath}"`);
-        console.log(`Converted to MP4: ${convertedFilePath}`);
-        uploadFilePath = convertedFilePath;
-        mimeType = "video/mp4";
-      } catch (ffmpegError) {
-        console.error("FFmpeg conversion failed, trying original file:", ffmpegError);
-        // Fall back to original file if conversion fails
-      }
-    }
-
-    // Upload file using the File API for large files
-    console.log("Uploading file to Gemini...");
-    const uploadedFile = await ai.files.upload({
-      file: uploadFilePath,
-      config: {
-        mimeType: mimeType,
-      },
-    });
-    console.log(`File uploaded: ${uploadedFile.name}, state: ${uploadedFile.state}`);
-
-    // Wait for file to be processed
-    let file = uploadedFile;
-    while (file.state === "PROCESSING") {
-      console.log("Waiting for file processing...");
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const fileInfo = await ai.files.get({ name: file.name! });
-      file = fileInfo;
-    }
-
-    if (file.state === "FAILED") {
-      console.error("File processing failed:", JSON.stringify(file));
-      throw new Error(`File processing failed: ${file.error?.message || "Unknown reason"}`);
-    }
-
-    console.log("File ready, generating transcription...");
-
-    // Use Gemini 2.5 Flash (stable) for video transcription
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: `Transcribe this video. Return ONLY a JSON object with this exact structure (no markdown, no code blocks, just raw JSON):
-{
-  "transcript": "the full transcript text here",
-  "segments": [
-    {
-      "text": "segment text",
-      "start": 0.0,
-      "end": 2.5
-    }
-  ]
-}
-
-Rules:
-- Break the transcript into natural segments (sentences or phrases)
-- Provide accurate timestamps in seconds for each segment
-- Start time is in seconds from the beginning
-- Be accurate with the transcription
-- If there's no speech, return empty transcript and empty segments array`,
-            },
-            {
-              fileData: {
-                fileUri: file.uri!,
-                mimeType: file.mimeType!,
-              },
-            },
-          ],
-        },
-      ],
-    });
-
-    const text = response.text;
-    console.log("Gemini response:", text?.substring(0, 500));
-
-    if (!text) {
-      return NextResponse.json(
-        { error: "No response from Gemini" },
-        { status: 500 }
-      );
-    }
-
-    // Clean up the uploaded file from Gemini
     try {
-      await ai.files.delete({ name: file.name! });
-      console.log("Deleted uploaded file from Gemini");
-    } catch {
-      // Ignore deletion errors
+      // Extract audio: -vn removes video, -acodec mp3 converts to mp3
+      // -ar 16000 downsamples to 16kHz (optimal for speech recognition)
+      // -ac 1 converts to mono
+      await execAsync(`ffmpeg -i "${tempFilePath}" -vn -acodec libmp3lame -ar 16000 -ac 1 -q:a 2 -y "${audioFilePath}"`);
+      console.log(`Extracted audio to: ${audioFilePath}`);
+    } catch (ffmpegError) {
+      console.error("FFmpeg audio extraction failed:", ffmpegError);
+      throw new Error("Failed to extract audio from video");
     }
 
-    // Parse the JSON response
-    try {
-      // Clean up the response - remove any markdown code blocks if present
-      let cleanedText = text.trim();
-      if (cleanedText.startsWith("```json")) {
-        cleanedText = cleanedText.slice(7);
-      }
-      if (cleanedText.startsWith("```")) {
-        cleanedText = cleanedText.slice(3);
-      }
-      if (cleanedText.endsWith("```")) {
-        cleanedText = cleanedText.slice(0, -3);
-      }
-      cleanedText = cleanedText.trim();
+    // Check audio file size (Groq limit is 25MB)
+    const audioBuffer = await readFile(audioFilePath);
+    const audioSizeMB = audioBuffer.length / (1024 * 1024);
+    console.log(`Audio file size: ${audioSizeMB.toFixed(2)} MB`);
 
-      const transcriptData = JSON.parse(cleanedText);
-      return NextResponse.json(transcriptData);
-    } catch {
-      // If JSON parsing fails, return the raw text as transcript
-      return NextResponse.json({
-        transcript: text,
-        segments: [{ text: text, start: 0, end: 0 }],
-      });
+    if (audioSizeMB > 25) {
+      throw new Error(`Audio file too large (${audioSizeMB.toFixed(2)} MB). Maximum is 25MB.`);
     }
+
+    // Create a File object for Groq API
+    const audioFile = new File([audioBuffer], "audio.mp3", { type: "audio/mpeg" });
+
+    console.log("Sending audio to Groq Whisper...");
+    const startTime = Date.now();
+
+    // Use Groq Whisper with word-level timestamps
+    const transcription = await groq.audio.transcriptions.create({
+      file: audioFile,
+      model: "whisper-large-v3-turbo",
+      response_format: "verbose_json",
+      timestamp_granularities: ["word", "segment"],
+      language: "en",
+    }) as GroqTranscriptionResponse;
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`Groq Whisper completed in ${elapsed}s`);
+    console.log(`Transcript preview: ${transcription.text?.substring(0, 200)}...`);
+
+    // Convert Groq response to our segment format
+    // Prefer word-level timestamps for more accurate segments
+    let segments: { text: string; start: number; end: number }[] = [];
+
+    if (transcription.segments && transcription.segments.length > 0) {
+      // Use segment-level timestamps
+      segments = transcription.segments.map((seg) => ({
+        text: seg.text.trim(),
+        start: seg.start,
+        end: seg.end,
+      }));
+      console.log(`Created ${segments.length} segments from Groq response`);
+    } else if (transcription.words && transcription.words.length > 0) {
+      // Fall back to grouping words into segments (roughly by sentence)
+      segments = groupWordsIntoSegments(transcription.words);
+      console.log(`Created ${segments.length} segments from word grouping`);
+    } else {
+      // No timing info, return full transcript as single segment
+      segments = [{
+        text: transcription.text,
+        start: 0,
+        end: 0,
+      }];
+    }
+
+    return NextResponse.json({
+      transcript: transcription.text,
+      segments,
+    });
   } catch (error) {
     console.error("Transcription error:", error);
     let errorMessage = "Unknown error";
     if (error instanceof Error) {
       errorMessage = error.message;
-      // Log full error for debugging
       console.error("Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
     } else if (typeof error === 'object' && error !== null) {
       errorMessage = JSON.stringify(error);
@@ -189,15 +156,47 @@ Rules:
         // Ignore cleanup errors
       }
     }
-    if (convertedFilePath) {
+    if (audioFilePath) {
       try {
-        await unlink(convertedFilePath);
-        console.log(`Cleaned up converted file: ${convertedFilePath}`);
+        await unlink(audioFilePath);
+        console.log(`Cleaned up audio file: ${audioFilePath}`);
       } catch {
         // Ignore cleanup errors
       }
     }
   }
+}
+
+/**
+ * Group words into natural segments based on punctuation and timing gaps
+ */
+function groupWordsIntoSegments(words: GroqWord[]): { text: string; start: number; end: number }[] {
+  const segments: { text: string; start: number; end: number }[] = [];
+  let currentSegment: GroqWord[] = [];
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    currentSegment.push(word);
+
+    // End segment on sentence-ending punctuation or significant pause
+    const endsWithPunctuation = /[.!?]$/.test(word.word);
+    const nextWord = words[i + 1];
+    const hasLongPause = nextWord && (nextWord.start - word.end) > 0.5;
+    const segmentTooLong = currentSegment.length >= 15;
+
+    if (endsWithPunctuation || hasLongPause || segmentTooLong || i === words.length - 1) {
+      if (currentSegment.length > 0) {
+        segments.push({
+          text: currentSegment.map(w => w.word).join(" "),
+          start: currentSegment[0].start,
+          end: currentSegment[currentSegment.length - 1].end,
+        });
+        currentSegment = [];
+      }
+    }
+  }
+
+  return segments;
 }
 
 // App Router: Configure max duration for processing large video files

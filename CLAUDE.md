@@ -68,7 +68,9 @@ Templates in `src/lib/templates/`:
 
 ### Transcript-Based Editing
 
-- `/api/transcribe` uses Google Gemini to generate timed word segments
+- `/api/transcribe` uses Groq Whisper Large v3 Turbo for fast transcription (~216x real-time)
+- Extracts audio from video via FFmpeg, sends to Groq API
+- Returns word-level timestamps grouped into natural segments
 - Segments displayed as clickable list; Delete key marks segments for exclusion
 - Only active segments included in final render
 
@@ -91,7 +93,7 @@ Templates in `src/lib/templates/`:
 ## Environment Variables
 
 ```
-GOOGLE_GEMINI_API_KEY           # Transcription API
+GROQ_API_KEY                    # Transcription API (Groq Whisper)
 NEXT_PUBLIC_SUPABASE_URL        # Database & auth
 NEXT_PUBLIC_SUPABASE_ANON_KEY   # Client auth token
 ```
