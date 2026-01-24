@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   // Allow larger request bodies for video uploads
   experimental: {
     serverActions: {
-      bodySizeLimit: "50mb",
+      bodySizeLimit: "100mb",
     },
   },
   // Turbopack config (empty to silence warning, Remotion uses webpack directly)

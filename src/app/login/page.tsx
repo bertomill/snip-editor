@@ -75,7 +75,7 @@ export default function LoginPage() {
   return (
     <>
       {/* Mobile View - Calm Style */}
-      <div className="lg:hidden min-h-screen bg-gradient-to-b from-[#1a1a2e] via-[#16213e] to-[#1a1a2e] flex flex-col">
+      <div className="lg:hidden min-h-screen bg-gradient-to-b from-[#0f1729] via-[#1a2744] via-60% to-[#e8a87c]/30 flex flex-col">
         {/* Header area with headline */}
         <div className="flex-1 flex flex-col items-center justify-center px-8 pt-16 pb-8">
           <Image
@@ -172,9 +172,13 @@ export default function LoginPage() {
                 onClick={() => setShowEmailForm(true)}
                 className="w-full py-4 bg-white/95 backdrop-blur-sm text-gray-900 font-semibold rounded-full transition-all flex items-center justify-start px-6 gap-4 active:scale-[0.98] shadow-lg"
               >
-                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
+                <Image
+                  src="/branding/apple-touch-icon.png"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className="w-6 h-6 rounded-md"
+                />
                 Continue with Email
               </button>
 
@@ -237,7 +241,7 @@ export default function LoginPage() {
         </div>
 
         {/* Right side - Login form */}
-        <div className="w-1/2 bg-[var(--background)] flex items-center justify-center p-8">
+        <div className="w-1/2 bg-gradient-to-b from-[#0f1729] via-[#1a2744] via-70% to-[#e8a87c]/20 flex items-center justify-center p-8">
           <div className="w-full max-w-md">
             <div className="text-center mb-8">
               <Image
