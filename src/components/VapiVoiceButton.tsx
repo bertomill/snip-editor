@@ -16,6 +16,10 @@ interface VapiVoiceButtonProps {
   stickerCount?: number;
   /** User's recent X posts for content inspiration */
   xPosts?: Array<{ id: string; text: string; likes: number }>;
+  /** Whether a video has been uploaded */
+  hasVideo?: boolean;
+  /** Whether transcription is currently in progress */
+  isTranscribing?: boolean;
 }
 
 export function VapiVoiceButton({
@@ -25,6 +29,8 @@ export function VapiVoiceButton({
   textOverlayCount = 0,
   stickerCount = 0,
   xPosts = [],
+  hasVideo = false,
+  isTranscribing = false,
 }: VapiVoiceButtonProps) {
   const [vapi, setVapi] = useState<Vapi | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -108,9 +114,17 @@ export function VapiVoiceButton({
         } else {
           // Fallback: start with inline assistant config
           // Build context-aware system prompt
-          const scriptContext = transcript
-            ? `\n\nThe user is editing a video with this script/transcript:\n"""${transcript}"""`
-            : "\n\nThe user hasn't transcribed their video yet.";
+          // Build script context based on current state
+          let scriptContext: string;
+          if (transcript) {
+            scriptContext = `\n\nThe user is editing a video with this script/transcript:\n"""${transcript}"""`;
+          } else if (isTranscribing) {
+            scriptContext = `\n\nThe user has a video but it's still being transcribed. You can't see the script yet - just chat with them and offer to help once it's ready.`;
+          } else if (hasVideo) {
+            scriptContext = `\n\nThe user has uploaded a video but there's no transcript yet. It might have no speech, or transcription hasn't run yet. You can still help with visual stuff like filters, stickers, and general video tips.`;
+          } else {
+            scriptContext = `\n\nNo video uploaded yet. Just chat and be helpful - maybe ask what kind of content they're working on.`;
+          }
 
           const editingContext = `\n\nCurrent editing state:
 - Filter: ${currentFilter || "none"}
@@ -132,26 +146,32 @@ Use these posts to suggest video ideas that match their content style and intere
               messages: [
                 {
                   role: "system",
-                  content: `You are Snip, a chill video editing assistant. You help creators make short-form content.
+                  content: `You are Snip, a warm and supportive video editing assistant. You genuinely care about helping creators make their best content.
 
-CRITICAL VOICE RULES - you MUST follow these:
-- Talk like a real person chatting with a friend. Use "like", "you know", "honestly", "kinda", "pretty much"
-- NEVER read or quote the transcript back. You know what it's about - just reference the topic casually
-- Keep it super short. One thought at a time. Let them respond.
-- Sound excited but not fake. Like a creative friend, not a customer service bot.
-- Use contractions always (don't, can't, I'd, you're, that's)
-- Pause naturally. Don't rush through ideas.
+YOUR PERSONALITY:
+- Kind, encouraging, and patient - like a supportive creative mentor
+- Genuinely enthusiastic about their ideas (not fake hype)
+- Helpful and practical - give suggestions they can actually use
+- Celebrate their wins, no matter how small
+- If something could be better, frame it positively as an opportunity
 
-BAD (robotic): "I see your transcript mentions the importance of morning routines. I would suggest..."
-GOOD (natural): "Oh nice, morning routine content! That stuff does so well. Have you thought about opening with like, the one thing that changed everything for you?"
+VOICE RULES:
+- Speak naturally and warmly. Use "I think", "maybe", "what if we tried"
+- NEVER read or quote their transcript back - just reference the topic naturally
+- Keep responses short and focused. One helpful thought at a time.
+- Use contractions (don't, can't, I'd, you're, that's)
+- Be genuine - if you love an idea, say so! If you have a suggestion, offer it kindly.
 
-BAD: "Based on your script about productivity tips, I recommend adding a sticker at the 3 second mark."
-GOOD: "Yo the productivity angle is solid. Maybe throw a quick emoji pop when you hit that main point?"
+BAD (robotic): "I see your transcript mentions morning routines. I would suggest adding a hook."
+GOOD (kind): "Oh I love that you're doing morning routine content - that resonates with so many people. What if we opened with something that really grabs attention, like the one change that made the biggest difference for you?"
+
+BAD (cold): "Your hook is weak. Add a sticker at 3 seconds."
+GOOD (supportive): "This is a great start! I think we could make the opening even stronger. Maybe a little emoji pop right when you say that key line?"
 
 You know about their video:
 ${scriptContext}${editingContext}${xPostsContext}
 
-Help with: hooks, filters, stickers, captions, pacing. But keep it conversational - like you're texting a friend who makes content.`,
+You can help with: hooks, filters, stickers, captions, pacing, and general creative direction. Always be encouraging and make them feel good about their content while offering genuinely useful suggestions.`,
                 },
               ],
             },
@@ -160,8 +180,12 @@ Help with: hooks, filters, stickers, captions, pacing. But keep it conversationa
               voiceId: "21m00Tcm4TlvDq8ikWAM", // Rachel voice
             },
             firstMessage: transcript
-              ? "Hey! Okay I peeped your script - pretty solid. What are you thinking for this one?"
-              : "Yo what's up! I'm Snip. Drop a video in and I can help you make it hit.",
+              ? "Hi there! I just looked through your script and I really like what you're working on. How can I help make this one shine?"
+              : isTranscribing
+              ? "Hey! I see your video's still processing, which is totally fine. While we wait, tell me - what's the vision for this one?"
+              : hasVideo
+              ? "Hi! I see you've got a video ready to go. I can't see the transcript just yet, but I'd love to help with filters, stickers, or anything visual. What are you creating?"
+              : "Hi, I'm Snip! I'm here to help you create something amazing. Whenever you're ready, drop in a video and let's make it great together.",
           });
         }
       } catch (error) {
@@ -169,7 +193,7 @@ Help with: hooks, filters, stickers, captions, pacing. But keep it conversationa
         setIsConnecting(false);
       }
     }
-  }, [vapi, isCallActive, isConnecting, assistantId, transcript, currentFilter, textOverlayCount, stickerCount]);
+  }, [vapi, isCallActive, isConnecting, assistantId, transcript, currentFilter, textOverlayCount, stickerCount, xPosts, hasVideo, isTranscribing]);
 
   const isActive = isCallActive || isConnecting;
 

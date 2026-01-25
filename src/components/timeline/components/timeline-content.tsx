@@ -222,6 +222,45 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
+      {/* Add overlay buttons - above timeline */}
+      {(onAddText || onAddSticker || onAddMedia) && (
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-[#282828] bg-[#181818]">
+          {onAddText && (
+            <button
+              onClick={onAddText}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#282828] hover:bg-[#333] text-white/70 hover:text-white text-xs font-medium transition-all"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Text
+            </button>
+          )}
+          {onAddSticker && (
+            <button
+              onClick={onAddSticker}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#282828] hover:bg-[#333] text-white/70 hover:text-white text-xs font-medium transition-all"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Stickers
+            </button>
+          )}
+          {onAddMedia && (
+            <button
+              onClick={onAddMedia}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#282828] hover:bg-[#333] text-white/70 hover:text-white text-xs font-medium transition-all"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Media
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Single scroll container for both markers and tracks */}
       <div
         ref={(el) => {
@@ -267,45 +306,6 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
               />
             ))}
           </div>
-
-          {/* Add overlay buttons */}
-          {(onAddText || onAddSticker || onAddMedia) && (
-            <div className="flex items-center gap-2 px-3 py-2 border-t border-[#282828]">
-              {onAddText && (
-                <button
-                  onClick={onAddText}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#282828] hover:bg-[#333] text-white/70 hover:text-white text-xs font-medium transition-all"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Text
-                </button>
-              )}
-              {onAddSticker && (
-                <button
-                  onClick={onAddSticker}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#282828] hover:bg-[#333] text-white/70 hover:text-white text-xs font-medium transition-all"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Stickers
-                </button>
-              )}
-              {onAddMedia && (
-                <button
-                  onClick={onAddMedia}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#282828] hover:bg-[#333] text-white/70 hover:text-white text-xs font-medium transition-all"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Media
-                </button>
-              )}
-            </div>
-          )}
 
           {/* Playhead line that extends through tracks */}
           <TimelinePlayhead

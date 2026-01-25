@@ -124,6 +124,10 @@ function HomeContent() {
   const [xPosts, setXPosts] = useState<Array<{ id: string; text: string; likes: number }>>([]);
   const [youtubeConnection, setYoutubeConnection] = useState<{ connected: boolean; channelName?: string } | null>(null);
   const [youtubeVideos, setYoutubeVideos] = useState<Array<{ id: string; title: string; views: number; likes: number; engagementRate: number }>>([]);
+  const [instagramConnection, setInstagramConnection] = useState<{ connected: boolean; username?: string } | null>(null);
+  const [showPlatformRequest, setShowPlatformRequest] = useState(false);
+  const [platformRequestInput, setPlatformRequestInput] = useState('');
+  const [platformRequestSubmitting, setPlatformRequestSubmitting] = useState(false);
 
   // Editor state
   const [step, setStep] = useState<EditorStep>("upload");
@@ -242,6 +246,18 @@ function HomeContent() {
     }
   }, [user]);
 
+  // Fetch Instagram connection status
+  useEffect(() => {
+    if (user) {
+      fetch('/api/auth/instagram/status')
+        .then(res => res.json())
+        .then(data => {
+          setInstagramConnection(data);
+        })
+        .catch(() => setInstagramConnection({ connected: false }));
+    }
+  }, [user]);
+
   // Load theme from localStorage on mount
   useEffect(() => {
     const savedTheme = localStorage.getItem('snip-theme');
@@ -316,6 +332,60 @@ function HomeContent() {
       setYoutubeVideos([]);
     } catch (error) {
       console.error('Failed to disconnect YouTube:', error);
+    }
+  };
+
+  // Handle Instagram connection
+  const handleConnectInstagram = async () => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    try {
+      const res = await fetch('/api/auth/instagram');
+      const data = await res.json();
+      if (data.error === 'Unauthorized') {
+        router.push('/login');
+        return;
+      }
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (error) {
+      console.error('Failed to connect Instagram:', error);
+    }
+  };
+
+  // Handle Instagram disconnect
+  const handleDisconnectInstagram = async () => {
+    try {
+      await fetch('/api/auth/instagram/status', { method: 'DELETE' });
+      setInstagramConnection({ connected: false });
+    } catch (error) {
+      console.error('Failed to disconnect Instagram:', error);
+    }
+  };
+
+  // Handle platform request submission
+  const handlePlatformRequest = async () => {
+    if (!platformRequestInput.trim()) return;
+
+    setPlatformRequestSubmitting(true);
+    try {
+      const res = await fetch('/api/platform-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: platformRequestInput.trim() }),
+      });
+
+      if (res.ok) {
+        setPlatformRequestInput('');
+        setShowPlatformRequest(false);
+      }
+    } catch (error) {
+      console.error('Failed to submit platform request:', error);
+    } finally {
+      setPlatformRequestSubmitting(false);
     }
   };
 
@@ -1208,11 +1278,13 @@ function HomeContent() {
               <div className="flex items-center justify-between px-5 py-4">
                 {/* Snip Mascot and Logo */}
                 <div className="flex items-center gap-2">
-                  <img
-                    src="/snip-removebg.png"
-                    alt="Snip mascot"
-                    className="w-20 h-20 object-contain"
-                  />
+                  <div className="w-12 h-12 rounded-full bg-[#1e2536] flex items-center justify-center">
+                    <img
+                      src="/snip-removebg.png"
+                      alt="Snip mascot"
+                      className="w-10 h-10 object-contain"
+                    />
+                  </div>
                   <motion.div
                     className="cursor-pointer font-bold text-3xl tracking-widest text-white italic leading-none flex items-center"
                     style={{
@@ -1309,19 +1381,12 @@ function HomeContent() {
                       <span className="ml-auto text-xs text-[#636366] group-hover:text-white">Connect</span>
                     )}
                   </button>
-                  {/* TikTok */}
-                  <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group">
-                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
-                      </svg>
-                    </div>
-                    <span className="text-white text-sm font-medium">TikTok</span>
-                    <span className="ml-auto text-xs text-[#636366] group-hover:text-white">Connect</span>
-                  </button>
                   {/* Instagram */}
-                  <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#833AB4]/20 via-[#FD1D1D]/20 to-[#F77737]/20 flex items-center justify-center">
+                  <button
+                    onClick={instagramConnection?.connected ? handleDisconnectInstagram : handleConnectInstagram}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group"
+                  >
+                    <div className="relative w-8 h-8 rounded-lg bg-gradient-to-br from-[#833AB4]/20 via-[#FD1D1D]/20 to-[#F77737]/20 flex items-center justify-center">
                       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="url(#instagram-gradient)">
                         <defs>
                           <linearGradient id="instagram-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
@@ -1332,9 +1397,31 @@ function HomeContent() {
                         </defs>
                         <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
                       </svg>
+                      {/* Green checkmark badge when connected */}
+                      {instagramConnection?.connected && (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full flex items-center justify-center ring-2 ring-[var(--background-card)]">
+                          <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
                     </div>
-                    <span className="text-white text-sm font-medium">Instagram</span>
-                    <span className="ml-auto text-xs text-[#636366] group-hover:text-white">Connect</span>
+                    <div className="flex-1 text-left">
+                      <span className="text-white text-sm font-medium">Instagram</span>
+                      {instagramConnection?.connected && instagramConnection.username && (
+                        <p className="text-[#636366] text-xs">@{instagramConnection.username}</p>
+                      )}
+                    </div>
+                    {instagramConnection?.connected ? (
+                      <span className="ml-auto text-xs text-green-400 flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        Connected
+                      </span>
+                    ) : (
+                      <span className="ml-auto text-xs text-[#636366] group-hover:text-white">Connect</span>
+                    )}
                   </button>
                   {/* X (Twitter) */}
                   <button
@@ -1371,6 +1458,47 @@ function HomeContent() {
                       <span className="ml-auto text-xs text-[#636366] group-hover:text-white">Connect</span>
                     )}
                   </button>
+                </div>
+
+                {/* More coming soon & Request a platform */}
+                <div className="mt-4 pt-3 border-t border-[var(--border)]/50">
+                  <p className="text-[#636366] text-xs mb-2">More platforms coming soon</p>
+                  {!showPlatformRequest ? (
+                    <button
+                      onClick={() => setShowPlatformRequest(true)}
+                      className="text-[#4A8FE7] text-xs hover:text-[#6BA3EC] transition-colors"
+                    >
+                      Request a platform
+                    </button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={platformRequestInput}
+                        onChange={(e) => setPlatformRequestInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handlePlatformRequest()}
+                        placeholder="e.g., Snapchat, LinkedIn..."
+                        className="flex-1 px-2 py-1.5 text-xs bg-[var(--background-elevated)] border border-[var(--border)] rounded-md text-white placeholder-[#636366] focus:outline-none focus:border-[#4A8FE7]"
+                        autoFocus
+                      />
+                      <button
+                        onClick={handlePlatformRequest}
+                        disabled={platformRequestSubmitting || !platformRequestInput.trim()}
+                        className="px-2 py-1.5 text-xs bg-[#4A8FE7] text-white rounded-md hover:bg-[#6BA3EC] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {platformRequestSubmitting ? '...' : 'Send'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowPlatformRequest(false);
+                          setPlatformRequestInput('');
+                        }}
+                        className="px-2 py-1.5 text-xs text-[#636366] hover:text-white transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2290,7 +2418,8 @@ function UploadStep({
         Your next viral moment starts here
       </p>
 
-      {/* Upload button - primary action with swoosh effect */}
+      {/* Upload button - primary action with swoosh effect - hidden when files are selected */}
+      {selectedFiles.length === 0 && (
       <div className="mb-6">
         <motion.button
           onClick={handleUploadClick}
@@ -2331,6 +2460,7 @@ function UploadStep({
           or drag and drop
         </p>
       </div>
+      )}
 
       {/* Hidden file input for auto-trigger */}
       <input
@@ -2403,19 +2533,47 @@ function UploadStep({
 
           {/* Quick select chips */}
           <div className="flex flex-wrap gap-2 justify-center mb-4 px-4">
-            <button className="flex items-center gap-2 px-4 py-2 bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border border-[var(--border)] rounded-full text-white text-sm font-medium transition-all">
+            <button
+              onClick={() => setAiPrompt('Compose clips into a cohesive video')}
+              className={`flex items-center gap-2 px-4 py-2 border rounded-full text-sm font-medium transition-all ${
+                aiPrompt.includes('Compose')
+                  ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                  : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white'
+              }`}
+            >
               <span className="text-base">🎬</span>
               Compose clips
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border border-[var(--border)] rounded-full text-white text-sm font-medium transition-all">
+            <button
+              onClick={() => setAiPrompt('Create a flashy, attention-grabbing video with dynamic transitions')}
+              className={`flex items-center gap-2 px-4 py-2 border rounded-full text-sm font-medium transition-all ${
+                aiPrompt.includes('flashy')
+                  ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                  : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white'
+              }`}
+            >
               <span className="text-base">✨</span>
               Flashy video
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border border-[var(--border)] rounded-full text-white text-sm font-medium transition-all">
+            <button
+              onClick={() => setAiPrompt('Keep it simple and professional, minimal cuts')}
+              className={`flex items-center gap-2 px-4 py-2 border rounded-full text-sm font-medium transition-all ${
+                aiPrompt.includes('simple')
+                  ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                  : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white'
+              }`}
+            >
               <span className="text-base">📋</span>
               Conservative
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border border-[var(--border)] rounded-full text-white text-sm font-medium transition-all">
+            <button
+              onClick={() => setAiPrompt('Extract the best highlights and key moments')}
+              className={`flex items-center gap-2 px-4 py-2 border rounded-full text-sm font-medium transition-all ${
+                aiPrompt.includes('highlights')
+                  ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                  : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white'
+              }`}
+            >
               <span className="text-base">🎯</span>
               Highlight reel
             </button>
@@ -2426,6 +2584,8 @@ function UploadStep({
             <div className="flex items-center gap-2 px-4 py-3 bg-[var(--background-card)] border border-[var(--border)] rounded-full focus-within:border-[var(--border)]">
               <input
                 type="text"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
                 placeholder="What do you want to create?"
                 className="flex-1 bg-transparent text-white placeholder-[#636366] text-sm outline-none border-none focus:ring-0 focus:outline-none"
               />
@@ -4346,6 +4506,8 @@ function EditStep({
           textOverlayCount={overlayState.textOverlays.length}
           stickerCount={overlayState.stickers.length}
           xPosts={xPosts}
+          hasVideo={clips.length > 0}
+          isTranscribing={isTranscribing}
         />
       </div>
     </div>

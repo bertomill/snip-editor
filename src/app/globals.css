@@ -473,28 +473,28 @@ textarea:focus-visible {
   z-index: 2;
 }
 
-/* Light Mode Theme */
+/* Light Mode Theme - Baby Blue */
 .light-mode {
-  --background: #f5f7fa;
-  --background-sidebar: #ffffff;
-  --background-content: #f0f2f5;
-  --background-elevated: #ffffff;
-  --background-card: #ffffff;
-  --background-card-hover: #f5f7fa;
-  --background-input: #f0f2f5;
+  --background: #e8f4fc;
+  --background-sidebar: #f0f8ff;
+  --background-content: #e0f0fa;
+  --background-elevated: #f5faff;
+  --background-card: #f0f8ff;
+  --background-card-hover: #e0f0fa;
+  --background-input: #dceef8;
 
   --accent: #4A8FE7;
   --accent-hover: #3A7FD7;
-  --accent-muted: rgba(74, 143, 231, 0.12);
-  --accent-glow: rgba(74, 143, 231, 0.3);
+  --accent-muted: rgba(74, 143, 231, 0.15);
+  --accent-glow: rgba(74, 143, 231, 0.35);
 
-  --text-primary: #1a1a1a;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
-  --text-hint: #d1d5db;
+  --text-primary: #1a2a3a;
+  --text-secondary: #4a6a8a;
+  --text-muted: #7a9aba;
+  --text-hint: #a0c0d8;
 
-  --border: #e5e7eb;
-  --border-subtle: #f0f2f5;
+  --border: #c8dff0;
+  --border-subtle: #d8ebf8;
 
   --success: #22c55e;
   --error: #ef4444;

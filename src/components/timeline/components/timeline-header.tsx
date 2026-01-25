@@ -89,20 +89,20 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
             <button
               onClick={onUndo}
               disabled={!canUndo}
-              className="w-8 h-8 flex items-center justify-center rounded bg-[#282828] hover:bg-[#333] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="w-8 h-8 flex items-center justify-center rounded hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               title="Undo (Cmd+Z)"
             >
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a5 5 0 0 1 5 5v2M3 10l4-4M3 10l4 4" />
               </svg>
             </button>
             <button
               onClick={onRedo}
               disabled={!canRedo}
-              className="w-8 h-8 flex items-center justify-center rounded bg-[#282828] hover:bg-[#333] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="w-8 h-8 flex items-center justify-center rounded hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               title="Redo (Cmd+Shift+Z)"
             >
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 10H11a5 5 0 0 0-5 5v2M21 10l-4-4M21 10l-4 4" />
               </svg>
             </button>
@@ -111,12 +111,17 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
 
         {/* Transcript button - only show on mobile, hidden on desktop where transcript panel is visible */}
         {onOpenTranscript && (
-          <button
-            onClick={onOpenTranscript}
-            className="lg:hidden px-5 py-2 rounded-full bg-gradient-to-r from-pink-500 to-blue-500 hover:from-pink-600 hover:to-blue-600 text-white text-sm font-semibold transition-all shadow-lg hover:shadow-xl active:scale-95"
-          >
-            Transcript
-          </button>
+          <div className="lg:hidden relative ml-2">
+            {/* Blue offset layer */}
+            <div className="absolute inset-0 bg-[#3b82f6] rounded-full translate-x-1 translate-y-1" />
+            {/* Pink main button */}
+            <button
+              onClick={onOpenTranscript}
+              className="relative px-5 py-2 rounded-full bg-[#ec4899] text-white text-sm font-semibold transition-all active:scale-95 hover:brightness-110"
+            >
+              Transcript
+            </button>
+          </div>
         )}
       </div>
 
