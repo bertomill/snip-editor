@@ -10,6 +10,7 @@ import { detectSilence } from "@/lib/audio/silence-detect";
 import { processSilenceForClip, calculateSilenceStats } from "@/lib/audio/silence-merger";
 import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
 import { downloadFromStorage, deleteFromStorage } from "@/lib/supabase/download";
+import { ffmpeg } from "@/lib/ffmpeg-path";
 
 const execAsync = promisify(exec);
 
@@ -178,7 +179,8 @@ export async function POST(request: NextRequest) {
         // Extract audio: -vn removes video, -acodec mp3 converts to mp3
         // -ar 16000 downsamples to 16kHz (optimal for speech recognition)
         // -ac 1 converts to mono
-        await execAsync(`ffmpeg -i "${tempFilePath}" -vn -acodec libmp3lame -ar 16000 -ac 1 -q:a 2 -y "${audioFilePath}"`);
+        // Use bundled ffmpeg binary for Vercel compatibility
+        await execAsync(`"${ffmpeg}" -i "${tempFilePath}" -vn -acodec libmp3lame -ar 16000 -ac 1 -q:a 2 -y "${audioFilePath}"`);
         console.log(`Extracted audio to: ${audioFilePath}`);
       } catch (ffmpegError) {
         console.error("FFmpeg audio extraction failed:", ffmpegError);

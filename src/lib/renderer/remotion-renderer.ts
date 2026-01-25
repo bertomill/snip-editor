@@ -5,6 +5,7 @@ import fs from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
 import os from "os";
+import { ffmpeg } from "@/lib/ffmpeg-path";
 
 const execAsync = promisify(exec);
 
@@ -50,7 +51,7 @@ export async function convertVideoToMp4(
 
     // Convert to MP4 with high quality settings
     await execAsync(
-      `ffmpeg -i "${inputPath}" -c:v libx264 -preset medium -crf 18 -c:a aac -b:a 192k -movflags +faststart -y "${outputPath}"`
+      `"${ffmpeg}" -i "${inputPath}" -c:v libx264 -preset medium -crf 18 -c:a aac -b:a 192k -movflags +faststart -y "${outputPath}"`
     );
 
     // Read converted file
