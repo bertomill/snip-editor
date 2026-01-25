@@ -3763,7 +3763,7 @@ function EditStep({
     <div className="w-full flex flex-col gap-0 lg:gap-6 animate-fade-in-up lg:px-6 isolate">
 
       {/* Mobile Video Panel */}
-      <div className="lg:hidden pt-14">
+      <div className="lg:hidden pt-4">
         <MobileVideoPanel
           activeClip={clips[activeClipIndex]}
           videoRef={mobileVideoRef}
@@ -4306,125 +4306,16 @@ function RollingLoadingMessageCompact() {
 function UploadingOverlay({ progress }: { progress: number }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10">
-      {/* Eddie Working Animation */}
+      {/* Loading video animation */}
       <div className="relative mb-6">
-        {/* Glow effect */}
-        <div
-          className="absolute inset-0 blur-2xl opacity-30 rounded-full"
-          style={{
-            background: 'linear-gradient(135deg, #6366f1 0%, #4A8FE7 50%, #22d3bb 100%)',
-            transform: 'scale(2)',
-          }}
+        <video
+          src="/snip-loading.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="w-72 h-72 object-contain"
         />
-
-        {/* Eddie at desk scene */}
-        <div className="relative w-40 h-32">
-          {/* Desk */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-32 h-3 bg-gradient-to-r from-[#3a3a4f] via-[#4a4a5f] to-[#3a3a4f] rounded-sm" />
-
-          {/* Monitor/Screen */}
-          <motion.div
-            className="absolute bottom-7 left-1/2 -translate-x-1/2 w-20 h-14 bg-gradient-to-br from-[#2a2a3a] to-[#1a1a2a] rounded-lg border-2 border-[#4a4a5f] overflow-hidden"
-            animate={{
-              boxShadow: ['0 0 10px rgba(74,143,231,0.3)', '0 0 20px rgba(74,143,231,0.5)', '0 0 10px rgba(74,143,231,0.3)']
-            }}
-            transition={{ duration: 2, repeat: Infinity }}
-          >
-            {/* Screen content - timeline bars */}
-            <div className="absolute inset-1 flex flex-col justify-center gap-1 p-1">
-              <motion.div
-                className="h-1.5 bg-[#4A8FE7] rounded-full"
-                animate={{ width: ['40%', '70%', '40%'] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              />
-              <motion.div
-                className="h-1.5 bg-[#6366f1] rounded-full"
-                animate={{ width: ['60%', '30%', '60%'] }}
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }}
-              />
-              <motion.div
-                className="h-1.5 bg-[#22d3bb] rounded-full"
-                animate={{ width: ['30%', '80%', '30%'] }}
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0.6 }}
-              />
-            </div>
-          </motion.div>
-
-          {/* Eddie character - sitting at desk */}
-          <motion.div
-            className="absolute bottom-6 left-1/2 -translate-x-1/2"
-            animate={{ y: [0, -2, 0] }}
-            transition={{ duration: 0.5, repeat: Infinity }}
-          >
-            {/* Body */}
-            <div className="relative">
-              {/* Head */}
-              <motion.div
-                className="w-8 h-8 bg-gradient-to-br from-[#4A8FE7] to-[#6366f1] rounded-full mx-auto relative"
-                animate={{ rotate: [-3, 3, -3] }}
-                transition={{ duration: 1, repeat: Infinity }}
-              >
-                {/* Eyes */}
-                <motion.div
-                  className="absolute flex gap-1.5 left-1/2 -translate-x-1/2"
-                  style={{ top: '35%' }}
-                  animate={{ scaleY: [1, 0.1, 1] }}
-                  transition={{ duration: 0.15, repeat: Infinity, repeatDelay: 2.5 }}
-                >
-                  <div className="w-1.5 h-1.5 bg-white rounded-full" />
-                  <div className="w-1.5 h-1.5 bg-white rounded-full" />
-                </motion.div>
-                {/* Smile */}
-                <svg className="absolute w-3 h-3 text-white left-1/2 -translate-x-1/2" style={{ top: '55%' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round">
-                  <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                </svg>
-              </motion.div>
-
-              {/* Arms - typing animation */}
-              <div className="flex justify-center gap-4 -mt-1">
-                <motion.div
-                  className="w-2 h-4 bg-[#4A8FE7] rounded-full origin-top"
-                  animate={{ rotate: [-15, 15, -15] }}
-                  transition={{ duration: 0.3, repeat: Infinity }}
-                />
-                <motion.div
-                  className="w-2 h-4 bg-[#4A8FE7] rounded-full origin-top"
-                  animate={{ rotate: [15, -15, 15] }}
-                  transition={{ duration: 0.3, repeat: Infinity, delay: 0.15 }}
-                />
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Sparkles around Eddie */}
-          <motion.div
-            className="absolute top-2 right-4"
-            animate={{ scale: [0, 1, 0], opacity: [0, 1, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity, delay: 0 }}
-          >
-            <svg className="w-4 h-4 text-[#22d3bb]" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0L14 8L22 10L14 12L12 20L10 12L2 10L10 8L12 0Z" />
-            </svg>
-          </motion.div>
-          <motion.div
-            className="absolute top-4 left-4"
-            animate={{ scale: [0, 1, 0], opacity: [0, 1, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
-          >
-            <svg className="w-3 h-3 text-[#4A8FE7]" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0L14 8L22 10L14 12L12 20L10 12L2 10L10 8L12 0Z" />
-            </svg>
-          </motion.div>
-          <motion.div
-            className="absolute bottom-16 right-2"
-            animate={{ scale: [0, 1, 0], opacity: [0, 1, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity, delay: 1 }}
-          >
-            <svg className="w-3 h-3 text-[#6366f1]" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0L14 8L22 10L14 12L12 20L10 12L2 10L10 8L12 0Z" />
-            </svg>
-          </motion.div>
-        </div>
       </div>
 
       {/* Animated progress text */}
@@ -4478,7 +4369,7 @@ function AutoCutOverlay({ status, message, currentClip, totalClips }: {
           loop
           muted
           playsInline
-          className="w-48 h-48 object-contain"
+          className="w-72 h-72 object-contain"
         />
       </div>
 
