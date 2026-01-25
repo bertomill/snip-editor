@@ -5,7 +5,7 @@ import React, { useCallback, useRef } from 'react';
 interface TimelinePlayheadProps {
   position: number; // Position as percentage 0-100
   onDragStart?: () => void;
-  onDrag?: (deltaX: number) => void;
+  onDrag?: (clientX: number) => void; // Now passes absolute clientX
   onDragEnd?: () => void;
 }
 
@@ -16,20 +16,18 @@ export const TimelinePlayhead: React.FC<TimelinePlayheadProps> = ({
   onDragEnd,
 }) => {
   const isDragging = useRef(false);
-  const lastX = useRef(0);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     isDragging.current = true;
-    lastX.current = e.clientX;
     onDragStart?.();
+    // Immediately send the current position
+    onDrag?.(e.clientX);
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!isDragging.current) return;
-      const deltaX = moveEvent.clientX - lastX.current;
-      lastX.current = moveEvent.clientX;
-      onDrag?.(deltaX);
+      onDrag?.(moveEvent.clientX);
     };
 
     const handleMouseUp = () => {
@@ -47,14 +45,13 @@ export const TimelinePlayhead: React.FC<TimelinePlayheadProps> = ({
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     e.stopPropagation();
     isDragging.current = true;
-    lastX.current = e.touches[0].clientX;
     onDragStart?.();
+    // Immediately send the current position
+    onDrag?.(e.touches[0].clientX);
 
     const handleTouchMove = (moveEvent: TouchEvent) => {
       if (!isDragging.current) return;
-      const deltaX = moveEvent.touches[0].clientX - lastX.current;
-      lastX.current = moveEvent.touches[0].clientX;
-      onDrag?.(deltaX);
+      onDrag?.(moveEvent.touches[0].clientX);
     };
 
     const handleTouchEnd = () => {
@@ -70,30 +67,30 @@ export const TimelinePlayhead: React.FC<TimelinePlayheadProps> = ({
 
   return (
     <div
-      className="absolute top-0 bottom-0 z-20 pointer-events-none"
+      className="absolute top-0 bottom-0 z-50 pointer-events-none"
       style={{ left: `${position}%`, transform: 'translateX(-50%)' }}
     >
-      {/* Playhead handle - draggable area */}
+      {/* Playhead handle - draggable area with larger hit zone */}
       <div
-        className="absolute -top-1 left-1/2 -translate-x-1/2 pointer-events-auto cursor-grab active:cursor-grabbing"
+        className="absolute -top-2 left-1/2 -translate-x-1/2 pointer-events-auto cursor-grab active:cursor-grabbing hover:scale-110 transition-transform"
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
-        style={{ padding: '4px' }} // Larger hit area
+        style={{ padding: '8px' }}
       >
         <div
-          className="w-3 h-3 bg-[#4A8FE7] rounded-sm"
+          className="w-4 h-4 bg-[#4A8FE7] rounded-sm shadow-lg shadow-[#4A8FE7]/50"
           style={{
             clipPath: 'polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%)',
           }}
         />
       </div>
-      {/* Playhead line - also draggable */}
+      {/* Playhead line - wider hit area for dragging */}
       <div
-        className="absolute top-1 bottom-0 left-1/2 -translate-x-1/2 w-2 flex justify-center pointer-events-auto cursor-grab active:cursor-grabbing"
+        className="absolute top-3 bottom-0 left-1/2 -translate-x-1/2 w-4 flex justify-center pointer-events-auto cursor-grab active:cursor-grabbing"
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
       >
-        <div className="w-0.5 h-full bg-[#4A8FE7]" />
+        <div className="w-0.5 h-full bg-[#4A8FE7] shadow-sm shadow-[#4A8FE7]/30" />
       </div>
     </div>
   );

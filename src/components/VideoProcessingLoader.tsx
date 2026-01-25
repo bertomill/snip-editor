@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useState, useMemo } from "react";
 
 type ProcessingStage =
+  | "preparing"
   | "converting"
   | "uploading"
   | "transcribing"
@@ -29,6 +30,12 @@ interface VideoProcessingLoaderProps {
 }
 
 const stageMessages: Record<ProcessingStage, string[]> = {
+  preparing: [
+    "Preparing your video...",
+    "Getting things ready...",
+    "Setting up...",
+    "Almost ready to start...",
+  ],
   converting: [
     "Converting video format...",
     "Preparing for playback...",
@@ -91,7 +98,7 @@ export default function VideoProcessingLoader({
 }: VideoProcessingLoaderProps) {
   const [currentTextIndex, setCurrentTextIndex] = useState(0);
 
-  const texts = useMemo(() => stageMessages[stage], [stage]);
+  const texts = useMemo(() => stageMessages[stage] || stageMessages.processing, [stage]);
 
   useEffect(() => {
     // Reset index when stage changes
@@ -190,7 +197,7 @@ export function VideoProcessingLoaderCompact({
   interval = 2000,
 }: Pick<VideoProcessingLoaderProps, "stage" | "className" | "interval">) {
   const [currentTextIndex, setCurrentTextIndex] = useState(0);
-  const texts = useMemo(() => stageMessages[stage], [stage]);
+  const texts = useMemo(() => stageMessages[stage] || stageMessages.processing, [stage]);
 
   useEffect(() => {
     setCurrentTextIndex(0);

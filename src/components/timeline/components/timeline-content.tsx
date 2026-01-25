@@ -60,22 +60,25 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
     isPlayheadDragging.current = true;
   }, []);
 
-  const handlePlayheadDrag = useCallback((deltaX: number) => {
+  const handlePlayheadDrag = useCallback((clientX: number) => {
     if (!onFrameChange || !scrollContainerRef.current) return;
 
     const container = scrollContainerRef.current;
+    const rect = container.getBoundingClientRect();
+    const scrollLeft = container.scrollLeft;
     const totalWidth = container.scrollWidth;
 
-    // Convert pixel delta to time delta
-    const timeDelta = (deltaX / totalWidth) * viewportDuration;
-    const frameDelta = timeDelta * fps;
+    // Calculate position relative to the scrollable content
+    const relativeX = clientX - rect.left + scrollLeft;
+    const percentage = Math.max(0, Math.min(1, relativeX / totalWidth));
 
-    // Calculate new frame, clamping to valid range
+    // Convert percentage to frame
+    const newTime = percentage * viewportDuration;
     const maxFrame = Math.floor(totalDuration * fps);
-    const newFrame = Math.max(0, Math.min(maxFrame, Math.round(currentFrame + frameDelta)));
+    const newFrame = Math.max(0, Math.min(maxFrame, Math.round(newTime * fps)));
 
     onFrameChange(newFrame);
-  }, [currentFrame, fps, totalDuration, viewportDuration, onFrameChange]);
+  }, [fps, totalDuration, viewportDuration, onFrameChange]);
 
   const handlePlayheadDragEnd = useCallback(() => {
     isPlayheadDragging.current = false;
@@ -125,8 +128,9 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
 
   // Handle click-to-seek on tracks area
   const handleTracksMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // Don't interfere with item interactions
+    // Don't interfere with item or playhead interactions
     if ((e.target as HTMLElement).closest('.timeline-item')) return;
+    if ((e.target as HTMLElement).closest('[class*="cursor-grab"]')) return;
     if (!onFrameChange) return;
 
     e.preventDefault();

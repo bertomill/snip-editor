@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { TextOverlay } from '@/types/overlays';
 import { getTextStyleById } from '@/lib/templates/text-templates';
 
@@ -8,7 +8,8 @@ interface TextOverlayPreviewProps {
   textOverlays: TextOverlay[];
   currentTimeMs: number;
   onUpdatePosition?: (id: string, position: { x: number; y: number }) => void;
-  containerRef?: React.RefObject<HTMLDivElement>;
+  onUpdateContent?: (id: string, content: string) => void;
+  containerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 /**
@@ -20,10 +21,46 @@ export function TextOverlayPreview({
   textOverlays,
   currentTimeMs,
   onUpdatePosition,
+  onUpdateContent,
   containerRef,
 }: TextOverlayPreviewProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
   const dragStartRef = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
+
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (editingId && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingId]);
+
+  const handleDoubleClick = useCallback((overlay: TextOverlay) => {
+    if (!onUpdateContent) return;
+    setEditingId(overlay.id);
+    setEditValue(overlay.content);
+  }, [onUpdateContent]);
+
+  const handleEditSubmit = useCallback(() => {
+    if (editingId && onUpdateContent && editValue.trim()) {
+      onUpdateContent(editingId, editValue.trim());
+    }
+    setEditingId(null);
+    setEditValue('');
+  }, [editingId, editValue, onUpdateContent]);
+
+  const handleEditKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleEditSubmit();
+    } else if (e.key === 'Escape') {
+      setEditingId(null);
+      setEditValue('');
+    }
+  }, [handleEditSubmit]);
 
   // Filter to only show overlays that are active at current time
   const activeOverlays = textOverlays.filter(overlay => {
@@ -125,47 +162,82 @@ export function TextOverlayPreview({
         // Check if backgroundColor is a gradient
         const isGradient = style.backgroundColor?.includes('gradient');
         const isDragging = draggingId === overlay.id;
+        const isEditing = editingId === overlay.id;
         const isInteractive = !!onUpdatePosition;
+        const canEdit = !!onUpdateContent;
 
         return (
           <div
             key={overlay.id}
-            className={`absolute ${isInteractive ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'} ${isDragging ? 'z-30' : 'z-20'}`}
+            className={`absolute ${isInteractive && !isEditing ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'z-30' : 'z-20'} ${isEditing ? 'z-40' : ''}`}
             style={{
               left: `${overlay.position.x}%`,
               top: `${overlay.position.y}%`,
               transform: 'translate(-50%, -50%)',
             }}
-            onMouseDown={isInteractive ? (e) => handleMouseDown(e, overlay) : undefined}
-            onTouchStart={isInteractive ? (e) => handleTouchStart(e, overlay) : undefined}
+            onMouseDown={isInteractive && !isEditing ? (e) => handleMouseDown(e, overlay) : undefined}
+            onTouchStart={isInteractive && !isEditing ? (e) => handleTouchStart(e, overlay) : undefined}
+            onDoubleClick={canEdit ? () => handleDoubleClick(overlay) : undefined}
           >
-            {/* Selection ring when dragging */}
-            {isDragging && (
+            {/* Selection ring when dragging or editing */}
+            {(isDragging || isEditing) && (
               <div className="absolute inset-0 -m-1 border-2 border-[#4A8FE7] rounded-lg pointer-events-none" />
             )}
-            <div
-              style={{
-                fontFamily: style.fontFamily,
-                fontSize: style.fontSize,
-                fontWeight: style.fontWeight,
-                color: style.color,
-                textShadow: style.textShadow,
-                letterSpacing: style.letterSpacing,
-                padding: style.padding,
-                borderRadius: style.borderRadius,
-                // Handle both solid colors and gradients
-                ...(style.backgroundColor && !isGradient && {
-                  backgroundColor: style.backgroundColor,
-                }),
-                ...(isGradient && {
-                  background: style.backgroundColor,
-                }),
-                whiteSpace: 'nowrap',
-                textAlign: 'center',
-              }}
-            >
-              {overlay.content}
-            </div>
+
+            {isEditing ? (
+              // Inline edit input
+              <input
+                ref={inputRef}
+                type="text"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={handleEditSubmit}
+                onKeyDown={handleEditKeyDown}
+                className="bg-transparent border-none outline-none text-center min-w-[100px]"
+                style={{
+                  fontFamily: style.fontFamily,
+                  fontSize: style.fontSize,
+                  fontWeight: style.fontWeight,
+                  color: style.color,
+                  textShadow: style.textShadow,
+                  letterSpacing: style.letterSpacing,
+                  padding: style.padding,
+                  borderRadius: style.borderRadius,
+                  ...(style.backgroundColor && !isGradient && {
+                    backgroundColor: style.backgroundColor,
+                  }),
+                  ...(isGradient && {
+                    background: style.backgroundColor,
+                  }),
+                }}
+                maxLength={100}
+              />
+            ) : (
+              // Display text
+              <div
+                style={{
+                  fontFamily: style.fontFamily,
+                  fontSize: style.fontSize,
+                  fontWeight: style.fontWeight,
+                  color: style.color,
+                  textShadow: style.textShadow,
+                  letterSpacing: style.letterSpacing,
+                  padding: style.padding,
+                  borderRadius: style.borderRadius,
+                  // Handle both solid colors and gradients
+                  ...(style.backgroundColor && !isGradient && {
+                    backgroundColor: style.backgroundColor,
+                  }),
+                  ...(isGradient && {
+                    background: style.backgroundColor,
+                  }),
+                  whiteSpace: 'nowrap',
+                  textAlign: 'center',
+                }}
+              >
+                {overlay.content}
+              </div>
+            )}
           </div>
         );
       })}

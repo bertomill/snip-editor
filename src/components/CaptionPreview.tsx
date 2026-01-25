@@ -173,15 +173,6 @@ export function CaptionPreview({
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
     >
-      {/* Drag handle indicator */}
-      <div className="flex justify-center mb-1">
-        <div
-          className={`w-8 h-1 rounded-full transition-opacity ${
-            isDragging ? "bg-white/60" : "bg-white/30"
-          }`}
-        />
-      </div>
-
       <div className="flex flex-wrap justify-center items-center gap-1">
         {currentCaption.words.map((word, index) => {
           const isHighlighted = currentMs >= word.startMs && currentMs <= word.endMs;

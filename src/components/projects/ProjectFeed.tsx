@@ -17,6 +17,7 @@ interface ProjectFeedProps {
   onToggleSelectProject?: (projectId: string) => void;
   onCancelSelection?: () => void;
   onBulkDelete?: () => void;
+  compact?: boolean;  // Hide search bar and filters when in drawer mode
 }
 
 type ProjectFilter = 'all' | 'yours' | 'shared';
@@ -138,7 +139,8 @@ export function ProjectFeed({
   selectedProjectIds = new Set(),
   onToggleSelectProject,
   onCancelSelection,
-  onBulkDelete
+  onBulkDelete,
+  compact = false
 }: ProjectFeedProps) {
   const { projects, isLoading, deleteProject } = useProjects();
   const [deleteConfirm, setDeleteConfirm] = useState<{ projectId: string; projectName: string } | null>(null);
@@ -271,92 +273,98 @@ export function ProjectFeed({
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 pt-2 pb-24">
-      {/* Header - Project Filter Dropdown */}
-      <div className="relative mb-4">
-        <button
-          onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-          className="flex items-center gap-2 group"
-        >
-          <h1 className="text-2xl font-bold text-white">{filterLabels[projectFilter]}</h1>
-          <svg
-            className={`w-5 h-5 text-white/70 group-hover:text-white transition-all ${showFilterDropdown ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-
-        {/* Filter Dropdown Menu */}
-        {showFilterDropdown && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setShowFilterDropdown(false)}
-            />
-            <div className="absolute left-0 top-full mt-2 w-56 bg-[#2C2C2E] border border-[var(--border)] rounded-xl shadow-xl z-50 overflow-hidden animate-scale-in">
-              {(['all', 'yours', 'shared'] as ProjectFilter[]).map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => {
-                    setProjectFilter(filter);
-                    setShowFilterDropdown(false);
-                  }}
-                  className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
-                    projectFilter === filter
-                      ? 'bg-[#4A8FE7]/10 text-[#4A8FE7]'
-                      : 'text-white hover:bg-white/5'
-                  }`}
-                >
-                  <span className="font-medium">{filterLabels[filter]}</span>
-                  {projectFilter === filter && (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Search Bar with blue radial hover effect - hidden on mobile (shown in bottom bar) */}
-      <div className="hidden md:block">
-        <SearchInput
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-      </div>
-
-      {/* Filter Pills */}
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-        {['Type', 'Category', 'Owner', 'Date'].map((filter) => (
+    <div className={`w-full ${compact ? 'px-0 pt-0 pb-4' : 'max-w-2xl mx-auto px-4 pt-2 pb-24'}`}>
+      {/* Header - Project Filter Dropdown - hidden in compact mode */}
+      {!compact && (
+        <div className="relative mb-4">
           <button
-            key={filter}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[var(--background-card)] border border-[var(--border)] rounded-full text-white text-sm font-medium hover:bg-[var(--background-card-hover)] transition-colors whitespace-nowrap"
+            onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+            className="flex items-center gap-2 group"
           >
-            {filter}
-            <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <h1 className="text-2xl font-bold text-white">{filterLabels[projectFilter]}</h1>
+            <svg
+              className={`w-5 h-5 text-white/70 group-hover:text-white transition-all ${showFilterDropdown ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              viewBox="0 0 24 24"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
-        ))}
-      </div>
+
+          {/* Filter Dropdown Menu */}
+          {showFilterDropdown && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowFilterDropdown(false)}
+              />
+              <div className="absolute left-0 top-full mt-2 w-56 bg-[#2C2C2E] border border-[var(--border)] rounded-xl shadow-xl z-50 overflow-hidden animate-scale-in">
+                {(['all', 'yours', 'shared'] as ProjectFilter[]).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => {
+                      setProjectFilter(filter);
+                      setShowFilterDropdown(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
+                      projectFilter === filter
+                        ? 'bg-[#4A8FE7]/10 text-[#4A8FE7]'
+                        : 'text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span className="font-medium">{filterLabels[filter]}</span>
+                    {projectFilter === filter && (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Search Bar with blue radial hover effect - hidden on mobile and in compact mode */}
+      {!compact && (
+        <div className="hidden md:block">
+          <SearchInput
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+      )}
+
+      {/* Filter Pills - hidden in compact mode */}
+      {!compact && (
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+          {['Type', 'Category', 'Owner', 'Date'].map((filter) => (
+            <button
+              key={filter}
+              className="flex items-center gap-1.5 px-4 py-2 bg-[var(--background-card)] border border-[var(--border)] rounded-full text-white text-sm font-medium hover:bg-[var(--background-card-hover)] transition-colors whitespace-nowrap"
+            >
+              {filter}
+              <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Grouped Project List - Apple Notes Style */}
       {viewMode === 'list' ? (
-        <div className="space-y-6">
+        <div className={compact ? 'space-y-4' : 'space-y-6'}>
           {groupedProjects.map((group) => (
             <div key={group.label}>
               {/* Section Header */}
-              <h2 className="text-lg font-semibold text-white mb-3 px-1">{group.label}</h2>
+              <h2 className={`font-semibold text-[#8E8E93] mb-2 ${compact ? 'text-xs uppercase tracking-wider px-4' : 'text-lg text-white px-1'}`}>{group.label}</h2>
 
               {/* Rounded Container */}
-              <div className="bg-[#2C2C2E] rounded-xl overflow-hidden">
+              <div className={`overflow-hidden ${compact ? 'bg-transparent' : 'bg-[#2C2C2E] rounded-xl'}`}>
                 {group.projects.map((project, index) => (
                   <div key={project.id}>
                     <ProjectCard
@@ -368,8 +376,8 @@ export function ProjectFeed({
                       isSelected={selectedProjectIds.has(project.id)}
                       onToggleSelect={() => onToggleSelectProject?.(project.id)}
                     />
-                    {/* Divider line - not on last item */}
-                    {index < group.projects.length - 1 && (
+                    {/* Divider line - not on last item, hidden in compact mode */}
+                    {!compact && index < group.projects.length - 1 && (
                       <div className="mx-4 border-b border-[#3A3A3C]" />
                     )}
                   </div>

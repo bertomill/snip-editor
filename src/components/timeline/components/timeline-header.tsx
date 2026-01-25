@@ -15,6 +15,10 @@ interface TimelineHeaderProps {
   onPause?: () => void;
   showPlaybackControls?: boolean;
   onOpenTranscript?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
@@ -28,6 +32,10 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
   onPause,
   showPlaybackControls = false,
   onOpenTranscript,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }) => {
   const handlePlayPause = () => {
     if (isPlaying) {
@@ -75,13 +83,39 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
           {formatTime(currentTime)} / {formatTime(totalDuration)}
         </div>
 
-        {/* Transcript button */}
+        {/* Undo/Redo buttons */}
+        {(onUndo || onRedo) && (
+          <div className="flex items-center gap-1 ml-2">
+            <button
+              onClick={onUndo}
+              disabled={!canUndo}
+              className="w-8 h-8 flex items-center justify-center rounded bg-[#282828] hover:bg-[#333] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Undo (Cmd+Z)"
+            >
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a5 5 0 0 1 5 5v2M3 10l4-4M3 10l4 4" />
+              </svg>
+            </button>
+            <button
+              onClick={onRedo}
+              disabled={!canRedo}
+              className="w-8 h-8 flex items-center justify-center rounded bg-[#282828] hover:bg-[#333] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Redo (Cmd+Shift+Z)"
+            >
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 10H11a5 5 0 0 0-5 5v2M21 10l-4-4M21 10l-4 4" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Transcript button - only show on mobile, hidden on desktop where transcript panel is visible */}
         {onOpenTranscript && (
           <button
             onClick={onOpenTranscript}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#282828] hover:bg-[#333] text-white text-xs font-medium transition-colors"
+            className="lg:hidden flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border border-[var(--border)] hover:border-[var(--accent)] text-white text-sm font-medium transition-all shadow-[0_2px_0_0_rgba(0,0,0,0.4)] hover:shadow-[0_1px_0_0_rgba(0,0,0,0.4)] hover:translate-y-[1px] active:shadow-none active:translate-y-[2px]"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-[var(--accent)]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             Transcript

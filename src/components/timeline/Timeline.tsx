@@ -33,6 +33,10 @@ export const Timeline: React.FC<TimelineProps> = ({
   showPlaybackControls = false,
   onAddContent,
   onOpenTranscript,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -164,6 +168,10 @@ export const Timeline: React.FC<TimelineProps> = ({
         onPause={onPause}
         showPlaybackControls={showPlaybackControls}
         onOpenTranscript={onOpenTranscript}
+        onUndo={onUndo}
+        onRedo={onRedo}
+        canUndo={canUndo}
+        canRedo={canRedo}
       />
 
       {/* Tracks container - flex layout */}

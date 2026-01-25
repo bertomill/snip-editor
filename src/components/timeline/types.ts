@@ -54,6 +54,11 @@ export interface TimelineProps {
   onAddContent?: () => void;
   // Transcript button
   onOpenTranscript?: () => void;
+  // Undo/Redo
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 // Timeline content area props
