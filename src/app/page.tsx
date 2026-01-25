@@ -4373,7 +4373,7 @@ function MobileVideoPanel({
   allWords: TranscriptWord[];
   deletedWordIds: Set<string>;
   currentTime: number;
-  overlayState: { showCaptionPreview: boolean; captionPositionY: number; textOverlays: TextOverlay[] };
+  overlayState: { showCaptionPreview: boolean; captionPositionY: number; textOverlays: TextOverlay[]; captionTemplateId: string };
   setCaptionPosition: (y: number) => void;
   updateTextOverlay: (id: string, updates: Partial<TextOverlay>) => void;
   formatTime: (seconds: number) => string;
