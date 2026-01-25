@@ -7,9 +7,28 @@ let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
 let ffmpegLoading = false;
 let loadPromise: Promise<FFmpeg> | null = null;
+let extractionCounter = 0;
 
 /**
- * Load FFmpeg.wasm (only once)
+ * Reset FFmpeg instance (used when FFmpeg crashes or gets corrupted)
+ */
+function resetFFmpeg(): void {
+  console.log('[FFmpeg] Resetting instance...');
+  if (ffmpeg) {
+    try {
+      ffmpeg.terminate();
+    } catch {
+      // Ignore termination errors
+    }
+  }
+  ffmpeg = null;
+  ffmpegLoaded = false;
+  ffmpegLoading = false;
+  loadPromise = null;
+}
+
+/**
+ * Load FFmpeg.wasm (only once, or reload after reset)
  */
 async function loadFFmpeg(onProgress?: (progress: number) => void): Promise<FFmpeg> {
   if (ffmpegLoaded && ffmpeg) {
@@ -70,10 +89,18 @@ export async function extractAudioFromVideo(
 ): Promise<File> {
   console.log(`[extractAudio] Starting extraction from ${videoFile.name} (${(videoFile.size / 1024 / 1024).toFixed(1)}MB)`);
 
-  const ff = await loadFFmpeg(onProgress);
+  // Use unique filenames to avoid conflicts between extractions
+  const uniqueId = ++extractionCounter;
+  const inputName = `input_${uniqueId}${getExtension(videoFile.name)}`;
+  const outputName = `output_${uniqueId}.mp3`;
 
-  const inputName = 'input' + getExtension(videoFile.name);
-  const outputName = 'output.mp3';
+  let ff: FFmpeg;
+  try {
+    ff = await loadFFmpeg(onProgress);
+  } catch (loadError) {
+    console.error('[extractAudio] Failed to load FFmpeg:', loadError);
+    throw new Error('Failed to load FFmpeg');
+  }
 
   try {
     // Write video file to FFmpeg virtual filesystem
@@ -88,6 +115,7 @@ export async function extractAudioFromVideo(
       '-ar', '16000',           // 16kHz sample rate (optimal for Whisper)
       '-ac', '1',               // Mono
       '-b:a', '64k',            // 64kbps bitrate (good enough for speech)
+      '-y',                     // Overwrite output
       outputName
     ]);
 
@@ -106,13 +134,37 @@ export async function extractAudioFromVideo(
 
     console.log(`[extractAudio] Extracted audio: ${(audioFile.size / 1024 / 1024).toFixed(2)}MB (was ${(videoFile.size / 1024 / 1024).toFixed(1)}MB)`);
 
-    // Cleanup
-    await ff.deleteFile(inputName);
-    await ff.deleteFile(outputName);
+    // Cleanup - wrapped in try-catch to not fail if files already cleaned up
+    try {
+      await ff.deleteFile(inputName);
+    } catch {
+      // Ignore cleanup errors
+    }
+    try {
+      await ff.deleteFile(outputName);
+    } catch {
+      // Ignore cleanup errors
+    }
 
     return audioFile;
   } catch (error) {
     console.error('[extractAudio] Failed:', error);
+
+    // Try to clean up on error
+    try {
+      await ff.deleteFile(inputName);
+    } catch {
+      // Ignore
+    }
+    try {
+      await ff.deleteFile(outputName);
+    } catch {
+      // Ignore
+    }
+
+    // Reset FFmpeg for the next attempt (it may be in a corrupted state)
+    resetFFmpeg();
+
     throw new Error('Failed to extract audio from video');
   }
 }
@@ -132,10 +184,18 @@ export async function convertVideoToMP4(
 ): Promise<{ file: File; url: string }> {
   console.log(`[convertVideo] Starting conversion of ${videoFile.name} (${(videoFile.size / 1024 / 1024).toFixed(1)}MB)`);
 
-  const ff = await loadFFmpeg(onProgress);
+  // Use unique filenames to avoid conflicts
+  const uniqueId = ++extractionCounter;
+  const inputName = `input_${uniqueId}${getExtension(videoFile.name)}`;
+  const outputName = `output_${uniqueId}.mp4`;
 
-  const inputName = 'input' + getExtension(videoFile.name);
-  const outputName = 'output.mp4';
+  let ff: FFmpeg;
+  try {
+    ff = await loadFFmpeg(onProgress);
+  } catch (loadError) {
+    console.error('[convertVideo] Failed to load FFmpeg:', loadError);
+    throw new Error('Failed to load FFmpeg');
+  }
 
   try {
     // Write video file to FFmpeg virtual filesystem
@@ -171,13 +231,37 @@ export async function convertVideoToMP4(
 
     console.log(`[convertVideo] Converted: ${(mp4File.size / 1024 / 1024).toFixed(2)}MB (was ${(videoFile.size / 1024 / 1024).toFixed(1)}MB)`);
 
-    // Cleanup
-    await ff.deleteFile(inputName);
-    await ff.deleteFile(outputName);
+    // Cleanup - wrapped in try-catch
+    try {
+      await ff.deleteFile(inputName);
+    } catch {
+      // Ignore cleanup errors
+    }
+    try {
+      await ff.deleteFile(outputName);
+    } catch {
+      // Ignore cleanup errors
+    }
 
     return { file: mp4File, url: mp4Url };
   } catch (error) {
     console.error('[convertVideo] Failed:', error);
+
+    // Try to clean up on error
+    try {
+      await ff.deleteFile(inputName);
+    } catch {
+      // Ignore
+    }
+    try {
+      await ff.deleteFile(outputName);
+    } catch {
+      // Ignore
+    }
+
+    // Reset FFmpeg for the next attempt
+    resetFFmpeg();
+
     throw new Error('Failed to convert video to MP4');
   }
 }
