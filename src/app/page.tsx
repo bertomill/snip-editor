@@ -38,6 +38,7 @@ import { extractAudioFromVideo, isFFmpegSupported } from "@/lib/audio/extract-au
 import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
 import { FlipWords } from "@/components/ui/flip-words";
 import SwooshText from "@/components/ui/swoosh-text";
+import SwooshButton from "@/components/ui/swoosh-button";
 
 type AppView = "feed" | "editor";
 type EditorStep = "upload" | "edit" | "export";
@@ -2030,13 +2031,6 @@ function ExportProgressIndicator({
                 style={{ width: `${Math.max(status === 'preparing' ? 5 : progress, 2)}%` }}
               />
             </div>
-            <p className="text-[#636366] text-[10px] mt-1.5 text-center">
-              {status === 'preparing'
-                ? 'Processing clips...'
-                : status === 'converting'
-                  ? 'Converting MOV/HEVC to MP4...'
-                  : 'This may take a few minutes'}
-            </p>
           </div>
         )}
 
@@ -2711,21 +2705,15 @@ function UploadStep({
             </button>
           </div>
 
-          {/* AutoCut button - Primary action */}
+          {/* AutoCut button - Primary action with swoosh effect */}
           <div className="flex justify-center pb-24 sm:pb-8">
-            <button
+            <SwooshButton
               onClick={handleAutoCut}
               disabled={isProcessing}
-              className="h-12 flex items-center gap-2 px-8 bg-[var(--accent)] hover:bg-[var(--accent-hover)] rounded-full text-white font-medium transition-all disabled:opacity-50 shadow-lg"
+              className="text-lg"
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-              </svg>
               AutoCut ({selectedFiles.length})
-            </button>
+            </SwooshButton>
           </div>
         </div>
       )}
@@ -3853,76 +3841,83 @@ function EditStep({
 
       try {
         let response: Response;
-        let fileToUpload: File;
 
-        // Always extract audio client-side when FFmpeg.wasm is supported
-        // This is required because server-side FFmpeg doesn't work on Vercel serverless
-        if (useClientExtraction) {
-          console.log(`[Transcribe] Extracting audio from clip ${i + 1} client-side...`);
-          try {
-            fileToUpload = await extractAudioFromVideo(clip.file, (progress) => {
-              // Progress for extraction (first half of clip progress)
-              setTranscribeProgress(baseProgress + (progress / clips.length) * 0.5);
-            });
-            console.log(`[Transcribe] Audio extracted: ${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB`);
-          } catch (extractError) {
-            console.warn(`[Transcribe] Client-side extraction failed, falling back to server:`, extractError);
-            // Fall back to sending full video
-            fileToUpload = clip.file;
-          }
+        // Use storage path if available (bypasses Vercel size limits)
+        if (clip.storagePath && clip.uploadStatus === 'complete') {
+          console.log(`[Transcribe] Using storage path for clip ${i + 1}: ${clip.storagePath}`);
+          setTranscribeProgress(baseProgress + (100 / clips.length) * 0.5);
+
+          response = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              storagePath: clip.storagePath,
+              enhanceAudio: audioSettings.enhanceAudio,
+              noiseReduction: audioSettings.noiseReduction,
+              noiseReductionStrength: audioSettings.noiseReductionStrength,
+              loudnessNormalization: audioSettings.loudnessNormalization,
+              detectSilence: true,
+              silenceAggressiveness: silenceAggressiveness,
+            }),
+          });
         } else {
-          // Re-create File with guaranteed valid MIME type for iOS Safari compatibility
-          fileToUpload = clip.file;
-          if (!clip.file.type || clip.file.type === 'application/octet-stream') {
-            const ext = clip.file.name.split('.').pop()?.toLowerCase();
-            const mimeMap: Record<string, string> = {
-              'mp4': 'video/mp4',
-              'mov': 'video/quicktime',
-              'webm': 'video/webm',
-              'm4v': 'video/x-m4v',
-              'hevc': 'video/mp4',
-            };
-            const mimeType = mimeMap[ext || ''] || 'video/mp4';
-            fileToUpload = new File([clip.file], clip.file.name, { type: mimeType });
-          }
-        }
+          // Fallback: Extract audio client-side and send directly
+          let fileToUpload: File;
 
-        // Create FormData and send to transcription API
-        const formData = new FormData();
-        // Use "audio" key if we extracted audio, "video" if sending full video
-        const fileKey = fileToUpload.type.startsWith('audio/') ? 'audio' : 'video';
-        formData.append(fileKey, fileToUpload);
-
-        // Add audio enhancement settings (only if sending video - audio is already clean)
-        if (fileKey === 'video' && audioSettings.enhanceAudio) {
-          formData.append("enhanceAudio", "true");
-          formData.append("noiseReduction", String(audioSettings.noiseReduction));
-          formData.append("noiseReductionStrength", audioSettings.noiseReductionStrength);
-          formData.append("loudnessNormalization", String(audioSettings.loudnessNormalization));
-        }
-
-        // Add silence detection settings
-        formData.append("detectSilence", "true");
-        formData.append("silenceAggressiveness", silenceAggressiveness);
-
-        setTranscribeProgress(baseProgress + (100 / clips.length) * 0.6);
-
-        response = await fetch("/api/transcribe", {
-          method: "POST",
-          body: formData,
-        });
-
-        // Handle 413 (file too large for direct upload)
-        if (response.status === 413) {
-          const fileSizeMB = fileToUpload.size / (1024 * 1024);
-          if (clip.uploadStatus === 'uploading') {
-            alert(`Clip ${i + 1} is still uploading. Please wait and try again.`);
-          } else if (clip.uploadStatus === 'error') {
-            alert(`Clip ${i + 1} storage upload failed. Please check your connection and try again.`);
+          if (useClientExtraction) {
+            console.log(`[Transcribe] Extracting audio from clip ${i + 1} client-side...`);
+            try {
+              fileToUpload = await extractAudioFromVideo(clip.file, (progress) => {
+                setTranscribeProgress(baseProgress + (progress / clips.length) * 0.5);
+              });
+              console.log(`[Transcribe] Audio extracted: ${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB`);
+            } catch (extractError) {
+              console.warn(`[Transcribe] Client-side extraction failed:`, extractError);
+              fileToUpload = clip.file;
+            }
           } else {
-            alert(`Clip ${i + 1} (${fileSizeMB.toFixed(1)}MB) exceeds the upload limit. Try using a shorter clip.`);
+            fileToUpload = clip.file;
+            if (!clip.file.type || clip.file.type === 'application/octet-stream') {
+              const ext = clip.file.name.split('.').pop()?.toLowerCase();
+              const mimeMap: Record<string, string> = {
+                'mp4': 'video/mp4',
+                'mov': 'video/quicktime',
+                'webm': 'video/webm',
+                'm4v': 'video/x-m4v',
+                'hevc': 'video/mp4',
+              };
+              const mimeType = mimeMap[ext || ''] || 'video/mp4';
+              fileToUpload = new File([clip.file], clip.file.name, { type: mimeType });
+            }
           }
-          continue;
+
+          const formData = new FormData();
+          const fileKey = fileToUpload.type.startsWith('audio/') ? 'audio' : 'video';
+          formData.append(fileKey, fileToUpload);
+
+          if (fileKey === 'video' && audioSettings.enhanceAudio) {
+            formData.append("enhanceAudio", "true");
+            formData.append("noiseReduction", String(audioSettings.noiseReduction));
+            formData.append("noiseReductionStrength", audioSettings.noiseReductionStrength);
+            formData.append("loudnessNormalization", String(audioSettings.loudnessNormalization));
+          }
+
+          formData.append("detectSilence", "true");
+          formData.append("silenceAggressiveness", silenceAggressiveness);
+
+          setTranscribeProgress(baseProgress + (100 / clips.length) * 0.6);
+
+          response = await fetch("/api/transcribe", {
+            method: "POST",
+            body: formData,
+          });
+
+          // Handle 413 (file too large for direct upload)
+          if (response.status === 413) {
+            const fileSizeMB = fileToUpload.size / (1024 * 1024);
+            alert(`Clip ${i + 1} (${fileSizeMB.toFixed(1)}MB) exceeds the upload limit. Please wait for storage upload to complete.`);
+            continue;
+          }
         }
 
         const data = await response.json();
@@ -4651,11 +4646,7 @@ function EditStep({
           hasVideo={clips.length > 0}
           isTranscribing={isTranscribing}
           captionsEnabled={overlayState.showCaptionPreview}
-          onToggleCaptions={(enabled) => {
-            if (enabled !== overlayState.showCaptionPreview) {
-              toggleCaptionPreview();
-            }
-          }}
+          onCommand={handleChatCommand}
         />
       </div>
     </div>

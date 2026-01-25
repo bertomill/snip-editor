@@ -26,8 +26,8 @@ interface VapiVoiceButtonProps {
   isTranscribing?: boolean;
   /** Whether captions are currently enabled */
   captionsEnabled?: boolean;
-  /** Callback to toggle captions on/off */
-  onToggleCaptions?: (enabled: boolean) => void;
+  /** Generic command handler - same interface as AIChatInput */
+  onCommand?: (command: { name: string; input: Record<string, unknown> }) => void;
 }
 
 export function VapiVoiceButton({
@@ -42,7 +42,7 @@ export function VapiVoiceButton({
   hasVideo = false,
   isTranscribing = false,
   captionsEnabled = true,
-  onToggleCaptions,
+  onCommand,
 }: VapiVoiceButtonProps) {
   const [vapi, setVapi] = useState<Vapi | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -52,10 +52,10 @@ export function VapiVoiceButton({
   const [liveTranscript, setLiveTranscript] = useState("");
 
   // Ref to store latest callback to avoid stale closures
-  const onToggleCaptionsRef = useRef(onToggleCaptions);
+  const onCommandRef = useRef(onCommand);
   useEffect(() => {
-    onToggleCaptionsRef.current = onToggleCaptions;
-  }, [onToggleCaptions]);
+    onCommandRef.current = onCommand;
+  }, [onCommand]);
 
   // Initialize VAPI
   useEffect(() => {
@@ -132,16 +132,34 @@ export function VapiVoiceButton({
 
         console.log("[Vapi] Extracted - name:", name, "params:", parameters);
 
-        if (name === "toggleCaptions") {
-          const enabled = (parameters?.enabled ?? true) as boolean;
-          console.log("[Vapi] Toggle captions to:", enabled);
+        // Map Vapi tool names to chat API command names
+        const toolNameMap: Record<string, string> = {
+          toggleCaptions: "toggle_captions",
+          toggle_captions: "toggle_captions",
+          setFilter: "set_filter",
+          set_filter: "set_filter",
+          applyFilter: "set_filter",
+          addSticker: "add_sticker",
+          add_sticker: "add_sticker",
+          addText: "add_text",
+          add_text: "add_text",
+          setCaptionStyle: "set_caption_style",
+          set_caption_style: "set_caption_style",
+          seekToTime: "seek_to_time",
+          seek_to_time: "seek_to_time",
+        };
 
-          if (onToggleCaptionsRef.current) {
-            onToggleCaptionsRef.current(enabled);
-            console.log("[Vapi] Caption toggle executed successfully");
-          } else {
-            console.warn("[Vapi] onToggleCaptionsRef.current is not set");
-          }
+        const commandName = name ? toolNameMap[name] || name : undefined;
+
+        if (commandName && onCommandRef.current) {
+          console.log("[Vapi] Executing command:", commandName, "with input:", parameters);
+          onCommandRef.current({
+            name: commandName,
+            input: parameters || {},
+          });
+          console.log("[Vapi] Command executed successfully");
+        } else if (!onCommandRef.current) {
+          console.warn("[Vapi] onCommandRef.current is not set");
         }
       }
     });
@@ -261,17 +279,21 @@ You can help with: hooks, filters, stickers, captions, pacing, and general creat
 
 TOOLS YOU CAN USE:
 You have the ability to actually make changes to their video! When the user asks you to do something, use your tools to do it.
-- toggleCaptions: Turn captions on or off. Use this when they ask to show/hide/enable/disable captions.
+- toggle_captions: Turn captions on or off
+- set_filter: Apply a visual filter (cinematic, vintage, vibrant, warm, cool, bw, dramatic, soft)
+- set_caption_style: Change caption style (classic, minimal, bold, neon)
+- add_sticker: Add an emoji/sticker to the video
+- add_text: Add text overlay with different styles
 
-After using a tool, confirm what you did in a friendly way like "Done! I turned on the captions for you" or "Captions are hidden now".
-Current caption state: ${captionsEnabled ? "Captions are ON" : "Captions are OFF"}`,
+After using a tool, confirm what you did in a friendly way.
+Current state: Captions ${captionsEnabled ? "ON" : "OFF"}, Filter: ${currentFilter || "none"}`,
                 },
               ],
               tools: [
                 {
                   type: "function",
                   function: {
-                    name: "toggleCaptions",
+                    name: "toggle_captions",
                     description: "Turn video captions on or off. Use when the user asks to show, hide, enable, or disable captions.",
                     parameters: {
                       type: "object",
@@ -284,7 +306,91 @@ Current caption state: ${captionsEnabled ? "Captions are ON" : "Captions are OFF
                       required: ["enabled"]
                     }
                   },
-                  async: false, // Client-side tool, no server
+                  async: false,
+                },
+                {
+                  type: "function",
+                  function: {
+                    name: "set_filter",
+                    description: "Apply a visual filter/color grade to the video. Use when user wants to change the look, mood, or color.",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        filter: {
+                          type: "string",
+                          enum: ["none", "cinematic", "vibrant", "vintage", "warm", "cool", "bw", "sepia", "dramatic", "soft", "hdr"],
+                          description: "The filter to apply. Use 'none' to remove filter."
+                        }
+                      },
+                      required: ["filter"]
+                    }
+                  },
+                  async: false,
+                },
+                {
+                  type: "function",
+                  function: {
+                    name: "set_caption_style",
+                    description: "Change the visual style of captions/subtitles.",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        style: {
+                          type: "string",
+                          enum: ["classic", "minimal", "bold", "neon"],
+                          description: "The caption style"
+                        }
+                      },
+                      required: ["style"]
+                    }
+                  },
+                  async: false,
+                },
+                {
+                  type: "function",
+                  function: {
+                    name: "add_sticker",
+                    description: "Add an emoji or sticker to the video. Use when user wants emojis, reactions, or decorative elements.",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        emoji: {
+                          type: "string",
+                          description: "The emoji to add (e.g. '🔥', '😂', '👍', '✨', '💯')"
+                        }
+                      },
+                      required: ["emoji"]
+                    }
+                  },
+                  async: false,
+                },
+                {
+                  type: "function",
+                  function: {
+                    name: "add_text",
+                    description: "Add a text overlay to the video. Use when user wants to add text, titles, or labels.",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        content: {
+                          type: "string",
+                          description: "The text content to display"
+                        },
+                        style: {
+                          type: "string",
+                          enum: ["bold", "minimal", "outline", "neon", "handwritten"],
+                          description: "The visual style of the text"
+                        },
+                        position: {
+                          type: "string",
+                          enum: ["top", "center", "bottom"],
+                          description: "Where to position the text"
+                        }
+                      },
+                      required: ["content"]
+                    }
+                  },
+                  async: false,
                 }
               ],
             },

@@ -107,10 +107,13 @@ export async function convertVideoToMp4(
     // Write input file
     fs.writeFileSync(inputPath, buffer);
 
-    // Convert to MP4 with balanced speed/quality settings
-    // Using -preset fast (was medium) for ~2x faster encoding with minimal quality loss
+    // Convert to MP4 with fast settings optimized for Remotion compatibility
+    // -preset ultrafast: ~4x faster than 'fast' with acceptable quality for social media
+    // -vsync cfr: constant frame rate (fixes timing issues)
+    // -ar 44100 -ac 2: standardize audio for Chrome compatibility
+    // -af aresample=async=1: fix audio sync issues from variable frame rate sources
     await execAsync(
-      `"${getFFmpegPath()}" -i "${inputPath}" -c:v libx264 -preset fast -crf 20 -c:a aac -b:a 128k -movflags +faststart -y "${outputPath}"`
+      `"${getFFmpegPath()}" -i "${inputPath}" -c:v libx264 -preset ultrafast -crf 23 -vsync cfr -c:a aac -ar 44100 -ac 2 -b:a 128k -af "aresample=async=1" -movflags +faststart -y "${outputPath}"`
     );
 
     // Read converted file

@@ -7,6 +7,7 @@
 import { TimelineTrack, TimelineItem, TrackItemType } from '../types';
 import { mergeTimeRanges, invertTimeRanges, calculateAdjustedTime, TimeSegment } from '@/lib/utils/time-ranges';
 import { SCRIPT_TRACK_CONSTANTS } from '../constants';
+import { SilenceSegment } from '@/types/silence';
 
 interface TranscriptWord {
   id: string;
@@ -20,6 +21,7 @@ interface ClipInfo {
   duration: number;
   file?: File | null;
   url?: string;
+  silenceSegments?: SilenceSegment[];
 }
 
 interface GenerateCollapsedTracksOptions {
@@ -61,7 +63,39 @@ function getDeletedWordRangesForClip(
 }
 
 /**
+ * Get deleted silence segment ranges for a specific clip
+ * Handles the `silence-${clipIndex}-${silence.id}` format from AutoCut
+ */
+function getDeletedSilenceSegmentRanges(
+  clipIndex: number,
+  silenceSegments: SilenceSegment[] | undefined,
+  deletedPauseIds: Set<string>,
+  clipStartTime: number
+): TimeSegment[] {
+  const ranges: TimeSegment[] = [];
+
+  if (!silenceSegments || silenceSegments.length === 0) return ranges;
+
+  for (const silence of silenceSegments) {
+    // Check for the silence segment ID format from AutoCut
+    const silenceId = `silence-${clipIndex}-${silence.id}`;
+    if (deletedPauseIds.has(silenceId)) {
+      ranges.push({
+        start: clipStartTime + silence.start,
+        end: clipStartTime + silence.end,
+      });
+    }
+  }
+
+  return ranges;
+}
+
+/**
  * Get deleted pause time ranges for a specific clip
+ * Handles multiple ID formats:
+ * - `pause-after-${word.id}` - manual pause deletion
+ * - `pause-before-clip-${clipIndex}` - leading silence
+ * - `pause-clip-${clipIndex}-${wordId1}-${wordId2}` - word gap from AutoCut
  */
 function getDeletedPauseRangesForClip(
   clipIndex: number,
@@ -76,11 +110,12 @@ function getDeletedPauseRangesForClip(
 
   if (clipWords.length === 0) return ranges;
 
-  // Check for leading silence
+  // Check for leading silence (multiple ID formats)
   const firstWord = clipWords[0];
   if (firstWord.start >= pauseThreshold) {
-    const pauseId = `pause-before-clip-${clipIndex}-first-word`;
-    if (deletedPauseIds.has(pauseId)) {
+    const pauseId1 = `pause-before-clip-${clipIndex}-first-word`;
+    const pauseId2 = `pause-before-clip-${clipIndex}`;
+    if (deletedPauseIds.has(pauseId1) || deletedPauseIds.has(pauseId2)) {
       ranges.push({
         start: clipStartTime,
         end: clipStartTime + firstWord.start,
@@ -88,15 +123,18 @@ function getDeletedPauseRangesForClip(
     }
   }
 
-  // Check pauses between words
+  // Check pauses between words (multiple ID formats)
   for (let i = 0; i < clipWords.length - 1; i++) {
     const word = clipWords[i];
     const nextWord = clipWords[i + 1];
     const gap = nextWord.start - word.end;
 
     if (gap >= pauseThreshold) {
-      const pauseId = `pause-after-${word.id}`;
-      if (deletedPauseIds.has(pauseId)) {
+      // Check multiple possible ID formats
+      const pauseId1 = `pause-after-${word.id}`;
+      const pauseId2 = `pause-clip-${clipIndex}-${word.id}-${nextWord.id}`;
+
+      if (deletedPauseIds.has(pauseId1) || deletedPauseIds.has(pauseId2)) {
         ranges.push({
           start: clipStartTime + word.end,
           end: clipStartTime + nextWord.start,
@@ -146,13 +184,20 @@ export function generateCollapsedTracks({
 
   for (let i = 0; i < clips.length; i++) {
     const clipStartTime = clipStartTimes[i];
-    const clipDuration = clips[i].duration;
+    const clip = clips[i];
+    const clipDuration = clip.duration;
 
     // Get deleted word ranges
     const wordRanges = getDeletedWordRangesForClip(i, words, deletedWordIds, clipStartTime);
     allDeletedRanges.push(...wordRanges);
 
-    // Get deleted pause ranges
+    // Get deleted silence segment ranges (from AutoCut FFmpeg detection)
+    const silenceRanges = getDeletedSilenceSegmentRanges(
+      i, clip.silenceSegments, deletedPauseIds, clipStartTime
+    );
+    allDeletedRanges.push(...silenceRanges);
+
+    // Get deleted pause ranges (from word gap detection)
     const pauseRanges = getDeletedPauseRangesForClip(
       i, words, deletedPauseIds, clipStartTime, clipDuration, pauseThreshold
     );
