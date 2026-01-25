@@ -121,6 +121,7 @@ function HomeContent() {
 
   // Social connections state
   const [xConnection, setXConnection] = useState<{ connected: boolean; username?: string } | null>(null);
+  const [xPosts, setXPosts] = useState<Array<{ id: string; text: string; likes: number }>>([]);
 
   // Editor state
   const [step, setStep] = useState<EditorStep>("upload");
@@ -144,6 +145,9 @@ function HomeContent() {
     totalClips: number;
     message: string;
   } | null>(null);
+
+  // Video loading state - shows loading animation while video buffers
+  const [isVideoLoading, setIsVideoLoading] = useState(false);
 
   // Mobile transcript drawer state (hoisted from EditStep for Sidebar access)
   const [showTranscriptDrawer, setShowTranscriptDrawer] = useState(false);
@@ -190,12 +194,25 @@ function HomeContent() {
     }
   }, [clips.length, deletedWordIds.size, deletedPauseIds.size, view]);
 
-  // Fetch X connection status
+  // Fetch X connection status and posts
   useEffect(() => {
     if (user) {
       fetch('/api/auth/x/status')
         .then(res => res.json())
-        .then(data => setXConnection(data))
+        .then(data => {
+          setXConnection(data);
+          // If connected, fetch their posts for AI context
+          if (data.connected) {
+            fetch('/api/x/posts')
+              .then(res => res.json())
+              .then(postsData => {
+                if (postsData.posts) {
+                  setXPosts(postsData.posts);
+                }
+              })
+              .catch(() => setXPosts([]));
+          }
+        })
         .catch(() => setXConnection({ connected: false }));
     }
   }, [user]);
@@ -1234,10 +1251,18 @@ function HomeContent() {
                     onClick={xConnection?.connected ? handleDisconnectX : handleConnectX}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group"
                   >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${xConnection?.connected ? 'bg-green-500/20' : 'bg-white/10'}`}>
+                    <div className={`relative w-8 h-8 rounded-lg flex items-center justify-center ${xConnection?.connected ? 'bg-white/10' : 'bg-white/10'}`}>
                       <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                       </svg>
+                      {/* Green checkmark badge when connected */}
+                      {xConnection?.connected && (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full flex items-center justify-center ring-2 ring-[var(--background-card)]">
+                          <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
                     </div>
                     <div className="flex-1 text-left">
                       <span className="text-white text-sm font-medium">X</span>
@@ -1447,7 +1472,7 @@ function HomeContent() {
         )}
 
         <div className="min-h-screen flex flex-col bg-canva-gradient pb-24 md:pb-0 relative">
-        <header className="z-[100] flex items-center justify-between px-3 sm:px-8 pt-4 pb-2 sm:py-4 bg-transparent fixed top-0 left-0 right-0">
+        <header className="z-[200] flex items-center justify-between px-3 sm:px-8 pt-4 pb-2 sm:py-4 bg-transparent fixed top-0 left-0 right-0">
           <div className="flex items-center gap-3">
             {/* Hamburger menu for projects */}
             <button
@@ -1512,7 +1537,7 @@ function HomeContent() {
           )}
         </header>
 
-        <main className={`flex-1 flex flex-col ${step === "upload" ? "items-center justify-center p-4 sm:p-6" : "p-0"}`}>
+        <main className={`flex-1 flex flex-col relative z-0 ${step === "upload" ? "items-center justify-center p-4 sm:p-6" : "p-0"}`}>
           {step === "upload" && (
             <UploadStep
               onFilesSelected={handleFilesSelected}
@@ -2756,15 +2781,15 @@ function EditStep({
       effectiveDuration = collapsed.totalDuration;
     } else {
       // No deletions - show original tracks
-      // Add small gap between clips for visual separation
-      const CLIP_GAP = 0.05; // 50ms gap between clips
+      // Add visual gap between clips for clear separation
+      const CLIP_GAP = 0.3; // 300ms gap between clips for visual separation
       videoTrack = {
         id: 'video-track',
         name: 'Video',
         items: clips.map((clip, i) => {
-          // Calculate start time with gaps
-          const clipStartTime = clips.slice(0, i).reduce((acc, c, idx) => {
-            return acc + c.duration + (idx < i - 1 ? 0 : 0); // No gap in timeline data, handled visually
+          // Calculate start time with gaps between clips
+          const clipStartTime = clips.slice(0, i).reduce((acc, c) => {
+            return acc + c.duration + CLIP_GAP;
           }, 0);
           return {
             id: `clip-${i}`,
@@ -2792,6 +2817,9 @@ function EditStep({
             clips: clips.map(c => ({ duration: c.duration })),
           })
         : { id: 'script-track', name: 'Script', items: [] };
+
+      // Update duration to include gaps between clips
+      effectiveDuration = totalDuration + (clips.length > 1 ? (clips.length - 1) * CLIP_GAP : 0);
     }
 
     // Text track
@@ -3344,12 +3372,21 @@ function EditStep({
   // Handle video error (unsupported format)
   const handleVideoError = useCallback(() => {
     setVideoError("Video format not supported by browser. Transcription will still work.");
+    setIsVideoLoading(false);
   }, []);
 
-  // Reset video error when switching clips
+  // Handle video ready to play
+  const handleVideoCanPlay = useCallback(() => {
+    setIsVideoLoading(false);
+  }, []);
+
+  // Reset video error and set loading when switching clips
   useEffect(() => {
     setVideoError(null);
-  }, [activeClipIndex]);
+    if (clips[activeClipIndex]) {
+      setIsVideoLoading(true);
+    }
+  }, [activeClipIndex, clips]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -3627,7 +3664,7 @@ function EditStep({
       onOpenTranscript={() => setShowTranscriptDrawer(true)}
     />
 
-    <div className="w-full flex flex-col gap-0 lg:gap-6 animate-fade-in-up lg:px-6">
+    <div className="w-full flex flex-col gap-0 lg:gap-6 animate-fade-in-up lg:px-6 isolate">
 
       {/* Mobile Video Panel */}
       <div className="lg:hidden pt-0">
@@ -3639,6 +3676,8 @@ function EditStep({
           handleTimeUpdate={handleTimeUpdate}
           handleVideoEnded={handleVideoEnded}
           handleVideoError={handleVideoError}
+          handleVideoCanPlay={handleVideoCanPlay}
+          isVideoLoading={isVideoLoading}
           videoError={videoError}
           handlePlayPause={handlePlayPause}
           isPlaying={isPlaying}
@@ -3704,6 +3743,19 @@ function EditStep({
                   totalClips={autoCutProcessing.totalClips}
                 />
               )}
+              {/* Video Loading Overlay */}
+              {isVideoLoading && activeClip && !isUploading && !autoCutProcessing?.active && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
+                  <video
+                    src="/loading video.mp4"
+                    className="w-full h-full object-cover"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                  />
+                </div>
+              )}
               {activeClip && !isUploading && !autoCutProcessing?.active && (
                 <>
                   <video
@@ -3714,6 +3766,7 @@ function EditStep({
                     onTimeUpdate={handleTimeUpdate}
                     onEnded={handleVideoEnded}
                     onError={handleVideoError}
+                    onCanPlay={handleVideoCanPlay}
                     playsInline
                   />
                   {/* Real-time caption preview */}
@@ -4130,7 +4183,13 @@ function EditStep({
             onCommand={handleChatCommand}
           />
         </div>
-        <VapiVoiceButton />
+        <VapiVoiceButton
+          transcript={fullTranscript}
+          currentFilter={overlayState.filterId}
+          textOverlayCount={overlayState.textOverlays.length}
+          stickerCount={overlayState.stickers.length}
+          xPosts={xPosts}
+        />
       </div>
     </div>
     </>
@@ -4459,6 +4518,8 @@ function MobileVideoPanel({
   handleTimeUpdate,
   handleVideoEnded,
   handleVideoError,
+  handleVideoCanPlay,
+  isVideoLoading,
   videoError,
   handlePlayPause,
   isPlaying,
@@ -4489,6 +4550,8 @@ function MobileVideoPanel({
   handleTimeUpdate: () => void;
   handleVideoEnded: () => void;
   handleVideoError: () => void;
+  handleVideoCanPlay: () => void;
+  isVideoLoading: boolean;
   videoError: string | null;
   handlePlayPause: () => void;
   isPlaying: boolean;
@@ -4519,7 +4582,7 @@ function MobileVideoPanel({
   } | null;
 }) {
   return (
-    <div className="flex flex-col relative z-10 -mt-12">
+    <div className="flex flex-col relative z-0 -mt-12">
       <div className="overflow-hidden relative w-full">
         <div ref={previewContainerRef} className="aspect-[9/16] bg-black relative max-h-[80vh] mx-auto">
           {/* Upload Progress Overlay */}
@@ -4533,6 +4596,19 @@ function MobileVideoPanel({
               totalClips={autoCutProcessing.totalClips}
             />
           )}
+          {/* Video Loading Overlay */}
+          {isVideoLoading && activeClip && !isUploading && !autoCutProcessing?.active && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
+              <video
+                src="/loading video.mp4"
+                className="w-full h-full object-cover"
+                autoPlay
+                loop
+                muted
+                playsInline
+              />
+            </div>
+          )}
           {activeClip && !isUploading && !autoCutProcessing?.active && (
           <>
             <video
@@ -4543,6 +4619,7 @@ function MobileVideoPanel({
               onTimeUpdate={handleTimeUpdate}
               onEnded={handleVideoEnded}
               onError={handleVideoError}
+              onCanPlay={handleVideoCanPlay}
               playsInline
             />
             <CaptionPreview

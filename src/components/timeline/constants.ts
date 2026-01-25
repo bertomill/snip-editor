@@ -23,7 +23,7 @@ export const ZOOM_CONSTRAINTS = {
   min: 0.5,
   max: 50,        // Increased for Descript-level zoom (frame-by-frame editing)
   step: 0.3,      // Increased for more responsive button clicks
-  default: 5,     // Start zoomed in so words are visible in script track
+  default: 0.8,   // Start at 80% zoom
   zoomStep: 0.3,  // Increased for more responsive zoom
   wheelStep: 0.2, // Increased for more responsive Ctrl+scroll
   transitionDuration: 100,

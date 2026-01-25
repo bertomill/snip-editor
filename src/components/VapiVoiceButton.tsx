@@ -6,15 +6,32 @@ import Vapi from "@vapi-ai/web";
 
 interface VapiVoiceButtonProps {
   assistantId?: string;
+  /** The video transcript/script to give context to the assistant */
+  transcript?: string;
+  /** Current filter applied to the video */
+  currentFilter?: string;
+  /** Number of text overlays */
+  textOverlayCount?: number;
+  /** Number of stickers */
+  stickerCount?: number;
+  /** User's recent X posts for content inspiration */
+  xPosts?: Array<{ id: string; text: string; likes: number }>;
 }
 
-export function VapiVoiceButton({ assistantId }: VapiVoiceButtonProps) {
+export function VapiVoiceButton({
+  assistantId,
+  transcript,
+  currentFilter,
+  textOverlayCount = 0,
+  stickerCount = 0,
+  xPosts = [],
+}: VapiVoiceButtonProps) {
   const [vapi, setVapi] = useState<Vapi | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isCallActive, setIsCallActive] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState("");
+  const [liveTranscript, setLiveTranscript] = useState("");
 
   // Initialize VAPI
   useEffect(() => {
@@ -29,7 +46,7 @@ export function VapiVoiceButton({ assistantId }: VapiVoiceButtonProps) {
     vapiInstance.on("call-start", () => {
       setIsConnecting(false);
       setIsCallActive(true);
-      setTranscript("");
+      setLiveTranscript("");
     });
 
     vapiInstance.on("call-end", () => {
@@ -50,7 +67,7 @@ export function VapiVoiceButton({ assistantId }: VapiVoiceButtonProps) {
 
     vapiInstance.on("message", (message) => {
       if (message.type === "transcript" && message.transcriptType === "final") {
-        setTranscript(message.transcript || "");
+        setLiveTranscript(message.transcript || "");
       }
     });
 
@@ -90,6 +107,24 @@ export function VapiVoiceButton({ assistantId }: VapiVoiceButtonProps) {
           await vapi.start(assistantId);
         } else {
           // Fallback: start with inline assistant config
+          // Build context-aware system prompt
+          const scriptContext = transcript
+            ? `\n\nThe user is editing a video with this script/transcript:\n"""${transcript}"""`
+            : "\n\nThe user hasn't transcribed their video yet.";
+
+          const editingContext = `\n\nCurrent editing state:
+- Filter: ${currentFilter || "none"}
+- Text overlays: ${textOverlayCount}
+- Stickers: ${stickerCount}`;
+
+          // Add X posts context if available
+          const xPostsContext = xPosts.length > 0
+            ? `\n\nThe user's recent X posts (for content inspiration and understanding their voice/topics):
+${xPosts.slice(0, 5).map(p => `- "${p.text.substring(0, 100)}${p.text.length > 100 ? '...' : ''}" (${p.likes} likes)`).join('\n')}
+
+Use these posts to suggest video ideas that match their content style and interests.`
+            : "";
+
           await vapi.start({
             model: {
               provider: "openai",
@@ -97,13 +132,25 @@ export function VapiVoiceButton({ assistantId }: VapiVoiceButtonProps) {
               messages: [
                 {
                   role: "system",
-                  content: `You are Snip's helpful video editing assistant. You give tips about:
-- How to edit videos effectively
-- Best practices for short-form content
-- Caption styling tips
-- Filter and effect suggestions
-- Timing and pacing advice
-Keep responses brief and actionable.`,
+                  content: `You are Snip, a friendly and creative video editing assistant for short-form vertical content (TikTok, Reels, Shorts).
+
+Your personality: Enthusiastic but concise, like a helpful creative director who respects the creator's time.
+
+You can help with:
+- Suggesting hooks and improvements based on the script content
+- Recommending filters, text styles, and stickers that match the video's vibe
+- Caption styling tips for maximum engagement
+- Pacing and timing advice
+- Content strategy for short-form video
+
+When the user shares their script, analyze it and proactively suggest:
+1. A strong hook for the first 3 seconds
+2. Relevant emojis/stickers that could enhance key moments
+3. Filter suggestions based on the content mood
+4. Caption emphasis on key words/phrases
+${scriptContext}${editingContext}${xPostsContext}
+
+Keep responses brief (2-3 sentences max) and actionable. Be specific to THEIR content, not generic advice.`,
                 },
               ],
             },
@@ -111,7 +158,9 @@ Keep responses brief and actionable.`,
               provider: "11labs",
               voiceId: "21m00Tcm4TlvDq8ikWAM", // Rachel voice
             },
-            firstMessage: "Hello! I'm Snip, your video editing assistant. Want me to make any changes to your video, or suggest some ideas?",
+            firstMessage: transcript
+              ? "Hey! I just read through your script. Want me to suggest some hooks or effects that could make it pop?"
+              : "Hey! I'm Snip, your video editing assistant. Upload a video and I can help you make it pop!",
           });
         }
       } catch (error) {
@@ -119,7 +168,7 @@ Keep responses brief and actionable.`,
         setIsConnecting(false);
       }
     }
-  }, [vapi, isCallActive, isConnecting, assistantId]);
+  }, [vapi, isCallActive, isConnecting, assistantId, transcript, currentFilter, textOverlayCount, stickerCount]);
 
   const isActive = isCallActive || isConnecting;
 
@@ -247,10 +296,10 @@ Keep responses brief and actionable.`,
                 </div>
               </div>
 
-              {/* Transcript */}
-              {transcript && (
+              {/* Live Transcript */}
+              {liveTranscript && (
                 <div className="bg-white/5 rounded-xl p-3 mb-4">
-                  <p className="text-white/80 text-sm">{transcript}</p>
+                  <p className="text-white/80 text-sm">{liveTranscript}</p>
                 </div>
               )}
 

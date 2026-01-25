@@ -113,9 +113,9 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
         {onOpenTranscript && (
           <button
             onClick={onOpenTranscript}
-            className="lg:hidden px-4 py-2 rounded-full bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border border-[var(--border)] hover:border-[var(--accent)] text-white text-sm font-medium transition-all shadow-[0_2px_0_0_rgba(0,0,0,0.4)] hover:shadow-[0_1px_0_0_rgba(0,0,0,0.4)] hover:translate-y-[1px] active:shadow-none active:translate-y-[2px]"
+            className="lg:hidden px-5 py-2 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm font-semibold transition-all shadow-lg hover:shadow-xl active:scale-95"
           >
-            Transcript
+            See transcript
           </button>
         )}
       </div>

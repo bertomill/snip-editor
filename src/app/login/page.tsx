@@ -110,22 +110,27 @@ export default function LoginPage() {
         {/* Header area with headline */}
         <div className="flex-1 flex flex-col items-center justify-center px-8 pt-16 pb-8">
           <Image
-            src="/branding/icon-transparent.png"
+            src="/snip.jpg"
             alt="Snip"
             width={200}
             height={200}
-            className="w-48 h-48 mb-6"
+            className="w-48 h-48 mb-6 rounded-2xl"
             priority
           />
-          <h1 className="text-3xl sm:text-4xl font-bold text-white text-center leading-tight mb-4">
+          <h2 className="relative text-4xl font-black mb-4">
+            <span className="absolute text-[#00f2ea] -translate-x-[3px] translate-y-[2px]">snip</span>
+            <span className="absolute text-[#ff0050] translate-x-[3px] -translate-y-[2px]">snip</span>
+            <span className="relative text-white">snip</span>
+          </h2>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight mb-3">
             {showEmailForm
               ? (isSignUp ? 'Create your account' : 'Welcome back')
-              : 'Sign up or log in to save your projects'
+              : 'Create viral content in seconds'
             }
           </h1>
           {!showEmailForm && (
             <p className="text-white/60 text-center text-lg">
-              AI-powered video editing
+              AI-powered editing for the next generation of creators
             </p>
           )}
         </div>
@@ -271,18 +276,23 @@ export default function LoginPage() {
         {/* Header area with headline */}
         <div className="flex-1 flex flex-col items-center justify-center px-8 pt-16 pb-8">
           <Image
-            src="/branding/icon-transparent.png"
+            src="/snip.jpg"
             alt="Snip"
             width={280}
             height={280}
-            className="w-64 h-64 mb-8"
+            className="w-64 h-64 mb-8 rounded-3xl"
             priority
           />
-          <h1 className="text-4xl md:text-5xl font-bold text-white text-center leading-tight mb-4">
-            Sign up or log in to save your projects
+          <h2 className="relative text-5xl font-black mb-6">
+            <span className="absolute text-[#00f2ea] -translate-x-[4px] translate-y-[3px]">snip</span>
+            <span className="absolute text-[#ff0050] translate-x-[4px] -translate-y-[3px]">snip</span>
+            <span className="relative text-white">snip</span>
+          </h2>
+          <h1 className="text-3xl md:text-4xl font-bold text-white text-center leading-tight mb-4">
+            Create viral content in seconds
           </h1>
           <p className="text-white/60 text-center text-xl">
-            AI-powered video editing
+            AI-powered editing for the next generation of creators
           </p>
         </div>
 
