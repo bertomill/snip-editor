@@ -10,7 +10,6 @@ interface TimelineHeaderProps {
   showZoomControls?: boolean;
   zoomScale: number;
   setZoomScale: (scale: number) => void;
-  resetZoom: () => void;
   isPlaying?: boolean;
   onPlay?: () => void;
   onPause?: () => void;
@@ -23,7 +22,6 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
   showZoomControls = false,
   zoomScale,
   setZoomScale,
-  resetZoom,
   isPlaying = false,
   onPlay,
   onPause,
@@ -99,12 +97,6 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
             +
           </button>
 
-          <button
-            onClick={resetZoom}
-            className="px-2 h-6 flex items-center justify-center rounded bg-[#282828] hover:bg-[#333] transition-colors text-white text-xs"
-          >
-            Reset
-          </button>
         </div>
       )}
     </div>

@@ -14,6 +14,7 @@ interface TimelineTrackProps {
   onDrag: (clientX: number, clientY: number) => void;
   onDragEnd: () => void;
   isDragging: boolean;
+  onAddContent?: () => void;
 }
 
 export const TimelineTrack: React.FC<TimelineTrackProps> = ({
@@ -25,7 +26,14 @@ export const TimelineTrack: React.FC<TimelineTrackProps> = ({
   onDrag,
   onDragEnd,
   isDragging,
+  onAddContent,
 }) => {
+  // Calculate position for add button (after last item)
+  const lastItemEnd = track.items.length > 0
+    ? Math.max(...track.items.map(item => item.end))
+    : 0;
+  const addButtonLeftPercent = (lastItemEnd / totalDuration) * 100;
+
   return (
     <div
       className="relative border-b border-[#282828] bg-[#181818]"
@@ -44,6 +52,37 @@ export const TimelineTrack: React.FC<TimelineTrackProps> = ({
           isDragging={isDragging}
         />
       ))}
+
+      {/* Add Video button at end of track */}
+      {onAddContent && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddContent();
+          }}
+          className="absolute top-1 bottom-1 flex items-center justify-center gap-1.5 px-3 rounded-lg border-2 border-dashed border-white/30 bg-white/5 hover:bg-white/10 hover:border-white/50 transition-all cursor-pointer group"
+          style={{
+            left: `calc(${addButtonLeftPercent}% + 8px)`,
+            height: `${TIMELINE_CONSTANTS.TRACK_ITEM_HEIGHT}px`,
+          }}
+          aria-label="Add video"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            className="text-white/60 group-hover:text-white/90"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          <span className="text-xs text-white/60 group-hover:text-white/90 whitespace-nowrap">Add Video</span>
+        </button>
+      )}
     </div>
   );
 };

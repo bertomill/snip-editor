@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { MediaFile, MediaType } from '@/types/media';
 import { useUser } from '@/lib/supabase/hooks';
+import { createClient } from '@/lib/supabase/client';
+import { v4 as uuidv4 } from 'uuid';
 
 interface MediaLibraryContextValue {
   mediaFiles: MediaFile[];
@@ -49,31 +51,73 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id]);
 
-  // Upload a new media file
+  // Upload a new media file directly to Supabase (bypasses Vercel's 4.5MB API limit)
   const uploadMedia = useCallback(async (file: File): Promise<MediaFile | null> => {
     if (!user?.id) {
       setError('You must be logged in to upload files');
       return null;
     }
 
+    // Validate file size (100MB max)
+    const maxSize = 100 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setError('File too large. Maximum size is 100MB.');
+      return null;
+    }
+
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      const supabase = createClient();
 
-      const response = await fetch('/api/media/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      // Determine media type
+      const getMediaType = (mimeType: string): MediaType => {
+        if (mimeType.startsWith('video/')) return 'video';
+        if (mimeType.startsWith('image/')) return 'image';
+        if (mimeType.startsWith('audio/')) return 'audio';
+        return 'video';
+      };
 
-      const data = await response.json();
+      const mediaType = getMediaType(file.type);
+      const fileId = uuidv4();
+      const fileExtension = file.name.split('.').pop() || '';
+      const storagePath = `${user.id}/${fileId}.${fileExtension}`;
 
-      if (response.ok && data.file) {
-        setMediaFiles(prev => [data.file, ...prev]);
-        return data.file;
-      } else {
-        setError(data.error || 'Failed to upload file');
+      // Upload directly to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('videos')
+        .upload(storagePath, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        setError('Failed to upload file: ' + uploadError.message);
         return null;
       }
+
+      // Get signed URL
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from('videos')
+        .createSignedUrl(storagePath, 60 * 60 * 24 * 7); // 7 days
+
+      if (signedUrlError) {
+        console.error('Signed URL error:', signedUrlError);
+      }
+
+      // Create media file record
+      const mediaFile: MediaFile = {
+        id: fileId,
+        name: file.name,
+        type: mediaType,
+        url: signedUrlData?.signedUrl || '',
+        size: file.size,
+        userId: user.id,
+        createdAt: new Date().toISOString(),
+        storagePath: storagePath,
+      };
+
+      setMediaFiles(prev => [mediaFile, ...prev]);
+      return mediaFile;
     } catch (err) {
       setError('Failed to upload file');
       console.error('Error uploading file:', err);

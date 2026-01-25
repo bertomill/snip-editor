@@ -40,7 +40,6 @@ export const Timeline: React.FC<TimelineProps> = ({
     zoomScale,
     setZoomScale,
     handleWheelZoom,
-    resetZoom,
   } = useTimelineZoom(timelineRef, currentFrame, fps, totalDuration);
 
   // Initialize interactions hook
@@ -126,14 +125,13 @@ export const Timeline: React.FC<TimelineProps> = ({
   }, [selectedItemIds, internalItemsDelete, onDeleteItems, onSelectedItemsChange]);
 
   return (
-    <div className="timeline-container bg-[var(--background)] flex flex-col h-full overflow-hidden rounded-lg border border-[var(--border)]">
+    <div className="timeline-container bg-[var(--background)] flex flex-col h-full overflow-hidden">
       <TimelineHeader
         totalDuration={compositionDuration}
         currentTime={currentTime}
         showZoomControls={showZoomControls}
         zoomScale={zoomScale}
         setZoomScale={setZoomScale}
-        resetZoom={resetZoom}
         isPlaying={isPlaying}
         onPlay={onPlay}
         onPause={onPause}
@@ -164,31 +162,9 @@ export const Timeline: React.FC<TimelineProps> = ({
             onDragStart={handleDragStart}
             onDrag={handleDrag}
             onDragEnd={handleDragEnd}
+            onAddContent={onAddContent}
           />
         </div>
-
-        {/* Floating Add Content Button - TikTok style */}
-        {onAddContent && (
-          <button
-            onClick={onAddContent}
-            className="absolute right-4 bottom-4 z-50 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg hover:bg-gray-100 active:scale-95 transition-all"
-            aria-label="Add content"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              className="text-black"
-            >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-          </button>
-        )}
       </div>
     </div>
   );

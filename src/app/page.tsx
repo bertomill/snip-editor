@@ -30,6 +30,8 @@ import { ProjectData } from "@/types/project";
 import { ResizableBottomPanel } from "@/components/ResizableBottomPanel";
 import { extractAudioFromVideo, isFFmpegSupported } from "@/lib/audio/extract-audio";
 import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
+import { createClient } from "@/lib/supabase/client";
+import { v4 as uuidv4 } from "uuid";
 
 type AppView = "feed" | "editor";
 type EditorStep = "upload" | "edit" | "export";
@@ -162,6 +164,13 @@ function HomeContent() {
     downloadUrl: string | null;
     error: string | null;
   }>({ status: 'idle', progress: 0, renderId: null, downloadUrl: null, error: null });
+
+  // Export drawer state
+  const [showExportDrawer, setShowExportDrawer] = useState(false);
+  const [exportSettings, setExportSettings] = useState<{
+    resolution: '720p' | '1080p' | '4k';
+    destination: 'device' | 'tiktok' | 'instagram' | 'youtube';
+  }>({ resolution: '1080p', destination: 'device' });
 
   const { createProject, updateProject, projects, refreshProjects } = useProjects();
   const { state: overlayState, loadState: loadOverlayState, resetOverlays } = useOverlay();
@@ -733,7 +742,7 @@ function HomeContent() {
     };
   }, [clips]);
 
-  // Upload a video to Supabase Storage for transcription
+  // Upload a video directly to Supabase Storage (bypasses Vercel's 4.5MB API limit)
   const uploadVideoToStorage = useCallback(async (clipIndex: number, file: File) => {
     try {
       // Update status to uploading
@@ -741,30 +750,47 @@ function HomeContent() {
         idx === clipIndex ? { ...clip, uploadStatus: 'uploading' as const } : clip
       ));
 
-      const formData = new FormData();
-      formData.append('video', file);
+      const supabase = createClient();
 
-      const response = await fetch('/api/upload-video', {
-        method: 'POST',
-        body: formData,
-      });
+      // Get current user (may be null for anonymous)
+      const { data: { user } } = await supabase.auth.getUser();
 
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+      // Generate storage path
+      const timestamp = Date.now();
+      const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+
+      let storagePath: string;
+      if (user) {
+        storagePath = `${user.id}/transcribe/${timestamp}-${sanitizedFilename}`;
+      } else {
+        const sessionId = uuidv4();
+        storagePath = `anonymous/${timestamp}-${sessionId}/${sanitizedFilename}`;
       }
 
-      const data = await response.json();
+      console.log(`[Upload] Uploading directly to Supabase: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+
+      // Upload directly to Supabase Storage (no 4.5MB limit)
+      const { error: uploadError } = await supabase.storage
+        .from('videos')
+        .upload(storagePath, file, {
+          contentType: file.type || 'video/mp4',
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw new Error(`Storage upload failed: ${uploadError.message}`);
+      }
 
       // Update clip with storage path
       setClips(prev => prev.map((clip, idx) =>
         idx === clipIndex ? {
           ...clip,
-          storagePath: data.storagePath,
+          storagePath: storagePath,
           uploadStatus: 'complete' as const
         } : clip
       ));
 
-      console.log(`[Upload] Clip ${clipIndex} uploaded to storage: ${data.storagePath}`);
+      console.log(`[Upload] Clip ${clipIndex} uploaded to storage: ${storagePath}`);
     } catch (error) {
       console.error(`[Upload] Failed to upload clip ${clipIndex}:`, error);
       // Mark as error but don't block - fallback to direct upload
@@ -1092,68 +1118,71 @@ function HomeContent() {
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="md:hidden fixed inset-0 z-[100] bg-[#0A0A0A]"
+                className="md:hidden fixed inset-0 z-[100] bg-[#0A0A0A] overflow-auto"
               >
-                {/* Gradient background */}
-                <div className="absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-[#4A8FE7]/30 via-[#4A8FE7]/10 to-transparent pointer-events-none" />
-
-                {/* Header */}
-                <div className="relative flex items-center justify-between px-4 py-4">
-                  <button
-                    onClick={() => setShowProfilePanel(false)}
-                    className="w-10 h-10 flex items-center justify-center text-white"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
+                {/* Header with back button */}
+                <div className="sticky top-0 z-10 bg-[#0A0A0A]/95 backdrop-blur-sm border-b border-[#1C1C1E]">
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <button
+                      onClick={() => setShowProfilePanel(false)}
+                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#1C1C1E] transition-colors"
+                    >
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <h1 className="text-lg font-semibold text-white">Account</h1>
+                  </div>
                 </div>
 
-                {/* Account Section */}
-                <div className="px-5 pb-4">
-                  <h2 className="text-2xl font-bold text-white mb-4">Account</h2>
-                  <div className="bg-[#1C1C1E] rounded-2xl p-4 flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-full overflow-hidden bg-gradient-to-br from-[#4A8FE7] to-[#5F7BFD] flex items-center justify-center flex-shrink-0">
-                      {user?.user_metadata?.avatar_url ? (
-                        <img
-                          src={user.user_metadata.avatar_url}
-                          alt="Profile"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-white text-xl font-semibold">
-                          {user?.email?.charAt(0).toUpperCase() || '?'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-white font-semibold text-lg truncate">
-                        {user?.user_metadata?.full_name || 'User'}
-                      </p>
-                      <p className="text-[#8E8E93] text-sm truncate">
-                        {user?.email}
-                      </p>
+                {/* User Profile Card */}
+                <div className="p-4">
+                  <div className="bg-[#1C1C1E] rounded-xl p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-[#4A8FE7] flex items-center justify-center flex-shrink-0">
+                        {user?.user_metadata?.avatar_url ? (
+                          <img
+                            src={user.user_metadata.avatar_url}
+                            alt="Profile"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-white text-lg font-semibold">
+                            {user?.email?.charAt(0).toUpperCase() || '?'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-medium truncate">
+                          {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'}
+                        </p>
+                        <p className="text-[#8E8E93] text-sm truncate">
+                          {user?.email}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Menu Items */}
-                <div className="px-5 pt-4">
-                  <div className="space-y-1">
+                <div className="px-4">
+                  <div className="bg-[#1C1C1E] rounded-xl overflow-hidden">
                     {/* Settings */}
                     <button
                       onClick={() => {
                         setShowProfilePanel(false);
                         // router.push('/settings');
                       }}
-                      className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-[#1C1C1E] transition-colors"
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#2C2C2E] transition-colors border-b border-[#2C2C2E]"
                     >
-                      <svg className="w-6 h-6 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <span className="text-white font-medium">Settings</span>
-                      <svg className="w-5 h-5 text-[#636366] ml-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <div className="w-8 h-8 rounded-lg bg-[#2C2C2E] flex items-center justify-center">
+                        <svg className="w-4 h-4 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                      <span className="text-white text-sm flex-1 text-left">Settings</span>
+                      <svg className="w-4 h-4 text-[#636366]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
                     </button>
@@ -1162,39 +1191,44 @@ function HomeContent() {
                     <button
                       onClick={() => {
                         setShowProfilePanel(false);
-                        window.open('https://github.com/anthropics/claude-code/issues', '_blank');
+                        window.open('mailto:support@snip.app', '_blank');
                       }}
-                      className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-[#1C1C1E] transition-colors"
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#2C2C2E] transition-colors"
                     >
-                      <svg className="w-6 h-6 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-                      </svg>
-                      <span className="text-white font-medium">Help & Support</span>
-                      <svg className="w-5 h-5 text-[#636366] ml-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <div className="w-8 h-8 rounded-lg bg-[#2C2C2E] flex items-center justify-center">
+                        <svg className="w-4 h-4 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+                        </svg>
+                      </div>
+                      <span className="text-white text-sm flex-1 text-left">Help & Support</span>
+                      <svg className="w-4 h-4 text-[#636366]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
                     </button>
+                  </div>
 
-                    {/* Divider */}
-                    <div className="my-2 border-t border-[#2C2C2E]" />
-
-                    {/* Sign Out */}
+                  {/* Sign Out - Separate card */}
+                  <div className="mt-4 bg-[#1C1C1E] rounded-xl overflow-hidden">
                     <button
                       onClick={() => {
                         setShowProfilePanel(false);
                         signOut();
                       }}
-                      className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-[#1C1C1E] transition-colors"
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#2C2C2E] transition-colors"
                     >
-                      <svg className="w-6 h-6 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-                      </svg>
-                      <span className="text-white font-medium">Sign Out</span>
-                      <svg className="w-5 h-5 text-[#636366] ml-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
+                      <div className="w-8 h-8 rounded-lg bg-[#2C2C2E] flex items-center justify-center">
+                        <svg className="w-4 h-4 text-[#FF453A]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                        </svg>
+                      </div>
+                      <span className="text-[#FF453A] text-sm flex-1 text-left">Sign Out</span>
                     </button>
                   </div>
+                </div>
+
+                {/* App version at bottom */}
+                <div className="absolute bottom-8 left-0 right-0 text-center">
+                  <p className="text-[#636366] text-xs">Snip v1.0</p>
                 </div>
               </motion.div>
             )}
@@ -1433,7 +1467,7 @@ function HomeContent() {
                 )}
               </button>
               <button
-                onClick={startBackgroundExport}
+                onClick={() => setShowExportDrawer(true)}
                 disabled={exportState.status !== 'idle' && exportState.status !== 'done' && exportState.status !== 'error'}
                 className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-full bg-[#4A8FE7]/90 backdrop-blur-xl text-white font-medium border border-[#4A8FE7]/50 shadow-lg shadow-[#4A8FE7]/25 hover:bg-[#4A8FE7] hover:shadow-[#4A8FE7]/40 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -1488,6 +1522,19 @@ function HomeContent() {
             onRetry={startBackgroundExport}
           />
         )}
+
+        {/* Export Settings Drawer */}
+        <ExportDrawer
+          isOpen={showExportDrawer}
+          onClose={() => setShowExportDrawer(false)}
+          settings={exportSettings}
+          onSettingsChange={setExportSettings}
+          onExport={() => {
+            setShowExportDrawer(false);
+            startBackgroundExport();
+          }}
+          isExporting={exportState.status !== 'idle' && exportState.status !== 'done' && exportState.status !== 'error'}
+        />
       </div>
     </MediaLibraryProvider>
   );
@@ -1608,6 +1655,224 @@ function ExportProgressIndicator({
             Try Again
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Export Settings Drawer Component
+function ExportDrawer({
+  isOpen,
+  onClose,
+  settings,
+  onSettingsChange,
+  onExport,
+  isExporting,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  settings: { resolution: '720p' | '1080p' | '4k'; destination: 'device' | 'tiktok' | 'instagram' | 'youtube' };
+  onSettingsChange: (settings: { resolution: '720p' | '1080p' | '4k'; destination: 'device' | 'tiktok' | 'instagram' | 'youtube' }) => void;
+  onExport: () => void;
+  isExporting: boolean;
+}) {
+  const [showResolutionPicker, setShowResolutionPicker] = useState(false);
+
+  const resolutionOptions = [
+    { value: '720p', label: '720p HD', description: 'Smaller file size' },
+    { value: '1080p', label: '1080p Full HD', description: 'Recommended' },
+    { value: '4k', label: '4K Ultra HD', description: 'Best quality' },
+  ] as const;
+
+  const destinationOptions = [
+    {
+      value: 'device',
+      label: 'Save to device',
+      description: 'Download to your device',
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+        </svg>
+      )
+    },
+    {
+      value: 'tiktok',
+      label: 'Share to TikTok',
+      description: 'Optimized for TikTok',
+      icon: (
+        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/>
+        </svg>
+      ),
+      comingSoon: true
+    },
+    {
+      value: 'instagram',
+      label: 'Share to Instagram',
+      description: 'Optimized for Reels',
+      icon: (
+        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+        </svg>
+      ),
+      comingSoon: true
+    },
+    {
+      value: 'youtube',
+      label: 'Share to YouTube',
+      description: 'Optimized for Shorts',
+      icon: (
+        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+        </svg>
+      ),
+      comingSoon: true
+    },
+  ] as const;
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
+        onClick={onClose}
+      />
+
+      {/* Drawer */}
+      <div className="absolute bottom-0 left-0 right-0 bg-[#1C1C1E] rounded-t-3xl animate-slide-up safe-area-bottom max-h-[85vh] overflow-hidden flex flex-col">
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
+          <div className="w-10 h-1 bg-white/20 rounded-full" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pb-4 border-b border-[#2C2C2E] flex-shrink-0">
+          {/* Resolution Picker */}
+          <button
+            onClick={() => setShowResolutionPicker(!showResolutionPicker)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#2C2C2E] rounded-full text-white text-sm font-medium hover:bg-[#3C3C3E] transition-colors"
+          >
+            {settings.resolution}
+            <svg className={`w-4 h-4 transition-transform ${showResolutionPicker ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          <h2 className="text-white font-semibold text-lg">Export settings</h2>
+
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors"
+          >
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Resolution Picker Dropdown */}
+        {showResolutionPicker && (
+          <div className="absolute top-20 left-4 w-56 bg-[#2C2C2E] border border-white/10 rounded-xl shadow-xl z-10 overflow-hidden animate-scale-in">
+            {resolutionOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => {
+                  onSettingsChange({ ...settings, resolution: option.value });
+                  setShowResolutionPicker(false);
+                }}
+                className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
+                  settings.resolution === option.value
+                    ? 'bg-[#4A8FE7]/20 text-[#4A8FE7]'
+                    : 'text-white hover:bg-white/5'
+                }`}
+              >
+                <div>
+                  <p className="font-medium text-sm">{option.label}</p>
+                  <p className="text-xs text-[#8E8E93]">{option.description}</p>
+                </div>
+                {settings.resolution === option.value && (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Content - scrollable */}
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          {/* Destination Options */}
+          <div className="space-y-3">
+            {destinationOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => !option.comingSoon && onSettingsChange({ ...settings, destination: option.value })}
+                disabled={option.comingSoon}
+                className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all ${
+                  settings.destination === option.value && !option.comingSoon
+                    ? 'bg-white text-black'
+                    : option.comingSoon
+                      ? 'bg-[#2C2C2E] text-white/50 cursor-not-allowed'
+                      : 'bg-[#2C2C2E] text-white hover:bg-[#3C3C3E]'
+                }`}
+              >
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                  settings.destination === option.value && !option.comingSoon
+                    ? 'bg-black/10'
+                    : 'bg-white/10'
+                }`}>
+                  {option.icon}
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="font-medium">{option.label}</p>
+                  <p className={`text-sm ${
+                    settings.destination === option.value && !option.comingSoon
+                      ? 'text-black/60'
+                      : 'text-[#8E8E93]'
+                  }`}>
+                    {option.comingSoon ? 'Coming soon' : option.description}
+                  </p>
+                </div>
+                {settings.destination === option.value && !option.comingSoon && (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Info text */}
+          <p className="text-[#636366] text-xs mt-4 text-center">
+            Video will be exported in 9:16 vertical format
+          </p>
+        </div>
+
+        {/* Export Button */}
+        <div className="px-4 pb-6 pt-4 border-t border-[#2C2C2E] flex-shrink-0">
+          <button
+            onClick={onExport}
+            disabled={isExporting}
+            className="w-full py-4 rounded-xl bg-[#4A8FE7] text-white text-base font-semibold hover:bg-[#3A7FD7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isExporting ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Export Video
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1741,8 +2006,11 @@ function UploadStep({
     <div className="w-full max-w-lg text-center px-4 animate-fade-in-up">
       <p className="label mb-5">Get Started</p>
       <h2 className="text-3xl font-bold mb-3 tracking-tight text-white">Drop your clips</h2>
-      <p className="text-[#8E8E93] mb-10 text-base">
+      <p className="text-[#8E8E93] mb-2 text-base">
         Upload your video clips to begin editing
+      </p>
+      <p className="text-[#636366] mb-10 text-sm">
+        Max file size: 100MB per clip
       </p>
 
       {/* Hidden file input for auto-trigger */}
@@ -1803,13 +2071,13 @@ function UploadStep({
           </div>
 
           {/* Action buttons - TikTok style */}
-          <div className="flex gap-3 justify-center">
+          <div className="flex gap-3 justify-center items-stretch">
             {/* AutoCut with aggressiveness dropdown */}
-            <div className="flex items-center">
+            <div className="flex items-stretch h-12">
               <button
                 onClick={handleAutoCut}
                 disabled={isProcessing}
-                className="flex items-center gap-2 px-5 py-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] border border-[#3C3C3E] rounded-l-full text-white font-medium transition-all disabled:opacity-50"
+                className="flex items-center gap-2 px-5 bg-[#2C2C2E] hover:bg-[#3C3C3E] border border-[#3C3C3E] rounded-l-full text-white font-medium transition-all disabled:opacity-50"
               >
                 <svg className="w-5 h-5 text-[#FF3B30]" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M19 9l-7 7-7-7" />
@@ -1824,7 +2092,7 @@ function UploadStep({
                 value={silenceAggressiveness}
                 onChange={(e) => setSilenceAggressiveness(e.target.value as SilenceDetectionOptions['aggressiveness'])}
                 disabled={isProcessing}
-                className="px-3 py-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] border border-l-0 border-[#3C3C3E] rounded-r-full text-white text-sm font-medium transition-all disabled:opacity-50 cursor-pointer appearance-none"
+                className="px-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] border border-l-0 border-[#3C3C3E] rounded-r-full text-white text-sm font-medium transition-all disabled:opacity-50 cursor-pointer appearance-none"
                 title="Silence removal aggressiveness"
               >
                 <option value="tight">Tight</option>
@@ -1835,7 +2103,7 @@ function UploadStep({
             <button
               onClick={handleNext}
               disabled={isProcessing}
-              className="px-8 py-3 bg-[#FF2D55] hover:bg-[#FF375F] rounded-full text-white font-medium transition-all disabled:opacity-50 flex items-center gap-2"
+              className="h-12 px-8 bg-[#FF2D55] hover:bg-[#FF375F] rounded-full text-white font-medium transition-all disabled:opacity-50 flex items-center gap-2"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="6" cy="6" r="3"/>
@@ -2735,15 +3003,15 @@ function EditStep({
             body: formData,
           });
 
-          // Handle 413 (file too large) specifically - suggest waiting for storage upload
+          // Handle 413 (file too large for direct upload)
           if (response.status === 413) {
             const fileSizeMB = fileToUpload.size / (1024 * 1024);
             if (clip.uploadStatus === 'uploading') {
-              alert(`Clip ${i + 1} (${fileSizeMB.toFixed(1)}MB) is still uploading to storage. Please wait and try again.`);
+              alert(`Clip ${i + 1} is still uploading. Please wait and try again.`);
             } else if (clip.uploadStatus === 'error') {
-              alert(`Clip ${i + 1} is too large (${fileSizeMB.toFixed(1)}MB) and storage upload failed. Try using a shorter clip.`);
+              alert(`Clip ${i + 1} storage upload failed. Please check your connection and try again.`);
             } else {
-              alert(`Clip ${i + 1} is too large (${fileSizeMB.toFixed(1)}MB). Try using a shorter clip.`);
+              alert(`Clip ${i + 1} (${fileSizeMB.toFixed(1)}MB) exceeds the upload limit. Try using a shorter clip.`);
             }
             continue;
           }
@@ -3575,6 +3843,20 @@ function AutoCutOverlay({ status, message, currentClip, totalClips }: {
         {message}
         {status === 'transcribing' && totalClips > 1 && ` (${currentClip}/${totalClips})`}
       </p>
+
+      {/* Encouraging sub-message */}
+      {status === 'preparing' && (
+        <p className="text-[#8E8E93] text-sm mt-2">Your video is almost ready</p>
+      )}
+      {status === 'transcribing' && (
+        <p className="text-[#8E8E93] text-sm mt-2">AI is analyzing your speech</p>
+      )}
+      {status === 'detecting' && (
+        <p className="text-[#8E8E93] text-sm mt-2">Finding the perfect cuts</p>
+      )}
+      {status === 'applying' && (
+        <p className="text-[#8E8E93] text-sm mt-2">Adding the finishing touches</p>
+      )}
 
       {/* Done state with checkmark */}
       {status === 'done' && (

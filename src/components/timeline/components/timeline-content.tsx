@@ -25,6 +25,7 @@ interface TimelineContentProps {
   onDragStart: (item: TimelineItemType, clientX: number, clientY: number, action: "move" | "resize-start" | "resize-end") => void;
   onDrag: (clientX: number, clientY: number) => void;
   onDragEnd: () => void;
+  onAddContent?: () => void;
 }
 
 export const TimelineContent: React.FC<TimelineContentProps> = ({
@@ -42,6 +43,7 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
   onDragStart,
   onDrag,
   onDragEnd,
+  onAddContent,
 }) => {
   const { ghostElement, isValidDrop, isDragging } = useTimelineStore();
   const isScrubbing = useRef(false);
@@ -215,6 +217,7 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
               onDrag={onDrag}
               onDragEnd={onDragEnd}
               isDragging={isDragging}
+              onAddContent={track.id === 'video-track' ? onAddContent : undefined}
             />
           ))}
 

@@ -20,7 +20,11 @@ export default function LoginPage() {
   const router = useRouter()
 
   useEffect(() => {
-    setSupabase(createClient())
+    const client = createClient()
+    setSupabase(client)
+
+    // Warm up Supabase connection - reduces delay on first auth call
+    client.auth.getSession()
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,15 +65,25 @@ export default function LoginPage() {
     if (!supabase) return
     setGoogleLoading(true)
     setError(null)
-    const { error } = await supabase.auth.signInWithOAuth({
+
+    // Use skipBrowserRedirect to get URL immediately, then redirect ourselves
+    // This is faster than waiting for Supabase to redirect
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+        skipBrowserRedirect: true,
       },
     })
+
     if (error) {
       setError(error.message)
       setGoogleLoading(false)
+      return
+    }
+
+    if (data?.url) {
+      window.location.href = data.url
     }
   }
 

@@ -111,14 +111,6 @@ export const useTimelineZoom = (
     [handleZoom]
   );
 
-  const resetZoom = useCallback(() => {
-    const scrollContainer = timelineRef?.current?.parentElement;
-    if (scrollContainer) {
-      scrollContainer.scrollLeft = 0;
-    }
-    setZoomState({ scale: ZOOM_CONSTRAINTS.default, scroll: 0 });
-  }, [timelineRef]);
-
   // Stub methods for compatibility
   const startSliderDrag = useCallback(() => {}, []);
   const endSliderDrag = useCallback(() => {}, []);
@@ -129,7 +121,6 @@ export const useTimelineZoom = (
     setZoomScale,
     handleZoom,
     handleWheelZoom,
-    resetZoom,
     startSliderDrag,
     endSliderDrag,
   };

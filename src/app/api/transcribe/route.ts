@@ -6,6 +6,9 @@ import { tmpdir } from "os";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { cleanupVoice, VoiceCleanupOptions } from "@/lib/audio/voice-cleanup";
+import { detectSilence } from "@/lib/audio/silence-detect";
+import { processSilenceForClip, calculateSilenceStats } from "@/lib/audio/silence-merger";
+import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
 import { downloadFromStorage, deleteFromStorage } from "@/lib/supabase/download";
 
 const execAsync = promisify(exec);
@@ -39,6 +42,10 @@ interface StorageTranscribeRequest {
   noiseReduction?: boolean;
   noiseReductionStrength?: 'light' | 'medium' | 'strong';
   loudnessNormalization?: boolean;
+  /** Enable silence detection for AutoCut (default: true) */
+  detectSilence?: boolean;
+  /** Silence detection aggressiveness (default: 'natural') */
+  silenceAggressiveness?: SilenceDetectionOptions['aggressiveness'];
 }
 
 export async function POST(request: NextRequest) {
@@ -60,6 +67,8 @@ export async function POST(request: NextRequest) {
     let noiseReduction = true;
     let noiseReductionStrength: 'light' | 'medium' | 'strong' = "medium";
     let loudnessNormalization = true;
+    let enableSilenceDetection = true;
+    let silenceAggressiveness: SilenceDetectionOptions['aggressiveness'] = 'natural';
 
     if (isJsonRequest) {
       // New: JSON body with storage path
@@ -103,6 +112,8 @@ export async function POST(request: NextRequest) {
       noiseReduction = body.noiseReduction ?? true;
       noiseReductionStrength = body.noiseReductionStrength ?? "medium";
       loudnessNormalization = body.loudnessNormalization ?? true;
+      enableSilenceDetection = body.detectSilence ?? true;
+      silenceAggressiveness = body.silenceAggressiveness ?? 'natural';
 
     } else {
       // Existing: FormData with video/audio file
@@ -115,6 +126,11 @@ export async function POST(request: NextRequest) {
       noiseReduction = formData.get("noiseReduction") !== "false";
       noiseReductionStrength = (formData.get("noiseReductionStrength") as 'light' | 'medium' | 'strong') || "medium";
       loudnessNormalization = formData.get("loudnessNormalization") !== "false";
+      enableSilenceDetection = formData.get("detectSilence") !== "false";
+      const aggParam = formData.get("silenceAggressiveness") as string | null;
+      if (aggParam && ['tight', 'natural', 'conservative'].includes(aggParam)) {
+        silenceAggressiveness = aggParam as SilenceDetectionOptions['aggressiveness'];
+      }
     }
 
     // Check if we received pre-extracted audio (from client-side FFmpeg)
@@ -204,18 +220,29 @@ export async function POST(request: NextRequest) {
     console.log("Sending audio to Groq Whisper...");
     const startTime = Date.now();
 
-    // Use Groq Whisper with word-level timestamps
-    const transcription = await groq.audio.transcriptions.create({
+    // Run Whisper transcription and silence detection in parallel
+    const whisperPromise = groq.audio.transcriptions.create({
       file: groqAudioFile,
       model: "whisper-large-v3-turbo",
       response_format: "verbose_json",
       timestamp_granularities: ["word", "segment"],
       language: "en",
-    }) as GroqTranscriptionResponse;
+    }) as Promise<GroqTranscriptionResponse>;
+
+    // Only run silence detection if enabled
+    const silencePromise = enableSilenceDetection
+      ? detectSilence(finalAudioPath, 0, { aggressiveness: silenceAggressiveness })
+      : Promise.resolve({ segments: [] as SilenceSegment[], totalDuration: 0, audioDuration: 0 });
+
+    // Wait for both to complete
+    const [transcription, rawSilenceData] = await Promise.all([whisperPromise, silencePromise]);
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`Groq Whisper completed in ${elapsed}s`);
     console.log(`Transcript preview: ${transcription.text?.substring(0, 200)}...`);
+    if (enableSilenceDetection) {
+      console.log(`Silence detection found ${rawSilenceData.segments.length} raw segments`);
+    }
 
     // Convert Groq response to our segment format
     // Prefer word-level timestamps for more accurate segments
@@ -250,10 +277,35 @@ export async function POST(request: NextRequest) {
       end: w.end,
     }));
 
+    // Process silence data: merge FFmpeg detection with Whisper word gaps
+    let silenceSegments: SilenceSegment[] = [];
+    let totalSilenceDuration = 0;
+    const audioDuration = rawSilenceData.audioDuration;
+
+    if (enableSilenceDetection && words.length > 0) {
+      // Merge FFmpeg silence with Whisper word gaps for higher accuracy
+      silenceSegments = processSilenceForClip(
+        rawSilenceData.segments,
+        words,
+        0, // clipIndex is 0 for single clip transcription
+        silenceAggressiveness
+      );
+
+      const stats = calculateSilenceStats(silenceSegments);
+      totalSilenceDuration = stats.totalSilence;
+
+      console.log(`[Transcribe] Merged silence segments: ${silenceSegments.length}`);
+      console.log(`[Transcribe] Total silence: ${totalSilenceDuration.toFixed(2)}s (${((totalSilenceDuration / audioDuration) * 100).toFixed(1)}% of audio)`);
+    }
+
     return NextResponse.json({
       transcript: transcription.text,
       segments,
       words,  // Word-level timestamps for script-driven editing
+      // Silence detection data for AutoCut
+      silenceSegments,
+      totalSilenceDuration,
+      audioDuration,
     });
   } catch (error) {
     console.error("Transcription error:", error);
