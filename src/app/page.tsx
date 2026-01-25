@@ -184,7 +184,7 @@ function HomeContent() {
   }>({ resolution: '1080p', destination: 'device' });
 
   const { createProject, updateProject, projects, refreshProjects } = useProjects();
-  const { state: overlayState, loadState: loadOverlayState, resetOverlays } = useOverlay();
+  const { state: overlayState, loadState: loadOverlayState, resetOverlays, addTextOverlay, addSticker } = useOverlay();
   const { user } = useUser();
   const signOut = useSignOut();
   const router = useRouter();
@@ -707,6 +707,7 @@ function HomeContent() {
             filename: clip.file!.name,
             duration: clip.duration,
             volume: clip.volume ?? 1,
+            silenceSegments: clip.silenceSegments || [],
           };
         })
       );
@@ -1205,28 +1206,35 @@ function HomeContent() {
             >
               {/* Drawer Header with Snip Logo and Close Button */}
               <div className="flex items-center justify-between px-5 py-4">
-                {/* Snip Logo with Swoosh Effect */}
-                <motion.div
-                  className="cursor-pointer font-bold text-3xl tracking-widest text-white italic"
-                  style={{
-                    textShadow: `
-                      2px 2px 0px #07bccc,
-                      4px 4px 0px #e601c0,
-                      6px 6px 0px #e9019a,
-                      8px 8px 0px #f40468,
-                      12px 12px 6px rgba(244, 4, 104, 0.3)
-                    `,
-                  }}
-                  whileHover={{
-                    textShadow: "none",
-                  }}
-                  transition={{
-                    duration: 0.2,
-                    ease: "easeOut",
-                  }}
-                >
-                  snip
-                </motion.div>
+                {/* Snip Mascot and Logo */}
+                <div className="flex items-center gap-2">
+                  <img
+                    src="/snip-removebg.png"
+                    alt="Snip mascot"
+                    className="w-20 h-20 object-contain"
+                  />
+                  <motion.div
+                    className="cursor-pointer font-bold text-3xl tracking-widest text-white italic leading-none flex items-center"
+                    style={{
+                      textShadow: `
+                        2px 2px 0px #07bccc,
+                        4px 4px 0px #e601c0,
+                        6px 6px 0px #e9019a,
+                        8px 8px 0px #f40468,
+                        12px 12px 6px rgba(244, 4, 104, 0.3)
+                      `,
+                    }}
+                    whileHover={{
+                      textShadow: "none",
+                    }}
+                    transition={{
+                      duration: 0.2,
+                      ease: "easeOut",
+                    }}
+                  >
+                    snip
+                  </motion.div>
+                </div>
 
                 {/* Close Button */}
                 <button
@@ -1262,9 +1270,9 @@ function HomeContent() {
                 />
               </div>
 
-              {/* Connect to Socials Section */}
+              {/* Let Snip get to know you Section */}
               <div className="px-4 py-4 border-t border-[var(--border)]">
-                <p className="text-[#636366] text-xs font-medium uppercase tracking-wider mb-3">Connect to Socials</p>
+                <p className="text-[#636366] text-xs font-medium uppercase tracking-wider mb-3">Let Snip get to know you</p>
                 <div className="space-y-1">
                   {/* YouTube */}
                   <button
@@ -1555,7 +1563,7 @@ function HomeContent() {
 
         <div className="min-h-screen flex flex-col bg-canva-gradient pb-24 md:pb-0 relative">
         <header className="z-[200] flex items-center justify-between px-3 sm:px-8 pt-4 pb-2 sm:py-4 bg-transparent fixed top-0 left-0 right-0">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
             {/* Hamburger menu for projects */}
             <button
               onClick={() => setShowProjectsDrawer(true)}
@@ -1566,6 +1574,18 @@ function HomeContent() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
+            {/* New Project button - only shown when editing */}
+            {step === "edit" && (
+              <button
+                onClick={handleNewProject}
+                className="p-2 rounded-lg text-white hover:bg-white/10 transition-colors"
+                title="New Project"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            )}
           </div>
           {step === "edit" && (
             <div className="flex items-center gap-1.5 sm:gap-3">
@@ -1628,6 +1648,7 @@ function HomeContent() {
               setSilenceAggressiveness={setSilenceAggressiveness}
               customInstructions={customInstructions}
               setCustomInstructions={setCustomInstructions}
+              user={user}
             />
           )}
           {step === "edit" && (
@@ -2052,6 +2073,7 @@ function UploadStep({
   setSilenceAggressiveness,
   customInstructions,
   setCustomInstructions,
+  user,
 }: {
   onFilesSelected: (files: File[], autoCut?: boolean) => void;
   autoTrigger?: boolean;
@@ -2059,10 +2081,13 @@ function UploadStep({
   setSilenceAggressiveness: (value: SilenceDetectionOptions['aggressiveness']) => void;
   customInstructions: string;
   setCustomInstructions: (value: string) => void;
+  user: import('@supabase/supabase-js').User | null;
 }) {
+  const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasTriggered = useRef(false);
   const clipsScrollRef = useRef<HTMLDivElement>(null);
@@ -2089,6 +2114,15 @@ function UploadStep({
       }, 100);
     }
   }, [autoTrigger]);
+
+  // Handle upload button click - require authentication
+  const handleUploadClick = () => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    fileInputRef.current?.click();
+  };
 
   // Generate thumbnail and get duration for a video file
   const processFile = async (file: File): Promise<SelectedFile> => {
@@ -2259,7 +2293,7 @@ function UploadStep({
       {/* Upload button - primary action with swoosh effect */}
       <div className="mb-6">
         <motion.button
-          onClick={() => fileInputRef.current?.click()}
+          onClick={handleUploadClick}
           className="relative w-full max-w-xs px-8 py-4 bg-gradient-to-br from-[#FF6B9F] via-[#C44FE2] to-[#6B5BFF] text-white font-bold text-lg rounded-2xl flex items-center justify-center gap-3 mx-auto cursor-pointer tracking-wide"
           initial={{
             boxShadow: `
@@ -2356,7 +2390,7 @@ function UploadStep({
             {/* Add more button */}
             {!isProcessing && (
               <button
-                onClick={() => fileInputRef.current?.click()}
+                onClick={handleUploadClick}
                 className="flex-shrink-0 w-20 h-28 rounded-lg bg-white/5 border border-dashed border-white/20 hover:bg-white/10 hover:border-white/30 transition-all flex flex-col items-center justify-center gap-1 group"
               >
                 <svg className="w-5 h-5 text-white/40 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2397,17 +2431,7 @@ function UploadStep({
               />
               <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
                 <svg className="w-5 h-5 text-[#636366]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
-              <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
-                <svg className="w-5 h-5 text-[#636366]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                </svg>
-              </button>
-              <button className="w-8 h-8 bg-[var(--accent)] hover:bg-[var(--accent-hover)] rounded-full flex items-center justify-center transition-colors">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
                 </svg>
               </button>
             </div>
@@ -4251,6 +4275,43 @@ function EditStep({
               // TODO: Open add content menu (clips, text, stickers, etc.)
               console.log('Add content clicked');
             }}
+            onAddText={() => {
+              const newTextOverlay = {
+                id: `text-${Date.now()}`,
+                text: 'New Text',
+                position: { x: 50, y: 50 },
+                style: {
+                  fontFamily: 'Inter',
+                  fontSize: 32,
+                  fontWeight: 700,
+                  color: '#FFFFFF',
+                  backgroundColor: 'transparent',
+                  textAlign: 'center' as const,
+                },
+                animation: 'none',
+                startTime: currentTime,
+                endTime: Math.min(currentTime + 3, totalDuration),
+              };
+              addTextOverlay(newTextOverlay);
+            }}
+            onAddSticker={() => {
+              const newSticker = {
+                id: `sticker-${Date.now()}`,
+                emoji: '⭐',
+                position: { x: 50, y: 30 },
+                size: 64,
+                startTime: currentTime,
+                endTime: Math.min(currentTime + 3, totalDuration),
+              };
+              addSticker(newSticker);
+            }}
+            onAddMedia={() => {
+              // Trigger the file input for adding more video clips
+              const fileInput = document.querySelector('input[type="file"][accept*="video"]') as HTMLInputElement;
+              if (fileInput) {
+                fileInput.click();
+              }
+            }}
             onOpenTranscript={() => setShowTranscriptDrawer(true)}
             onUndo={handleUndo}
             onRedo={handleRedo}
@@ -4302,19 +4363,46 @@ function RollingLoadingMessageCompact() {
   return <VideoProcessingLoaderCompact stage="transcribing" className="text-sm text-white" />;
 }
 
+// Seamless looping video component
+function SeamlessLoopVideo({ src, className }: { src: string; className?: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleTimeUpdate = () => {
+      // When video is within 0.1 seconds of ending, seek back to start
+      if (video.duration - video.currentTime < 0.1) {
+        video.currentTime = 0;
+      }
+    };
+
+    video.addEventListener('timeupdate', handleTimeUpdate);
+    return () => video.removeEventListener('timeupdate', handleTimeUpdate);
+  }, []);
+
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      autoPlay
+      muted
+      playsInline
+      className={className}
+    />
+  );
+}
+
 // Uploading Overlay Component - Eddie working animation
 function UploadingOverlay({ progress }: { progress: number }) {
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10">
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1a2e] z-10">
       {/* Loading video animation */}
       <div className="relative mb-6">
-        <video
-          src="/snip-loading.mp4"
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="w-72 h-72 object-contain"
+        <SeamlessLoopVideo
+          src="/snip-loading-square.mp4"
+          className="w-96 h-96 object-contain"
         />
       </div>
 
@@ -4360,16 +4448,12 @@ function AutoCutOverlay({ status, message, currentClip, totalClips }: {
   const progress = getProgress();
 
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10">
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1a2e] z-10">
       {/* Loading video animation */}
       <div className="relative mb-6">
-        <video
-          src="/snip-loading.mp4"
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="w-72 h-72 object-contain"
+        <SeamlessLoopVideo
+          src="/snip-loading-square.mp4"
+          className="w-96 h-96 object-contain"
         />
       </div>
 
@@ -4620,7 +4704,7 @@ function TranscriptDrawer({
   deletedPauseIds: Set<string>;
   handleRestoreAll: () => void;
 }) {
-  const [drawerHeight, setDrawerHeight] = useState(50); // percentage of viewport height
+  const [drawerHeight, setDrawerHeight] = useState(85); // percentage of viewport height - start fully expanded
   const isDragging = useRef(false);
   const startY = useRef(0);
   const startHeight = useRef(50);
@@ -4674,7 +4758,7 @@ function TranscriptDrawer({
 
       {/* Semi-transparent drawer that slides up over video */}
       <div
-        className="relative w-full bg-black/50 backdrop-blur-xl rounded-t-2xl p-4 overflow-hidden animate-slide-up flex flex-col"
+        className="relative w-full bg-black/30 backdrop-blur-xl rounded-t-2xl p-4 overflow-hidden animate-slide-up flex flex-col"
         style={{
           boxShadow: '0 -4px 30px rgba(0,0,0,0.3)',
           height: `${drawerHeight}vh`,

@@ -15,12 +15,24 @@ import {
   cutVideoBufferSegments,
 } from "@/lib/renderer/video-cutter";
 
+interface SilenceSegment {
+  id: string;
+  start: number;
+  end: number;
+  clipIndex: number;
+  source: 'whisper' | 'ffmpeg' | 'merged';
+  confidence: number;
+  duration: number;
+  type: 'boundary' | 'mid';
+}
+
 interface RenderRequestBody {
   clips: {
     data: string; // Base64 encoded video data
     filename: string;
     duration: number; // seconds
     volume?: number; // Audio volume (0-1, default 1)
+    silenceSegments?: SilenceSegment[]; // Detected silence segments to remove
   }[];
   segments: TranscriptSegment[];
   deletedSegmentIndices: number[];
@@ -127,6 +139,54 @@ function clipHasDeletedPauses(
   return false;
 }
 
+/**
+ * Get deleted ranges from silence segments
+ * Silence segments already contain start/end times, so we just extract them
+ */
+function getSilenceRangesForClip(
+  silenceSegments: SilenceSegment[] | undefined,
+  deletedPauseIds: Set<string>,
+  clipIndex: number
+): TimeSegment[] {
+  if (!silenceSegments || silenceSegments.length === 0) {
+    return [];
+  }
+
+  const ranges: TimeSegment[] = [];
+
+  for (const silence of silenceSegments) {
+    // Check if this silence was marked for deletion
+    // AutoCut uses format: silence-{clipIndex}-{silenceId}
+    const silenceId = `silence-${clipIndex}-${silence.id}`;
+    if (deletedPauseIds.has(silenceId)) {
+      ranges.push({ start: silence.start, end: silence.end });
+    }
+  }
+
+  return ranges;
+}
+
+/**
+ * Check if any silences from a clip were deleted
+ */
+function clipHasDeletedSilences(
+  silenceSegments: SilenceSegment[] | undefined,
+  deletedPauseIds: Set<string>,
+  clipIndex: number
+): boolean {
+  if (!silenceSegments || silenceSegments.length === 0) {
+    return false;
+  }
+
+  for (const silence of silenceSegments) {
+    const silenceId = `silence-${clipIndex}-${silence.id}`;
+    if (deletedPauseIds.has(silenceId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 
 /**
  * POST /api/render
@@ -197,23 +257,29 @@ export async function POST(request: NextRequest) {
         console.log(`✅ Converted to ${filename}`);
       }
 
-      // Cut video segments for deleted words and pauses
+      // Cut video segments for deleted words, pauses, and silence segments
       const hasDeletedWords = words.length > 0 && clipHasDeletedWords(i, words, deletedWordIds);
       const hasDeletedPauses = words.length > 0 && clipHasDeletedPauses(i, words, deletedPauseIds);
+      const hasDeletedSilences = clipHasDeletedSilences(clip.silenceSegments, deletedPauseIds, i);
 
-      if (hasDeletedWords || hasDeletedPauses) {
+      if (hasDeletedWords || hasDeletedPauses || hasDeletedSilences) {
         // Get deleted ranges from words
         const wordRanges = hasDeletedWords
           ? getDeletedRangesForClip(i, words, deletedWordIds)
           : [];
 
-        // Get deleted ranges from pauses (jump cuts)
+        // Get deleted ranges from pauses (jump cuts based on word gaps)
         const pauseRanges = hasDeletedPauses
           ? getDeletedPauseRangesForClip(i, words, deletedPauseIds)
           : [];
 
+        // Get deleted ranges from silence segments (FFmpeg + Whisper detected)
+        const silenceRanges = hasDeletedSilences
+          ? getSilenceRangesForClip(clip.silenceSegments, deletedPauseIds, i)
+          : [];
+
         // Merge all deleted ranges
-        const allDeletedRanges = [...wordRanges, ...pauseRanges];
+        const allDeletedRanges = [...wordRanges, ...pauseRanges, ...silenceRanges];
         const mergedDeleted = mergeTimeRanges(allDeletedRanges);
         deletedRangesByClip.set(i, mergedDeleted);
 
@@ -225,7 +291,7 @@ export async function POST(request: NextRequest) {
         }
 
         const totalCutDuration = mergedDeleted.reduce((acc, r) => acc + (r.end - r.start), 0);
-        console.log(`✂️ Cutting clip ${i}: removing ${totalCutDuration.toFixed(2)}s across ${mergedDeleted.length} ranges (${wordRanges.length} words, ${pauseRanges.length} pauses)`);
+        console.log(`✂️ Cutting clip ${i}: removing ${totalCutDuration.toFixed(2)}s across ${mergedDeleted.length} ranges (${wordRanges.length} words, ${pauseRanges.length} pauses, ${silenceRanges.length} silences)`);
 
         const cutResult = await cutVideoBufferSegments(buffer, keepSegments, filename);
         buffer = Buffer.from(cutResult.buffer);

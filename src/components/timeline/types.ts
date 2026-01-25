@@ -50,8 +50,11 @@ export interface TimelineProps {
   onPlay?: () => void;
   onPause?: () => void;
   showPlaybackControls?: boolean;
-  // Add content button
+  // Add content buttons
   onAddContent?: () => void;
+  onAddText?: () => void;
+  onAddSticker?: () => void;
+  onAddMedia?: () => void;
   // Transcript button
   onOpenTranscript?: () => void;
   // Undo/Redo

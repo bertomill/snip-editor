@@ -32,6 +32,9 @@ export const Timeline: React.FC<TimelineProps> = ({
   onPause,
   showPlaybackControls = false,
   onAddContent,
+  onAddText,
+  onAddSticker,
+  onAddMedia,
   onOpenTranscript,
   onUndo,
   onRedo,
@@ -193,6 +196,9 @@ export const Timeline: React.FC<TimelineProps> = ({
             onDrag={handleDrag}
             onDragEnd={handleDragEnd}
             onAddContent={onAddContent}
+            onAddText={onAddText}
+            onAddSticker={onAddSticker}
+            onAddMedia={onAddMedia}
           />
         </div>
       </div>

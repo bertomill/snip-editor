@@ -106,7 +106,7 @@ export default function LoginPage() {
   return (
     <>
       {/* Mobile View - Calm Style */}
-      <div className="lg:hidden min-h-screen bg-gradient-to-b from-[#0f1729] via-[#1a2744] via-60% to-[#e8a87c]/30 flex flex-col">
+      <div className="lg:hidden min-h-screen bg-[#161b2e] flex flex-col">
         {/* Header area with headline */}
         <div className="flex-1 flex flex-col items-center justify-center px-8 pt-16 pb-8">
           <Image
@@ -118,8 +118,8 @@ export default function LoginPage() {
             priority
           />
           <h2 className="relative text-4xl font-black mb-4">
-            <span className="absolute text-[#00f2ea] -translate-x-[3px] translate-y-[2px]">snip</span>
-            <span className="absolute text-[#ff0050] translate-x-[3px] -translate-y-[2px]">snip</span>
+            <span className="absolute text-[#00f2ea] glitch-text-cyan">snip</span>
+            <span className="absolute text-[#ff0050] glitch-text-pink">snip</span>
             <span className="relative text-white">snip</span>
           </h2>
           <h1 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight mb-3">
@@ -272,7 +272,7 @@ export default function LoginPage() {
       </div>
 
       {/* Desktop View - Clean Centered Layout */}
-      <div className="hidden lg:flex min-h-screen bg-gradient-to-b from-[#0f1729] via-[#1a2744] via-60% to-[#e8a87c]/30 flex-col">
+      <div className="hidden lg:flex min-h-screen bg-[#161b2e] flex-col">
         {/* Header area with headline */}
         <div className="flex-1 flex flex-col items-center justify-center px-8 pt-16 pb-8">
           <Image
@@ -284,8 +284,8 @@ export default function LoginPage() {
             priority
           />
           <h2 className="relative text-5xl font-black mb-6">
-            <span className="absolute text-[#00f2ea] -translate-x-[4px] translate-y-[3px]">snip</span>
-            <span className="absolute text-[#ff0050] translate-x-[4px] -translate-y-[3px]">snip</span>
+            <span className="absolute text-[#00f2ea] glitch-text-cyan">snip</span>
+            <span className="absolute text-[#ff0050] glitch-text-pink">snip</span>
             <span className="relative text-white">snip</span>
           </h2>
           <h1 className="text-3xl md:text-4xl font-bold text-white text-center leading-tight mb-4">

@@ -362,6 +362,29 @@ textarea:focus-visible {
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
+/* TikTok-style glitch text animation */
+@keyframes glitch-cyan {
+  0%, 100% { transform: translate(-3px, 2px); }
+  25% { transform: translate(-4px, 1px); }
+  50% { transform: translate(-2px, 3px); }
+  75% { transform: translate(-3px, 2px); }
+}
+
+@keyframes glitch-pink {
+  0%, 100% { transform: translate(3px, -2px); }
+  25% { transform: translate(2px, -3px); }
+  50% { transform: translate(4px, -1px); }
+  75% { transform: translate(3px, -2px); }
+}
+
+.glitch-text-cyan {
+  animation: glitch-cyan 2s ease-in-out infinite;
+}
+
+.glitch-text-pink {
+  animation: glitch-pink 2s ease-in-out infinite;
+}
+
 /* Progress bar glow effect */
 .progress-glow {
   box-shadow: 0 0 10px var(--accent-glow), 0 0 20px var(--accent-muted);
