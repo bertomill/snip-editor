@@ -52,7 +52,9 @@ async function loadFFmpeg(onProgress?: (progress: number) => void): Promise<FFmp
       });
 
       ffmpeg.on('progress', ({ progress }) => {
-        onProgress?.(progress * 100);
+        // Clamp progress to valid range (FFmpeg can report negative/huge values during metadata parsing)
+        const validProgress = Math.max(0, Math.min(1, progress));
+        onProgress?.(validProgress * 100);
       });
 
       // Load FFmpeg core from CDN using direct URLs

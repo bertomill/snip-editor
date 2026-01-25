@@ -17,7 +17,16 @@ import { MobileTextDrawer } from '@/components/overlays/MobileTextDrawer'
 import { MobileCaptionsDrawer } from '@/components/overlays/MobileCaptionsDrawer'
 import { HookSuggestionsPanel } from '@/components/HookSuggestionsPanel'
 
-type PanelType = 'text' | 'stickers' | 'filters' | 'audio' | 'cuts' | 'captions' | 'suggestions' | null;
+type PanelType = 'text' | 'stickers' | 'filters' | 'audio' | 'cuts' | 'captions' | 'suggestions' | 'xposts' | null;
+
+interface XPost {
+  id: string;
+  text: string;
+  createdAt: string;
+  likes: number;
+  retweets: number;
+  replies: number;
+}
 
 interface SidebarProps {
   onNavigateHome?: () => void;
@@ -61,6 +70,9 @@ export function Sidebar({
   const [activePanel, setActivePanel] = useState<PanelType>(null)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(true)
+  const [xPosts, setXPosts] = useState<XPost[]>([])
+  const [xPostsLoading, setXPostsLoading] = useState(false)
+  const [xPostsError, setXPostsError] = useState<string | null>(null)
 
   // Load theme from localStorage on mount
   useEffect(() => {
@@ -83,6 +95,32 @@ export function Sidebar({
       localStorage.setItem('snip-theme', 'light')
     }
   }
+
+  // Fetch X posts
+  const fetchXPosts = async () => {
+    setXPostsLoading(true)
+    setXPostsError(null)
+    try {
+      const response = await fetch('/api/x/posts')
+      const data = await response.json()
+      if (!response.ok) {
+        setXPostsError(data.error || 'Failed to fetch posts')
+        return
+      }
+      setXPosts(data.posts || [])
+    } catch {
+      setXPostsError('Failed to fetch posts')
+    } finally {
+      setXPostsLoading(false)
+    }
+  }
+
+  // Fetch X posts when panel opens
+  useEffect(() => {
+    if (activePanel === 'xposts' && xPosts.length === 0 && !xPostsLoading) {
+      fetchXPosts()
+    }
+  }, [activePanel])
 
   // Get overlay context for captions, overlays, and transitions
   const { state: overlayState, toggleCaptionPreview, addTextOverlay, addSticker, setFilter, setAudioSettings, updateTransition, removeTransition, setTransitions, setCaptionTemplate } = useOverlay()
@@ -223,6 +261,14 @@ export function Sidebar({
             <span className="text-[10px] font-medium text-[#4A8FE7]">Create</span>
           </button>
 
+          {/* X Posts */}
+          <NavButton
+            icon={<XIcon />}
+            label="X Posts"
+            onClick={() => togglePanel('xposts')}
+            active={activePanel === 'xposts'}
+          />
+
         </nav>
 
         {/* Feedback and Light Mode at bottom */}
@@ -298,6 +344,17 @@ export function Sidebar({
         <HookSuggestionsPanel
           transcript={transcript || ''}
           segments={transcriptSegments || []}
+          onClose={() => setActivePanel(null)}
+        />
+      )}
+
+      {/* X Posts Panel */}
+      {activePanel === 'xposts' && (
+        <XPostsPanel
+          posts={xPosts}
+          loading={xPostsLoading}
+          error={xPostsError}
+          onRefresh={fetchXPosts}
           onClose={() => setActivePanel(null)}
         />
       )}
@@ -1614,5 +1671,135 @@ function SunIcon() {
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
     </svg>
+  )
+}
+
+function XIcon() {
+  return (
+    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  )
+}
+
+// X Posts Panel Component
+function XPostsPanel({
+  posts,
+  loading,
+  error,
+  onRefresh,
+  onClose,
+}: {
+  posts: XPost[]
+  loading: boolean
+  error: string | null
+  onRefresh: () => void
+  onClose: () => void
+}) {
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  return (
+    <div className="hidden md:block fixed left-[72px] top-0 bottom-0 w-[320px] bg-[#1C1C1E] border-r border-[var(--border-subtle)] z-40 animate-slide-right overflow-hidden">
+      {/* Panel Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)]">
+        <div className="flex items-center gap-2">
+          <XIcon />
+          <h3 className="text-sm font-semibold text-white">Recent Posts</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+            title="Refresh"
+          >
+            <svg className={`w-4 h-4 text-white/60 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Panel Content */}
+      <div className="p-4 overflow-y-auto h-[calc(100%-52px)]">
+        {loading && posts.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-8 h-8 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin mb-3" />
+            <p className="text-sm text-[#8E8E93]">Loading posts...</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-center">
+            <p className="text-red-400 text-sm mb-2">{error}</p>
+            {error.includes('not connected') && (
+              <p className="text-[#8E8E93] text-xs">Connect your X account in settings to view posts.</p>
+            )}
+          </div>
+        )}
+
+        {!loading && !error && posts.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-12 h-12 rounded-full bg-[#2C2C2E] flex items-center justify-center mb-3">
+              <XIcon />
+            </div>
+            <p className="text-sm text-white mb-1">No posts yet</p>
+            <p className="text-xs text-[#8E8E93]">Your recent X posts will appear here.</p>
+          </div>
+        )}
+
+        {posts.length > 0 && (
+          <div className="space-y-3">
+            {posts.map((post) => (
+              <div
+                key={post.id}
+                className="p-3 bg-[#2C2C2E] rounded-xl hover:bg-[#333] transition-colors"
+              >
+                <p className="text-sm text-white mb-2 line-clamp-3">{post.text}</p>
+                <div className="flex items-center justify-between text-[10px] text-[#8E8E93]">
+                  <span>{formatDate(post.createdAt)}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                      </svg>
+                      {post.likes}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M23.77 15.67c-.292-.293-.767-.293-1.06 0l-2.22 2.22V7.65c0-2.068-1.683-3.75-3.75-3.75h-5.85c-.414 0-.75.336-.75.75s.336.75.75.75h5.85c1.24 0 2.25 1.01 2.25 2.25v10.24l-2.22-2.22c-.293-.293-.768-.293-1.06 0s-.294.768 0 1.06l3.5 3.5c.145.147.337.22.53.22s.383-.072.53-.22l3.5-3.5c.294-.292.294-.767 0-1.06zm-10.66 3.28H7.26c-1.24 0-2.25-1.01-2.25-2.25V6.46l2.22 2.22c.148.147.34.22.532.22s.384-.073.53-.22c.293-.293.293-.768 0-1.06l-3.5-3.5c-.293-.294-.768-.294-1.06 0l-3.5 3.5c-.294.292-.294.767 0 1.06s.767.293 1.06 0l2.22-2.22V16.7c0 2.068 1.683 3.75 3.75 3.75h5.85c.414 0 .75-.336.75-.75s-.337-.75-.75-.75z" />
+                      </svg>
+                      {post.retweets}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M14.046 2.242l-4.148-.01h-.002c-4.374 0-7.8 3.427-7.8 7.802 0 4.098 3.186 7.206 7.465 7.37v3.828c0 .108.044.286.12.403.142.225.384.347.632.347.138 0 .277-.038.402-.118.264-.168 6.473-4.14 8.088-5.506 1.902-1.61 3.04-3.97 3.043-6.312v-.017c-.006-4.367-3.43-7.787-7.8-7.788zm3.787 12.972c-1.134.96-4.862 3.405-6.772 4.643V16.67c0-.414-.335-.75-.75-.75h-.396c-3.66 0-6.318-2.476-6.318-5.886 0-3.534 2.768-6.302 6.3-6.302l4.147.01h.002c3.532 0 6.3 2.766 6.302 6.296-.003 1.91-.942 3.844-2.514 5.176z" />
+                      </svg>
+                      {post.replies}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
