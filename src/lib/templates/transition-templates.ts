@@ -241,6 +241,309 @@ const speedRamp: TransitionTemplate = {
 };
 
 /**
+ * Zoom Blur - Heavy dramatic zoom with intense motion blur
+ * Very eye-catching for demos
+ */
+const zoomBlur: TransitionTemplate = {
+  id: 'zoom-blur',
+  name: 'Zoom Blur',
+  description: 'Dramatic zoom with heavy blur',
+  durationFrames: 8,
+  apply: (frame, duration, intensity) => {
+    // Aggressive zoom curve
+    const maxScale = 1 + (0.25 * intensity); // Up to 1.25x zoom
+    const scale = interpolate(
+      frame,
+      [0, duration * 0.3, duration * 0.5, duration],
+      [1, maxScale, maxScale * 0.95, 1],
+      {
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+        easing: Easing.out(Easing.back(1.5)),
+      }
+    );
+
+    // Heavy motion blur at peak
+    const blurAmount = interpolate(
+      frame,
+      [0, duration * 0.3, duration * 0.6, duration],
+      [0, 15 * intensity, 8 * intensity, 0],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+
+    return {
+      transform: `scale(${scale})`,
+      filter: `blur(${blurAmount}px)`,
+    };
+  },
+};
+
+/**
+ * RGB Split - Color channel separation effect
+ * Creates that viral glitchy TikTok look
+ */
+const rgbSplit: TransitionTemplate = {
+  id: 'rgb-split',
+  name: 'RGB Split',
+  description: 'Color channel separation',
+  durationFrames: 6,
+  apply: (frame, duration, intensity) => {
+    const splitAmount = interpolate(
+      frame,
+      [0, duration * 0.4, duration],
+      [0, 1, 0],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+
+    // Create pseudo-RGB split using hue rotation and position shifts
+    const xShift = 8 * intensity * splitAmount * (frame % 2 === 0 ? 1 : -1);
+    const scale = 1 + (0.03 * splitAmount * intensity);
+
+    return {
+      transform: `translateX(${xShift}px) scale(${scale})`,
+      filter: `saturate(${1 + splitAmount * 0.8}) contrast(${1 + splitAmount * 0.2}) hue-rotate(${splitAmount * 15 * intensity}deg)`,
+    };
+  },
+  overlay: (frame, duration, intensity) => {
+    const progress = interpolate(
+      frame,
+      [0, duration * 0.4, duration],
+      [0, 1, 0],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+
+    // Rapid color flashes
+    const colors = ['#FF0080', '#00FFFF', '#FF0000', '#00FF00'];
+    const colorIndex = Math.floor(frame * 2) % colors.length;
+
+    return {
+      visible: progress > 0.3 && frame % 2 === 0,
+      backgroundColor: colors[colorIndex],
+      opacity: 0.15 * intensity * progress,
+    };
+  },
+};
+
+/**
+ * Spin Zoom - Rotation combined with zoom
+ * Very dramatic, great for high-energy content
+ */
+const spinZoom: TransitionTemplate = {
+  id: 'spin-zoom',
+  name: 'Spin Zoom',
+  description: 'Rotation + zoom combo',
+  durationFrames: 10,
+  apply: (frame, duration, intensity) => {
+    // Quick spin (partial rotation)
+    const rotation = interpolate(
+      frame,
+      [0, duration * 0.4, duration],
+      [0, 15 * intensity, 0],
+      {
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+        easing: Easing.out(Easing.back(2)),
+      }
+    );
+
+    // Zoom in then settle
+    const scale = interpolate(
+      frame,
+      [0, duration * 0.3, duration * 0.6, duration],
+      [1, 1.15 * intensity, 1.05, 1],
+      {
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+        easing: Easing.out(Easing.cubic),
+      }
+    );
+
+    return {
+      transform: `rotate(${rotation}deg) scale(${scale})`,
+    };
+  },
+};
+
+/**
+ * Bounce Pop - Bouncy scale with overshoot
+ * Fun, playful transition
+ */
+const bouncePop: TransitionTemplate = {
+  id: 'bounce-pop',
+  name: 'Bounce Pop',
+  description: 'Bouncy scale with overshoot',
+  durationFrames: 12,
+  apply: (frame, duration, intensity) => {
+    // Bouncy scale using spring-like curve
+    const scale = interpolate(
+      frame,
+      [0, duration * 0.2, duration * 0.4, duration * 0.6, duration * 0.8, duration],
+      [1, 1.2 * intensity, 0.92, 1.08 * intensity, 0.98, 1],
+      {
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+      }
+    );
+
+    // Slight vertical bounce
+    const yOffset = interpolate(
+      frame,
+      [0, duration * 0.2, duration * 0.5, duration],
+      [0, -15 * intensity, 5 * intensity, 0],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+
+    return {
+      transform: `scale(${scale}) translateY(${yOffset}px)`,
+    };
+  },
+};
+
+/**
+ * Slide Push - Push old content out while new slides in
+ * Classic but effective
+ */
+const slidePush: TransitionTemplate = {
+  id: 'slide-push',
+  name: 'Slide Push',
+  description: 'Push content horizontally',
+  durationFrames: 8,
+  apply: (frame, duration, intensity) => {
+    // Slide from right to left
+    const xOffset = interpolate(
+      frame,
+      [0, duration],
+      [100 * intensity, 0],
+      {
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+        easing: Easing.out(Easing.cubic),
+      }
+    );
+
+    // Slight scale for depth
+    const scale = interpolate(
+      frame,
+      [0, duration * 0.5, duration],
+      [0.9, 1.02, 1],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+
+    return {
+      transform: `translateX(${xOffset}px) scale(${scale})`,
+    };
+  },
+};
+
+/**
+ * Lens Distort - Barrel/pincushion distortion effect
+ * Creates a warped, liquid-like transition
+ */
+const lensDistort: TransitionTemplate = {
+  id: 'lens-distort',
+  name: 'Lens Distort',
+  description: 'Warped lens effect',
+  durationFrames: 8,
+  apply: (frame, duration, intensity) => {
+    // Simulate lens distortion with scale oscillation
+    const distortProgress = interpolate(
+      frame,
+      [0, duration * 0.3, duration * 0.6, duration],
+      [0, 1, 0.8, 0],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+
+    // Non-uniform scale for distortion feel
+    const scaleX = 1 + (0.1 * intensity * distortProgress);
+    const scaleY = 1 - (0.05 * intensity * distortProgress);
+
+    // Slight blur for lens feel
+    const blur = 3 * intensity * distortProgress;
+
+    return {
+      transform: `scale(${scaleX}, ${scaleY})`,
+      filter: blur > 0.5 ? `blur(${blur}px)` : undefined,
+    };
+  },
+};
+
+/**
+ * Strobe - Rapid flash strobe effect
+ * Very attention-grabbing, club/concert vibe
+ */
+const strobe: TransitionTemplate = {
+  id: 'strobe',
+  name: 'Strobe',
+  description: 'Rapid flash strobe',
+  durationFrames: 8,
+  apply: (frame) => {
+    // Quick scale pulse on each strobe
+    const pulse = frame % 2 === 0 ? 1.03 : 1;
+    return {
+      transform: `scale(${pulse})`,
+    };
+  },
+  overlay: (frame, duration, intensity) => {
+    // Rapid on/off flashing
+    const strobeOn = frame % 2 === 0;
+    const fadeOut = interpolate(
+      frame,
+      [0, duration],
+      [1, 0],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+
+    return {
+      visible: strobeOn && fadeOut > 0.2,
+      backgroundColor: '#FFFFFF',
+      opacity: 0.9 * intensity * fadeOut,
+    };
+  },
+};
+
+/**
+ * Color Flash - Colored flash (pink/cyan gradient feel)
+ * Modern, stylish transition
+ */
+const colorFlash: TransitionTemplate = {
+  id: 'color-flash',
+  name: 'Color Flash',
+  description: 'Colorful flash effect',
+  durationFrames: 6,
+  apply: (frame, duration, intensity) => {
+    // Slight zoom during flash
+    const scale = interpolate(
+      frame,
+      [0, duration * 0.3, duration],
+      [1, 1.05 * intensity, 1],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+
+    return {
+      transform: `scale(${scale})`,
+    };
+  },
+  overlay: (frame, duration, intensity) => {
+    const opacity = interpolate(
+      frame,
+      [0, duration * 0.3, duration],
+      [0, 0.7 * intensity, 0],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+
+    // Alternate between pink and cyan
+    const isPink = frame < duration / 2;
+    const color = isPink ? '#FF00FF' : '#00FFFF';
+
+    return {
+      visible: opacity > 0.05,
+      backgroundColor: color,
+      opacity,
+    };
+  },
+};
+
+/**
  * No transition - placeholder for when transitions are disabled
  */
 const none: TransitionTemplate = {
@@ -262,6 +565,15 @@ export const transitionTemplates: Record<TransitionType, TransitionTemplate> = {
   'glitch': glitch,
   'whip-pan': whipPan,
   'speed-ramp': speedRamp,
+  // New dramatic transitions
+  'zoom-blur': zoomBlur,
+  'rgb-split': rgbSplit,
+  'spin-zoom': spinZoom,
+  'bounce-pop': bouncePop,
+  'slide-push': slidePush,
+  'lens-distort': lensDistort,
+  'strobe': strobe,
+  'color-flash': colorFlash,
 };
 
 /**

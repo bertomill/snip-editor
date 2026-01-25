@@ -120,10 +120,8 @@ export function VapiVoiceButton({
             scriptContext = `\n\nThe user is editing a video with this script/transcript:\n"""${transcript}"""`;
           } else if (isTranscribing) {
             scriptContext = `\n\nThe user has a video but it's still being transcribed. You can't see the script yet - just chat with them and offer to help once it's ready.`;
-          } else if (hasVideo) {
-            scriptContext = `\n\nThe user has uploaded a video but there's no transcript yet. It might have no speech, or transcription hasn't run yet. You can still help with visual stuff like filters, stickers, and general video tips.`;
           } else {
-            scriptContext = `\n\nNo video uploaded yet. Just chat and be helpful - maybe ask what kind of content they're working on.`;
+            scriptContext = `\n\nThe user has a video but there's no transcript available. It might have no speech, or transcription hasn't run yet. You can still help with visual stuff like filters, stickers, captions, and general video tips.`;
           }
 
           const editingContext = `\n\nCurrent editing state:
@@ -183,9 +181,7 @@ You can help with: hooks, filters, stickers, captions, pacing, and general creat
               ? "Hi there! I just looked through your script and I really like what you're working on. How can I help make this one shine?"
               : isTranscribing
               ? "Hey! I see your video's still processing, which is totally fine. While we wait, tell me - what's the vision for this one?"
-              : hasVideo
-              ? "Hi! I see you've got a video ready to go. I can't see the transcript just yet, but I'd love to help with filters, stickers, or anything visual. What are you creating?"
-              : "Hi, I'm Snip! I'm here to help you create something amazing. Whenever you're ready, drop in a video and let's make it great together.",
+              : "Hi! I'd love to help you with this video. I can help with filters, stickers, captions - what are you thinking for this one?",
           });
         }
       } catch (error) {

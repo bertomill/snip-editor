@@ -14,16 +14,26 @@ export interface ClipInfo {
 
 /**
  * Distribution weights for auto-selection
- * zoom-punch is most common in TikTok-style edits
+ * Favors dramatic, eye-catching transitions for demos
  */
 const TRANSITION_WEIGHTS: Record<TransitionType, number> = {
   'none': 0,
-  'zoom-punch': 60,  // Most TikTok-like, very common
-  'flash': 20,       // Good for emphasis
-  'shake': 10,       // For energetic content
-  'glitch': 5,       // For tech/gaming content
-  'whip-pan': 3,     // Less common, more cinematic
-  'speed-ramp': 2,   // Reserved for longer clips
+  // Classic transitions
+  'zoom-punch': 25,      // TikTok classic
+  'flash': 10,           // Good for emphasis
+  'shake': 8,            // For energetic content
+  'glitch': 8,           // For tech/gaming content
+  'whip-pan': 5,         // Cinematic
+  'speed-ramp': 5,       // For longer clips
+  // NEW dramatic transitions - higher weights for standout demos
+  'zoom-blur': 20,       // Very dramatic, heavy blur
+  'rgb-split': 15,       // Viral glitchy look
+  'spin-zoom': 12,       // High energy rotation
+  'bounce-pop': 10,      // Fun and bouncy
+  'color-flash': 15,     // Modern pink/cyan flash
+  'strobe': 8,           // Club/concert vibe
+  'slide-push': 6,       // Classic push effect
+  'lens-distort': 8,     // Warped liquid effect
 };
 
 /**
@@ -44,15 +54,28 @@ function selectRandomTransition(seed: number): TransitionType {
 }
 
 /**
+ * Best dramatic transitions for clip boundaries
+ */
+const CLIP_BOUNDARY_TRANSITIONS: TransitionType[] = [
+  'zoom-blur',
+  'color-flash',
+  'rgb-split',
+  'spin-zoom',
+  'zoom-punch',
+  'bounce-pop',
+  'strobe',
+];
+
+/**
  * Generate auto-transitions for a list of clips
  *
  * Rules:
  * - Transitions are applied BETWEEN clips (after clip N ends, before clip N+1 starts)
  * - No transition after the last clip
- * - Smart selection based on clip duration and position
+ * - Uses dramatic, eye-catching transitions for demos
  *
  * @param clips - Array of clip info
- * @param strategy - 'consistent' uses same transition, 'varied' alternates
+ * @param strategy - 'consistent' uses same transition, 'varied' alternates with dramatic effects
  */
 export function generateAutoTransitions(
   clips: ClipInfo[],
@@ -64,7 +87,7 @@ export function generateAutoTransitions(
   }
 
   const transitions: ClipTransition[] = [];
-  const baseTransition = 'zoom-punch'; // Most TikTok-like
+  const baseTransition: TransitionType = 'zoom-blur'; // Default to dramatic zoom-blur
 
   for (let i = 0; i < clips.length - 1; i++) {
     const clip = clips[i];
@@ -73,34 +96,37 @@ export function generateAutoTransitions(
     let transitionType: TransitionType;
 
     if (strategy === 'consistent') {
-      // Use same transition for all cuts
+      // Use same dramatic transition for all cuts
       transitionType = baseTransition;
     } else {
-      // Varied strategy: mostly zoom-punch with occasional variety
-      if (i === 0 || i === clips.length - 2) {
-        // First and last transitions are usually zoom-punch for consistency
-        transitionType = baseTransition;
+      // Varied strategy: cycle through dramatic transitions
+      if (i === 0) {
+        // First transition: make a strong first impression
+        const openers: TransitionType[] = ['zoom-blur', 'color-flash', 'spin-zoom'];
+        transitionType = openers[Math.floor(Math.random() * openers.length)];
+      } else if (i === clips.length - 2) {
+        // Last transition: end with impact
+        const closers: TransitionType[] = ['strobe', 'color-flash', 'zoom-blur'];
+        transitionType = closers[Math.floor(Math.random() * closers.length)];
       } else {
-        // Middle transitions can vary
+        // Middle transitions: full variety
         transitionType = selectRandomTransition(i * 1000 + clip.duration * 100);
-
-        // Keep it mostly zoom-punch (70% chance to override)
-        if (Math.random() > 0.3) {
-          transitionType = baseTransition;
-        }
       }
     }
 
     // Get default duration from template
     const template = transitionTemplates[transitionType];
-    const durationFrames = template?.durationFrames || 6;
+    const durationFrames = template?.durationFrames || 8;
+
+    // Higher intensity for clip boundaries (more noticeable than internal cuts)
+    const intensity = 1.2;
 
     transitions.push({
       id: `transition-${i}-${Date.now()}`,
       type: transitionType,
       clipIndex: i,
       durationFrames,
-      intensity: 1.0, // Default intensity
+      intensity,
     });
   }
 
@@ -192,10 +218,24 @@ export interface CutPoint {
 }
 
 /**
+ * Dramatic transition pool for internal cuts
+ * These are the most visually striking transitions
+ */
+const DRAMATIC_TRANSITIONS: TransitionType[] = [
+  'zoom-blur',      // Heavy dramatic zoom
+  'rgb-split',      // Glitchy color split
+  'color-flash',    // Pink/cyan flash
+  'zoom-punch',     // Classic punch
+  'spin-zoom',      // Rotation combo
+  'bounce-pop',     // Bouncy effect
+  'strobe',         // Rapid flash
+];
+
+/**
  * Generate transitions for internal cuts (silence removal points)
  *
  * These transitions are applied WITHIN a clip where silences were removed,
- * making the jump cuts smoother with visual effects.
+ * making the jump cuts smoother with dramatic visual effects.
  *
  * @param cutPoints - Array of cut point info
  * @param transitionType - 'auto' selects based on silence duration, or specify a type
@@ -216,16 +256,19 @@ export function generateInternalCutTransitions(
     // Select transition type based on silence duration or use specified type
     let type: TransitionType;
     if (transitionType === 'auto') {
-      // Longer silences = more noticeable jumps = stronger transitions
+      // Use dramatic transitions for all cuts to make demos stand out
       if (cut.silenceDuration > 1.5) {
-        // Long pause: use flash or zoom-punch for emphasis
-        type = Math.random() > 0.5 ? 'flash' : 'zoom-punch';
+        // Long pause: use most dramatic transitions
+        const dramaticOptions: TransitionType[] = ['zoom-blur', 'color-flash', 'strobe', 'spin-zoom'];
+        type = dramaticOptions[Math.floor(Math.random() * dramaticOptions.length)];
       } else if (cut.silenceDuration > 0.8) {
-        // Medium pause: mostly zoom-punch
-        type = 'zoom-punch';
+        // Medium pause: varied dramatic transitions
+        const mediumOptions: TransitionType[] = ['zoom-blur', 'rgb-split', 'bounce-pop', 'zoom-punch'];
+        type = mediumOptions[Math.floor(Math.random() * mediumOptions.length)];
       } else {
-        // Short pause: subtle zoom-punch with lower intensity
-        type = 'zoom-punch';
+        // Short pause: quick punchy transitions
+        const quickOptions: TransitionType[] = ['zoom-punch', 'color-flash', 'rgb-split'];
+        type = quickOptions[Math.floor(Math.random() * quickOptions.length)];
       }
     } else {
       type = transitionType;
@@ -234,10 +277,10 @@ export function generateInternalCutTransitions(
     const template = transitionTemplates[type];
     const durationFrames = template?.durationFrames || 6;
 
-    // Adjust intensity based on silence duration
-    // Shorter silences get subtler transitions
-    const intensity = cut.silenceDuration > 1.0 ? 1.0 :
-                     cut.silenceDuration > 0.5 ? 0.8 : 0.6;
+    // Higher intensity for more impactful transitions
+    // Even short silences get good intensity now
+    const intensity = cut.silenceDuration > 1.0 ? 1.3 :
+                     cut.silenceDuration > 0.5 ? 1.1 : 0.9;
 
     transitions.push({
       id: `internal-cut-${cut.clipIndex}-${i}-${Date.now()}`,
