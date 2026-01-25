@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Lambda functions use CommonJS
+    "worker/**",
   ]),
 ]);
 

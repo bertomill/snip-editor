@@ -57,3 +57,25 @@ export async function deleteFromStorage(storagePath: string): Promise<boolean> {
 
   return true;
 }
+
+/**
+ * Get a signed URL for a file in Supabase Storage
+ * Used to give Lambda access to download the video
+ */
+export async function getSignedUrl(storagePath: string, expiresIn = 3600): Promise<string> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.storage
+    .from('videos')
+    .createSignedUrl(storagePath, expiresIn);
+
+  if (error) {
+    throw new Error(`Failed to create signed URL: ${error.message}`);
+  }
+
+  if (!data?.signedUrl) {
+    throw new Error('No signed URL returned from storage');
+  }
+
+  return data.signedUrl;
+}

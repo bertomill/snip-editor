@@ -1,0 +1,12 @@
+{
+  "name": "snip-transcribe-lambda",
+  "version": "1.0.0",
+  "description": "AWS Lambda function for video transcription with FFmpeg and Groq Whisper",
+  "main": "index.js",
+  "dependencies": {
+    "form-data": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -98,12 +98,12 @@ export function Sidebar({
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[72px] bg-[var(--background-sidebar)] border-r border-[var(--border-subtle)] flex-col items-center py-4 z-50">
         {/* Logo */}
         <Link href="/" className="mb-4">
-          <div className="w-11 h-11 rounded-full bg-[#1e2536] flex items-center justify-center hover:scale-105 transition-transform">
+          <div className="w-14 h-14 rounded-full [.light-mode_&]:bg-[#1e2536] flex items-center justify-center hover:scale-105 transition-transform">
             <Image
               src="/snip-removebg.png"
               alt="Snip"
-              width={36}
-              height={36}
+              width={44}
+              height={44}
               className="object-contain"
             />
           </div>

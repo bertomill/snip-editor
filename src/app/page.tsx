@@ -39,6 +39,7 @@ import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
 import { FlipWords } from "@/components/ui/flip-words";
 import SwooshText from "@/components/ui/swoosh-text";
 import SwooshButton from "@/components/ui/swoosh-button";
+import ExportLoadingState from "@/components/ExportLoadingState";
 
 type AppView = "feed" | "editor";
 type EditorStep = "upload" | "edit" | "export";
@@ -1959,97 +1960,89 @@ function ExportProgressIndicator({
   onDismiss: () => void;
   onRetry: () => void;
 }) {
-  const getStatusText = () => {
-    switch (status) {
-      case 'preparing': return 'Preparing export...';
-      case 'converting': return 'Converting video formats...';
-      case 'rendering': return `Rendering video (${Math.round(progress)}%)`;
-      case 'done': return 'Export complete!';
-      case 'error': return 'Export failed';
-      default: return '';
-    }
-  };
-
-  const getStatusIcon = () => {
-    if (status === 'done') {
-      return (
-        <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-          <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-      );
-    }
-    if (status === 'error') {
-      return (
-        <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-          <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </div>
-      );
-    }
-    return (
-      <div className="w-10 h-10 rounded-full bg-[#4A8FE7]/20 flex items-center justify-center">
-        <div className="w-5 h-5 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  };
+  const isActiveExport = status === 'preparing' || status === 'converting' || status === 'rendering';
 
   return (
     <div className="fixed bottom-20 md:bottom-6 left-4 right-4 md:left-auto md:right-6 z-[60] animate-slide-up">
-      <div className="bg-[#1C1C1E]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 p-4 w-full md:min-w-[300px] md:max-w-[360px] ml-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-3">
-          {getStatusIcon()}
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-medium text-sm truncate">{getStatusText()}</p>
-            {status === 'error' && error && (
-              <p className="text-red-400 text-xs truncate">{error}</p>
-            )}
-          </div>
-          <button
-            onClick={onDismiss}
-            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
-          >
-            <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Progress bar (only during conversion/rendering) */}
-        {(status === 'preparing' || status === 'converting' || status === 'rendering') && (
-          <div className="mb-3">
-            <div className="w-full h-2 bg-[#2C2C2E] rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  status === 'converting'
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-500'
-                    : 'bg-gradient-to-r from-[#4A8FE7] to-[#5F7BFD]'
-                }`}
-                style={{ width: `${Math.max(status === 'preparing' ? 5 : progress, 2)}%` }}
-              />
-            </div>
+      <div className="bg-[#1C1C1E]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 p-4 w-full md:min-w-[320px] md:max-w-[380px] ml-auto">
+        {/* Active export state - animated loading */}
+        {isActiveExport && (
+          <div className="relative">
+            <button
+              onClick={onDismiss}
+              className="absolute -top-1 -right-1 p-1.5 hover:bg-white/10 rounded-lg transition-colors z-10"
+            >
+              <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <ExportLoadingState
+              status={status as 'preparing' | 'converting' | 'rendering'}
+              progress={status === 'preparing' ? 5 : progress}
+            />
           </div>
         )}
 
-        {/* Actions */}
+        {/* Done state */}
         {status === 'done' && (
-          <button
-            onClick={onDownload}
-            className="w-full py-2.5 rounded-xl bg-[#4A8FE7] text-white text-sm font-medium hover:bg-[#3A7FD7] transition-colors"
-          >
-            Download Video
-          </button>
+          <>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-medium text-sm">Export complete!</p>
+                <p className="text-[#8E8E93] text-xs">Your video is ready</p>
+              </div>
+              <button
+                onClick={onDismiss}
+                className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <button
+              onClick={onDownload}
+              className="w-full py-2.5 rounded-xl bg-[#4A8FE7] text-white text-sm font-medium hover:bg-[#3A7FD7] transition-colors"
+            >
+              Download Video
+            </button>
+          </>
         )}
+
+        {/* Error state */}
         {status === 'error' && (
-          <button
-            onClick={onRetry}
-            className="w-full py-2.5 rounded-xl bg-[#4A8FE7] text-white text-sm font-medium hover:bg-[#3A7FD7] transition-colors"
-          >
-            Try Again
-          </button>
+          <>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-medium text-sm">Export failed</p>
+                {error && <p className="text-red-400 text-xs truncate">{error}</p>}
+              </div>
+              <button
+                onClick={onDismiss}
+                className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <button
+              onClick={onRetry}
+              className="w-full py-2.5 rounded-xl bg-[#4A8FE7] text-white text-sm font-medium hover:bg-[#3A7FD7] transition-colors"
+            >
+              Try Again
+            </button>
+          </>
         )}
       </div>
     </div>

@@ -9,10 +9,13 @@ import { cleanupVoice, VoiceCleanupOptions } from "@/lib/audio/voice-cleanup";
 import { detectSilence } from "@/lib/audio/silence-detect";
 import { processSilenceForClip, calculateSilenceStats } from "@/lib/audio/silence-merger";
 import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
-import { downloadFromStorage, deleteFromStorage } from "@/lib/supabase/download";
+import { downloadFromStorage, deleteFromStorage, getSignedUrl } from "@/lib/supabase/download";
 import { getFFmpegPath } from "@/lib/ffmpeg-path";
 
 const execAsync = promisify(exec);
+
+// Lambda function URL for transcription (bypasses Vercel FFmpeg limitations)
+const LAMBDA_TRANSCRIBE_URL = process.env.LAMBDA_TRANSCRIBE_URL;
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -72,7 +75,7 @@ export async function POST(request: NextRequest) {
     let silenceAggressiveness: SilenceDetectionOptions['aggressiveness'] = 'natural';
 
     if (isJsonRequest) {
-      // New: JSON body with storage path
+      // JSON body with storage path
       const body = await request.json() as StorageTranscribeRequest;
 
       if (!body.storagePath) {
@@ -82,6 +85,48 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // If Lambda URL is configured, use Lambda (which has FFmpeg) instead of local processing
+      if (LAMBDA_TRANSCRIBE_URL) {
+        console.log(`[Transcribe] Using Lambda for transcription: ${body.storagePath}`);
+
+        // Get a signed URL for the video that Lambda can access
+        const signedUrl = await getSignedUrl(body.storagePath);
+
+        // Call Lambda with the signed URL
+        const lambdaResponse = await fetch(LAMBDA_TRANSCRIBE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            videoUrl: signedUrl,
+            detectSilence: body.detectSilence ?? true,
+            silenceAggressiveness: body.silenceAggressiveness ?? 'natural',
+          }),
+        });
+
+        if (!lambdaResponse.ok) {
+          const errorData = await lambdaResponse.json().catch(() => ({}));
+          console.error('[Transcribe] Lambda error:', errorData);
+          return NextResponse.json(
+            { error: 'Lambda transcription failed', details: errorData.details || errorData.error },
+            { status: lambdaResponse.status }
+          );
+        }
+
+        const result = await lambdaResponse.json();
+        console.log(`[Transcribe] Lambda transcription complete: ${result.words?.length || 0} words`);
+
+        // Clean up storage file
+        try {
+          await deleteFromStorage(body.storagePath);
+          console.log(`[Transcribe] Cleaned up storage file: ${body.storagePath}`);
+        } catch {
+          // Ignore cleanup errors
+        }
+
+        return NextResponse.json(result);
+      }
+
+      // Fallback: Download and process locally (requires FFmpeg - won't work on Vercel)
       console.log(`[Transcribe] Downloading video from storage: ${body.storagePath}`);
 
       // Download video from Supabase Storage
