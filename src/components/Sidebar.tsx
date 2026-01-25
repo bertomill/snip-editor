@@ -13,8 +13,10 @@ import { captionTemplates } from '@/lib/caption-templates'
 import { TextOverlay, StickerOverlay, ClipTransition, defaultAudioSettings } from '@/types/overlays'
 import { TransitionRefinementPanel } from '@/components/overlays/TransitionRefinementPanel'
 import { generateAutoTransitions } from '@/lib/transitions/auto-transitions'
+import { MobileTextDrawer } from '@/components/overlays/MobileTextDrawer'
+import { HookSuggestionsPanel } from '@/components/HookSuggestionsPanel'
 
-type PanelType = 'text' | 'stickers' | 'filters' | 'audio' | 'cuts' | 'captions' | null;
+type PanelType = 'text' | 'stickers' | 'filters' | 'audio' | 'cuts' | 'captions' | 'suggestions' | null;
 
 interface SidebarProps {
   onOpenUploads?: () => void;
@@ -22,6 +24,8 @@ interface SidebarProps {
   onCreateProject?: () => void;
   // View state - determines which mobile bottom bar to show
   view?: 'feed' | 'editor';
+  // Editor step - determines if toolbar should be visible
+  editorStep?: 'upload' | 'edit' | 'export';
   // For overlay panels that need timing info
   totalDurationMs?: number;
   currentTimeMs?: number;
@@ -30,6 +34,11 @@ interface SidebarProps {
   // Search state for feed view (mobile bottom bar)
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
+  // For mobile transcript drawer
+  onOpenTranscript?: () => void;
+  // For AI suggestions panel
+  transcript?: string;
+  transcriptSegments?: Array<{ text: string; start: number; end: number }>;
 }
 
 export function Sidebar({
@@ -37,11 +46,15 @@ export function Sidebar({
   onNavigateHome,
   onCreateProject,
   view = 'feed',
+  editorStep = 'edit',
   totalDurationMs = 10000,
   currentTimeMs = 0,
   clipCount = 1,
   searchQuery,
   onSearchChange,
+  onOpenTranscript,
+  transcript,
+  transcriptSegments,
 }: SidebarProps) {
   const { user, loading } = useUser()
   const signOut = useSignOut()
@@ -78,7 +91,7 @@ export function Sidebar({
             <>
               <button
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center text-white font-semibold text-sm hover:scale-105 transition-transform ring-2 ring-transparent hover:ring-[#4A8FE7]/50"
+                className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-[#3b82f6] to-[#1e3a8a] flex items-center justify-center text-white font-semibold text-sm hover:scale-105 transition-transform ring-2 ring-transparent hover:ring-[#4A8FE7]/50"
               >
                 {user.user_metadata?.avatar_url ? (
                   <img
@@ -102,7 +115,7 @@ export function Sidebar({
                     {/* Profile Header */}
                     <div className="p-4 border-b border-[var(--border)]">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center text-white font-semibold text-lg">
+                        <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-[#3b82f6] to-[#1e3a8a] flex items-center justify-center text-white font-semibold text-lg">
                           {user.user_metadata?.avatar_url ? (
                             <img
                               src={user.user_metadata.avatar_url}
@@ -242,6 +255,13 @@ export function Sidebar({
                 onClick={() => togglePanel('captions')}
                 active={activePanel === 'captions' || overlayState.showCaptionPreview}
               />
+
+              <NavButton
+                icon={<AIHooksIcon />}
+                label="AI Hooks"
+                onClick={() => togglePanel('suggestions')}
+                active={activePanel === 'suggestions'}
+              />
             </>
           )}
         </nav>
@@ -249,23 +269,34 @@ export function Sidebar({
       </aside>
 
       {/* Secondary Panel - Canva style slide-out */}
-      <SidebarPanel
-        activePanel={activePanel}
-        onClose={() => setActivePanel(null)}
-        totalDurationMs={totalDurationMs}
-        currentTimeMs={currentTimeMs}
-        addTextOverlay={addTextOverlay}
-        addSticker={addSticker}
-        setFilter={setFilter}
-        setAudioSettings={setAudioSettings}
-        overlayState={overlayState}
-        clipCount={clipCount}
-        updateTransition={updateTransition}
-        removeTransition={removeTransition}
-        setTransitions={setTransitions}
-        setCaptionTemplate={setCaptionTemplate}
-        toggleCaptionPreview={toggleCaptionPreview}
-      />
+      {activePanel !== 'suggestions' && (
+        <SidebarPanel
+          activePanel={activePanel}
+          onClose={() => setActivePanel(null)}
+          totalDurationMs={totalDurationMs}
+          currentTimeMs={currentTimeMs}
+          addTextOverlay={addTextOverlay}
+          addSticker={addSticker}
+          setFilter={setFilter}
+          setAudioSettings={setAudioSettings}
+          overlayState={overlayState}
+          clipCount={clipCount}
+          updateTransition={updateTransition}
+          removeTransition={removeTransition}
+          setTransitions={setTransitions}
+          setCaptionTemplate={setCaptionTemplate}
+          toggleCaptionPreview={toggleCaptionPreview}
+        />
+      )}
+
+      {/* AI Hooks Suggestions Panel */}
+      {activePanel === 'suggestions' && (
+        <HookSuggestionsPanel
+          transcript={transcript || ''}
+          segments={transcriptSegments || []}
+          onClose={() => setActivePanel(null)}
+        />
+      )}
 
       {/* Mobile Bottom Bar - different for feed vs editor */}
       {view === 'feed' ? (
@@ -274,7 +305,7 @@ export function Sidebar({
           searchQuery={searchQuery}
           onSearchChange={onSearchChange}
         />
-      ) : (
+      ) : editorStep !== 'upload' ? (
         <MobileBottomToolbar
           onNavigateHome={onNavigateHome}
           onCreateProject={onCreateProject}
@@ -283,10 +314,19 @@ export function Sidebar({
           onOpenFilterDrawer={() => togglePanel('filters')}
           onOpenAudioDrawer={() => togglePanel('audio')}
           onOpenCaptionsDrawer={() => togglePanel('captions')}
+          onOpenTranscript={onOpenTranscript}
           captionsEnabled={overlayState.showCaptionPreview}
           audioEnabled={overlayState.audioSettings?.enhanceAudio ?? false}
         />
-      )}
+      ) : null}
+
+      {/* Mobile Text Drawer - CapCut style slide-up */}
+      <MobileTextDrawer
+        isOpen={activePanel === 'text'}
+        onClose={() => setActivePanel(null)}
+        totalDurationMs={totalDurationMs}
+        currentTimeMs={currentTimeMs}
+      />
     </>
   )
 }
@@ -348,6 +388,7 @@ function MobileBottomToolbar({
   onOpenFilterDrawer,
   onOpenAudioDrawer,
   onOpenCaptionsDrawer,
+  onOpenTranscript,
   captionsEnabled = false,
   audioEnabled = false,
 }: {
@@ -358,6 +399,7 @@ function MobileBottomToolbar({
   onOpenFilterDrawer?: () => void
   onOpenAudioDrawer?: () => void
   onOpenCaptionsDrawer?: () => void
+  onOpenTranscript?: () => void
   captionsEnabled?: boolean
   audioEnabled?: boolean
 }) {
@@ -395,6 +437,11 @@ function MobileBottomToolbar({
           label="Captions"
           onClick={onOpenCaptionsDrawer}
           active={captionsEnabled}
+        />
+        <ToolbarButton
+          icon={<TranscriptIcon />}
+          label="Script"
+          onClick={onOpenTranscript}
         />
         <ToolbarButton
           icon={<MobileFilterIcon />}
@@ -1330,6 +1377,23 @@ function CutsIcon() {
   )
 }
 
+function AIHooksIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"
+      />
+    </svg>
+  )
+}
+
 // Mobile Toolbar Icons (CapCut style)
 function EditIcon() {
   return (
@@ -1390,6 +1454,14 @@ function MobileFilterIcon() {
     <svg className="w-full h-full" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="9" />
       <path strokeLinecap="round" d="M12 3a9 9 0 019 9M12 3v18M3 12h18" />
+    </svg>
+  )
+}
+
+function TranscriptIcon() {
+  return (
+    <svg className="w-full h-full" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     </svg>
   )
 }
