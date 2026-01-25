@@ -132,7 +132,7 @@ function HomeContent() {
   // AutoCut processing state for loading overlay
   const [autoCutProcessing, setAutoCutProcessing] = useState<{
     active: boolean;
-    status: 'preparing' | 'transcribing' | 'detecting' | 'applying' | 'done';
+    status: 'preparing' | 'converting' | 'transcribing' | 'detecting' | 'applying' | 'done';
     currentClip: number;
     totalClips: number;
     message: string;
@@ -806,75 +806,111 @@ function HomeContent() {
     setStep("edit");
     setAutoCutEnabled(autoCut);
 
+    // Check which files need conversion upfront
+    const filesNeedingConversion = files.filter(file => {
+      const filename = file.name.toLowerCase();
+      return filename.endsWith('.mov') || filename.endsWith('.hevc') || file.type === 'video/quicktime';
+    });
+    const hasConversions = filesNeedingConversion.length > 0;
+
     // Initialize AutoCut processing overlay if enabled
     if (autoCut) {
       setAutoCutProcessing({
         active: true,
+        status: hasConversions ? 'converting' : 'preparing',
+        currentClip: hasConversions ? 1 : 0,
+        totalClips: hasConversions ? filesNeedingConversion.length : files.length,
+        message: hasConversions
+          ? `Converting video for preview (1/${filesNeedingConversion.length})...`
+          : 'Preparing your clips...'
+      });
+    }
+
+    // Process files sequentially if conversion needed (for progress updates)
+    const videoClips: VideoClip[] = [];
+    let conversionCount = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      // Ensure valid MIME type for iOS Safari compatibility
+      let processedFile = file;
+      if (!file.type || file.type === 'application/octet-stream') {
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        const mimeMap: Record<string, string> = {
+          'mp4': 'video/mp4',
+          'mov': 'video/quicktime',
+          'webm': 'video/webm',
+          'm4v': 'video/x-m4v',
+          'hevc': 'video/mp4',
+        };
+        const mimeType = mimeMap[ext || ''] || 'video/mp4';
+        processedFile = new File([file], file.name, { type: mimeType });
+      }
+
+      // Check if file needs conversion for browser preview (MOV/HEVC)
+      const filename = processedFile.name.toLowerCase();
+      const needsConversion = filename.endsWith('.mov') || filename.endsWith('.hevc') || processedFile.type === 'video/quicktime';
+
+      let url: string;
+      if (needsConversion) {
+        conversionCount++;
+        // Update progress for conversion
+        if (autoCut) {
+          setAutoCutProcessing(prev => prev ? {
+            ...prev,
+            status: 'converting',
+            currentClip: conversionCount,
+            totalClips: filesNeedingConversion.length,
+            message: `Converting video for preview (${conversionCount}/${filesNeedingConversion.length})...`
+          } : null);
+        }
+
+        // Convert for browser preview
+        try {
+          const formData = new FormData();
+          formData.append('video', processedFile);
+          const response = await fetch('/api/convert-preview', {
+            method: 'POST',
+            body: formData,
+          });
+          if (response.ok) {
+            const data = await response.json();
+            url = data.url;
+          } else {
+            // Fallback to blob URL (will show error but transcription still works)
+            url = URL.createObjectURL(processedFile);
+          }
+        } catch {
+          // Fallback to blob URL
+          url = URL.createObjectURL(processedFile);
+        }
+      } else {
+        url = URL.createObjectURL(processedFile);
+      }
+
+      const duration = await getVideoDuration(url);
+      // Initialize with pending upload status for large files
+      const shouldUploadToStorage = processedFile.size > 4 * 1024 * 1024; // >4MB
+      videoClips.push({
+        file: processedFile,
+        url,
+        duration,
+        blobReady: true,
+        uploadStatus: shouldUploadToStorage ? 'pending' as const : undefined,
+      });
+    }
+
+    // Update status after conversion is done
+    if (autoCut && hasConversions) {
+      setAutoCutProcessing(prev => prev ? {
+        ...prev,
         status: 'preparing',
         currentClip: 0,
         totalClips: files.length,
         message: 'Preparing your clips...'
-      });
+      } : null);
     }
-
-    const videoClips: VideoClip[] = await Promise.all(
-      files.map(async (file) => {
-        // Ensure valid MIME type for iOS Safari compatibility
-        let processedFile = file;
-        if (!file.type || file.type === 'application/octet-stream') {
-          const ext = file.name.split('.').pop()?.toLowerCase();
-          const mimeMap: Record<string, string> = {
-            'mp4': 'video/mp4',
-            'mov': 'video/quicktime',
-            'webm': 'video/webm',
-            'm4v': 'video/x-m4v',
-            'hevc': 'video/mp4',
-          };
-          const mimeType = mimeMap[ext || ''] || 'video/mp4';
-          processedFile = new File([file], file.name, { type: mimeType });
-        }
-
-        // Check if file needs conversion for browser preview (MOV/HEVC)
-        const filename = processedFile.name.toLowerCase();
-        const needsConversion = filename.endsWith('.mov') || filename.endsWith('.hevc') || processedFile.type === 'video/quicktime';
-
-        let url: string;
-        if (needsConversion) {
-          // Convert for browser preview
-          try {
-            const formData = new FormData();
-            formData.append('video', processedFile);
-            const response = await fetch('/api/convert-preview', {
-              method: 'POST',
-              body: formData,
-            });
-            if (response.ok) {
-              const data = await response.json();
-              url = data.url;
-            } else {
-              // Fallback to blob URL (will show error but transcription still works)
-              url = URL.createObjectURL(processedFile);
-            }
-          } catch {
-            // Fallback to blob URL
-            url = URL.createObjectURL(processedFile);
-          }
-        } else {
-          url = URL.createObjectURL(processedFile);
-        }
-
-        const duration = await getVideoDuration(url);
-        // Initialize with pending upload status for large files
-        const shouldUploadToStorage = processedFile.size > 4 * 1024 * 1024; // >4MB
-        return {
-          file: processedFile,
-          url,
-          duration,
-          blobReady: true,
-          uploadStatus: shouldUploadToStorage ? 'pending' as const : undefined,
-        };
-      })
-    );
 
     setClips(videoClips);
 
@@ -2179,14 +2215,14 @@ function EditStep({
   silenceAggressiveness: SilenceDetectionOptions['aggressiveness'];
   autoCutProcessing: {
     active: boolean;
-    status: 'preparing' | 'transcribing' | 'detecting' | 'applying' | 'done';
+    status: 'preparing' | 'converting' | 'transcribing' | 'detecting' | 'applying' | 'done';
     currentClip: number;
     totalClips: number;
     message: string;
   } | null;
   setAutoCutProcessing: React.Dispatch<React.SetStateAction<{
     active: boolean;
-    status: 'preparing' | 'transcribing' | 'detecting' | 'applying' | 'done';
+    status: 'preparing' | 'converting' | 'transcribing' | 'detecting' | 'applying' | 'done';
     currentClip: number;
     totalClips: number;
     message: string;
@@ -3297,14 +3333,6 @@ function EditStep({
 
               {/* Overlay Toolbar - moved to sidebar (TODO) */}
             </div>
-            <div className="p-4 text-center text-sm text-[#8E8E93] bg-[#111111]">
-              {formatTime(currentTime)} / {formatTime(activeDuration)}
-              {deletedSegments.size > 0 && (
-                <span className="text-[#636366] ml-1">
-                  ({formatTime(totalDuration - activeDuration)} removed)
-                </span>
-              )}
-            </div>
           </div>
 
           {/* Active Overlays List */}
@@ -3770,7 +3798,7 @@ function UploadingOverlay({ progress }: { progress: number }) {
 
 // AutoCut Processing Overlay - Same style as UploadingOverlay but with scissors icon
 function AutoCutOverlay({ status, message, currentClip, totalClips }: {
-  status: 'preparing' | 'transcribing' | 'detecting' | 'applying' | 'done';
+  status: 'preparing' | 'converting' | 'transcribing' | 'detecting' | 'applying' | 'done';
   message: string;
   currentClip: number;
   totalClips: number;
@@ -3870,8 +3898,11 @@ function AutoCutOverlay({ status, message, currentClip, totalClips }: {
       </p>
 
       {/* Encouraging sub-message */}
+      {status === 'converting' && (
+        <p className="text-[#8E8E93] text-sm mt-2">Converting MOV to MP4 for browser preview</p>
+      )}
       {status === 'preparing' && (
-        <p className="text-[#8E8E93] text-sm mt-2">Your video is almost ready</p>
+        <p className="text-[#8E8E93] text-sm mt-2">Setting up your editing workspace</p>
       )}
       {status === 'transcribing' && (
         <p className="text-[#8E8E93] text-sm mt-2">AI is analyzing your speech</p>
@@ -3958,7 +3989,7 @@ function MobileVideoPanel({
   uploadProgress?: number;
   autoCutProcessing?: {
     active: boolean;
-    status: 'preparing' | 'transcribing' | 'detecting' | 'applying' | 'done';
+    status: 'preparing' | 'converting' | 'transcribing' | 'detecting' | 'applying' | 'done';
     currentClip: number;
     totalClips: number;
     message: string;
@@ -4029,15 +4060,7 @@ function MobileVideoPanel({
         </button>
 
         </div>
-        <div className="py-2 px-3 flex items-center justify-between text-sm bg-[#111111]">
-          <div className="text-[#8E8E93]">
-            {formatTime(currentTime)} / {formatTime(activeDuration)}
-            {deletedSegments.size > 0 && (
-              <span className="text-[#636366] ml-1">
-                ({formatTime(totalDuration - activeDuration)} removed)
-              </span>
-            )}
-          </div>
+        <div className="py-2 px-3 flex items-center justify-end text-sm bg-[#111111]">
           {/* Transcript Button */}
           <button
             onClick={onOpenTranscript}
