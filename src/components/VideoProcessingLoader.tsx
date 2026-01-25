@@ -48,6 +48,7 @@ const stageMessages: Record<ProcessingStage, string[]> = {
     "Detecting speech patterns...",
     "Converting speech to text...",
     "Finding the perfect words...",
+    "Removing word gaps...",
     "AI is working its magic...",
     "Understanding your content...",
     "Capturing every word...",
