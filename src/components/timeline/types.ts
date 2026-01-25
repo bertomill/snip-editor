@@ -6,6 +6,7 @@ export enum TrackItemType {
   TEXT = "text",
   VIDEO = "video",
   STICKER = "sticker",
+  MUSIC = "music",     // Background music track
   SCRIPT = "script",   // Individual word from transcript
   PAUSE = "pause",     // Gap/pause between words
 }

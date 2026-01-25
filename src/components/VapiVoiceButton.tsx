@@ -289,7 +289,8 @@ Current caption state: ${captionsEnabled ? "Captions are ON" : "Captions are OFF
               ],
             },
             // Enable client-side tool calls
-            clientMessages: ["tool-calls", "function-call", "transcript"],
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            clientMessages: ["tool-calls", "function-call", "transcript"] as any,
             voice: {
               provider: "11labs",
               voiceId: "21m00Tcm4TlvDq8ikWAM", // Rachel voice

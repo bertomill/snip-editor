@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { AbsoluteFill, Sequence, Video, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Sequence, Video, Audio, useCurrentFrame } from "remotion";
 import { SnipCompositionProps } from "../types/composition";
 import { CaptionLayer } from "./caption-layer";
 import { TextLayer } from "./text-layer";
@@ -94,6 +94,7 @@ export const SnipMain: React.FC<SnipCompositionProps> = ({
   stickers = [],
   captionPositionY = 75,
   clipTransitions = [],
+  musicTracks = [],
 }) => {
   const frame = useCurrentFrame();
 
@@ -202,6 +203,27 @@ export const SnipMain: React.FC<SnipCompositionProps> = ({
           currentFrame={frame}
         />
       </AbsoluteFill>
+
+      {/* Music Tracks Layer - background audio */}
+      {musicTracks.map((track) => {
+        const startFrame = Math.floor((track.startMs / 1000) * fps);
+        const durationFrames = Math.floor((track.durationMs / 1000) * fps);
+        const trimStartSeconds = track.trimStartMs / 1000;
+
+        return (
+          <Sequence
+            key={track.id}
+            from={startFrame}
+            durationInFrames={durationFrames}
+          >
+            <Audio
+              src={track.url}
+              volume={track.volume}
+              startFrom={Math.floor(trimStartSeconds * fps)}
+            />
+          </Sequence>
+        );
+      })}
     </AbsoluteFill>
   );
 };

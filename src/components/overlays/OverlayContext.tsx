@@ -1,11 +1,12 @@
 "use client";
 
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { OverlayState, OverlayAction, TextOverlay, StickerOverlay, ClipTransition, AudioSettings, defaultAudioSettings } from '@/types/overlays';
+import { OverlayState, OverlayAction, TextOverlay, StickerOverlay, MusicTrack, ClipTransition, AudioSettings, defaultAudioSettings } from '@/types/overlays';
 
 const initialState: OverlayState = {
   textOverlays: [],
   stickers: [],
+  musicTracks: [],
   filterId: null,
   showCaptionPreview: true,
   captionPositionY: 75, // Default near bottom (75% from top)
@@ -60,6 +61,29 @@ function overlayReducer(state: OverlayState, action: OverlayAction): OverlayStat
       return {
         ...state,
         stickers: state.stickers.filter((s) => s.id !== action.payload),
+      };
+
+    case 'ADD_MUSIC_TRACK':
+      if (state.musicTracks.length >= 3) return state; // Max 3 music tracks
+      return {
+        ...state,
+        musicTracks: [...state.musicTracks, action.payload],
+      };
+
+    case 'UPDATE_MUSIC_TRACK':
+      return {
+        ...state,
+        musicTracks: state.musicTracks.map((track) =>
+          track.id === action.payload.id
+            ? { ...track, ...action.payload.updates }
+            : track
+        ),
+      };
+
+    case 'REMOVE_MUSIC_TRACK':
+      return {
+        ...state,
+        musicTracks: state.musicTracks.filter((t) => t.id !== action.payload),
       };
 
     case 'SET_FILTER':
@@ -140,6 +164,9 @@ interface OverlayContextValue {
   addSticker: (sticker: StickerOverlay) => void;
   updateSticker: (id: string, updates: Partial<StickerOverlay>) => void;
   removeSticker: (id: string) => void;
+  addMusicTrack: (track: MusicTrack) => void;
+  updateMusicTrack: (id: string, updates: Partial<MusicTrack>) => void;
+  removeMusicTrack: (id: string) => void;
   setFilter: (filterId: string | null) => void;
   toggleCaptionPreview: () => void;
   setCaptionPosition: (positionY: number) => void;
@@ -167,6 +194,9 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
     addSticker: (sticker) => dispatch({ type: 'ADD_STICKER', payload: sticker }),
     updateSticker: (id, updates) => dispatch({ type: 'UPDATE_STICKER', payload: { id, updates } }),
     removeSticker: (id) => dispatch({ type: 'REMOVE_STICKER', payload: id }),
+    addMusicTrack: (track) => dispatch({ type: 'ADD_MUSIC_TRACK', payload: track }),
+    updateMusicTrack: (id, updates) => dispatch({ type: 'UPDATE_MUSIC_TRACK', payload: { id, updates } }),
+    removeMusicTrack: (id) => dispatch({ type: 'REMOVE_MUSIC_TRACK', payload: id }),
     setFilter: (filterId) => dispatch({ type: 'SET_FILTER', payload: filterId }),
     toggleCaptionPreview: () => dispatch({ type: 'TOGGLE_CAPTION_PREVIEW' }),
     setCaptionPosition: (positionY) => dispatch({ type: 'SET_CAPTION_POSITION', payload: positionY }),

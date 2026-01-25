@@ -8,6 +8,7 @@ import {
   OverlayProvider,
   useOverlay,
   ActiveOverlayList,
+  MusicDrawer,
 } from "@/components/overlays";
 import { getFilterById } from "@/lib/templates/filter-presets";
 import { getTextStyleById } from "@/lib/templates/text-templates";
@@ -36,6 +37,7 @@ import { VapiVoiceButton } from "@/components/VapiVoiceButton";
 import { extractAudioFromVideo, isFFmpegSupported } from "@/lib/audio/extract-audio";
 import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
 import { FlipWords } from "@/components/ui/flip-words";
+import SwooshText from "@/components/ui/swoosh-text";
 
 type AppView = "feed" | "editor";
 type EditorStep = "upload" | "edit" | "export";
@@ -160,6 +162,9 @@ function HomeContent() {
 
   // Mobile transcript drawer state (hoisted from EditStep for Sidebar access)
   const [showTranscriptDrawer, setShowTranscriptDrawer] = useState(false);
+
+  // Music drawer state
+  const [showMusicDrawer, setShowMusicDrawer] = useState(false);
 
   // Save/Load state
   const [isSaving, setIsSaving] = useState(false);
@@ -2598,51 +2603,57 @@ function UploadStep({
             </div>
           </div>
 
-          {/* Quick select chips */}
-          <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center mb-6 px-2 sm:px-4">
+          {/* Quick select chips - video themes */}
+          <div className="flex flex-wrap gap-1.5 justify-center mb-6 px-4">
             <button
-              onClick={() => setAiPrompt('Compose clips into a cohesive video')}
-              className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border rounded-full text-xs sm:text-sm font-medium transition-all ${
-                aiPrompt.includes('Compose')
+              onClick={() => setAiPrompt('High energy, fast-paced and exciting')}
+              className={`px-3 py-1 border rounded-full text-xs font-medium transition-all ${
+                aiPrompt.includes('energy')
                   ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
-                  : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white'
+                  : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white/70'
               }`}
             >
-              <span className="text-sm sm:text-base">🎬</span>
-              Compose
+              Hype
             </button>
             <button
-              onClick={() => setAiPrompt('Create a flashy, attention-grabbing video with dynamic transitions')}
-              className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border rounded-full text-xs sm:text-sm font-medium transition-all ${
-                aiPrompt.includes('flashy')
+              onClick={() => setAiPrompt('Chill and relaxed vibes')}
+              className={`px-3 py-1 border rounded-full text-xs font-medium transition-all ${
+                aiPrompt.includes('Chill')
                   ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
-                  : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white'
+                  : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white/70'
               }`}
             >
-              <span className="text-sm sm:text-base">✨</span>
-              Flashy
+              Chill
             </button>
             <button
-              onClick={() => setAiPrompt('Keep it simple and professional, minimal cuts')}
-              className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border rounded-full text-xs sm:text-sm font-medium transition-all ${
-                aiPrompt.includes('simple')
+              onClick={() => setAiPrompt('Cinematic and dramatic feel')}
+              className={`px-3 py-1 border rounded-full text-xs font-medium transition-all ${
+                aiPrompt.includes('Cinematic')
                   ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
-                  : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white'
+                  : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white/70'
               }`}
             >
-              <span className="text-sm sm:text-base">📋</span>
-              Minimal
+              Cinematic
             </button>
             <button
-              onClick={() => setAiPrompt('Extract the best highlights and key moments')}
-              className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border rounded-full text-xs sm:text-sm font-medium transition-all ${
-                aiPrompt.includes('highlights')
+              onClick={() => setAiPrompt('Clean and professional look')}
+              className={`px-3 py-1 border rounded-full text-xs font-medium transition-all ${
+                aiPrompt.includes('professional')
                   ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
-                  : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white'
+                  : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white/70'
               }`}
             >
-              <span className="text-sm sm:text-base">🎯</span>
-              Highlights
+              Professional
+            </button>
+            <button
+              onClick={() => setAiPrompt('Fun and playful style')}
+              className={`px-3 py-1 border rounded-full text-xs font-medium transition-all ${
+                aiPrompt.includes('playful')
+                  ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                  : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white/70'
+              }`}
+            >
+              Playful
             </button>
           </div>
 
@@ -2811,7 +2822,7 @@ function EditStep({
   // Timeline selection state
   const [selectedTimelineItems, setSelectedTimelineItems] = useState<string[]>([]);
 
-  const { state: overlayState, updateTextOverlay, updateSticker, removeTextOverlay, removeSticker, setCaptionPosition, setTransitions, setFilter, toggleCaptionPreview, addTextOverlay, addSticker, setCaptionTemplate, setAudioSettings } = useOverlay();
+  const { state: overlayState, updateTextOverlay, updateSticker, updateMusicTrack, removeTextOverlay, removeSticker, removeMusicTrack, setCaptionPosition, setTransitions, setFilter, toggleCaptionPreview, addTextOverlay, addSticker, addMusicTrack, setCaptionTemplate, setAudioSettings } = useOverlay();
 
   
   const activeClip = clips[activeClipIndex];
@@ -3176,11 +3187,26 @@ function EditStep({
       })),
     };
 
+    // Music track
+    const musicTrack: TimelineTrack = {
+      id: 'music-track',
+      name: 'Music',
+      items: overlayState.musicTracks.map((track) => ({
+        id: track.id,
+        trackId: 'music-track',
+        start: track.startMs / 1000,
+        end: (track.startMs + track.durationMs) / 1000,
+        type: TrackItemType.MUSIC,
+        label: track.name.slice(0, 15) || 'Music',
+        data: track,
+      })),
+    };
+
     return {
-      timelineTracks: [videoTrack, textTrack, stickerTrack],
+      timelineTracks: [videoTrack, musicTrack, textTrack, stickerTrack],
       collapsedDuration: effectiveDuration,
     };
-  }, [clips, allWords, deletedWordIds, deletedPauseIds, overlayState.textOverlays, overlayState.stickers, totalDuration]);
+  }, [clips, allWords, deletedWordIds, deletedPauseIds, overlayState.textOverlays, overlayState.stickers, overlayState.musicTracks, totalDuration]);
 
   // Handle timeline item move
   const handleTimelineItemMove = useCallback((itemId: string, newStart: number, newEnd: number, trackId: string) => {
@@ -3191,6 +3217,11 @@ function EditStep({
       });
     } else if (trackId === 'sticker-track') {
       updateSticker(itemId, {
+        startMs: newStart * 1000,
+        durationMs: (newEnd - newStart) * 1000,
+      });
+    } else if (trackId === 'music-track') {
+      updateMusicTrack(itemId, {
         startMs: newStart * 1000,
         durationMs: (newEnd - newStart) * 1000,
       });
@@ -3239,7 +3270,7 @@ function EditStep({
         });
       }
     }
-  }, [updateTextOverlay, updateSticker, clips]);
+  }, [updateTextOverlay, updateSticker, updateMusicTrack, clips]);
 
   // Handle timeline item resize
   const handleTimelineItemResize = useCallback((itemId: string, newStart: number, newEnd: number) => {
@@ -3259,8 +3290,17 @@ function EditStep({
         startMs: newStart * 1000,
         durationMs: (newEnd - newStart) * 1000,
       });
+      return;
     }
-  }, [overlayState.textOverlays, overlayState.stickers, updateTextOverlay, updateSticker]);
+
+    const musicItem = overlayState.musicTracks.find(m => m.id === itemId);
+    if (musicItem) {
+      updateMusicTrack(itemId, {
+        startMs: newStart * 1000,
+        durationMs: (newEnd - newStart) * 1000,
+      });
+    }
+  }, [overlayState.textOverlays, overlayState.stickers, overlayState.musicTracks, updateTextOverlay, updateSticker, updateMusicTrack]);
 
   // Handle timeline item delete
   const handleTimelineItemDelete = useCallback((itemIds: string[]) => {

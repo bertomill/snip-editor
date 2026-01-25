@@ -24,6 +24,19 @@ export interface StickerOverlay {
   scale: number;           // 0.5 - 2.0
 }
 
+// Music Track
+export interface MusicTrack {
+  id: string;
+  pixabayId: number;        // Pixabay track ID
+  url: string;              // MP3 URL for playback/render
+  name: string;             // Track title
+  artist: string;           // Artist name
+  startMs: number;          // When music starts in timeline
+  durationMs: number;       // How long music plays
+  trimStartMs: number;      // Offset into audio file
+  volume: number;           // 0-1 volume level
+}
+
 // Filter Preset
 export interface FilterPreset {
   id: string;
@@ -121,6 +134,7 @@ export const defaultAudioSettings: AudioSettings = {
 export interface OverlayState {
   textOverlays: TextOverlay[];
   stickers: StickerOverlay[];
+  musicTracks: MusicTrack[];
   filterId: string | null;
   showCaptionPreview: boolean;
   captionPositionY: number; // Percentage from top (0-100), default ~75 (bottom area)
@@ -137,6 +151,9 @@ export type OverlayAction =
   | { type: 'ADD_STICKER'; payload: StickerOverlay }
   | { type: 'UPDATE_STICKER'; payload: { id: string; updates: Partial<StickerOverlay> } }
   | { type: 'REMOVE_STICKER'; payload: string }
+  | { type: 'ADD_MUSIC_TRACK'; payload: MusicTrack }
+  | { type: 'UPDATE_MUSIC_TRACK'; payload: { id: string; updates: Partial<MusicTrack> } }
+  | { type: 'REMOVE_MUSIC_TRACK'; payload: string }
   | { type: 'SET_FILTER'; payload: string | null }
   | { type: 'TOGGLE_CAPTION_PREVIEW' }
   | { type: 'SET_CAPTION_POSITION'; payload: number }
@@ -155,4 +172,5 @@ export interface RenderOverlayParams {
   textOverlays?: TextOverlay[];
   stickers?: StickerOverlay[];
   clipTransitions?: ClipTransition[];
+  musicTracks?: MusicTrack[];
 }

@@ -60,6 +60,8 @@ export const TimelineItem: React.FC<TimelineItemProps> = ({
         return `${baseGlass} bg-gradient-to-r from-purple-500/70 to-purple-600/60`;
       case TrackItemType.STICKER:
         return `${baseGlass} bg-gradient-to-r from-amber-500/70 to-yellow-500/60`;
+      case TrackItemType.MUSIC:
+        return `${baseGlass} bg-gradient-to-r from-pink-500/70 to-purple-500/60`;
       case TrackItemType.SCRIPT:
         // Grey styling for script items (more subtle than video track)
         return isDeleted
@@ -83,6 +85,8 @@ export const TimelineItem: React.FC<TimelineItemProps> = ({
         return 'T';
       case TrackItemType.STICKER:
         return '😀';
+      case TrackItemType.MUSIC:
+        return '🎵';
       case TrackItemType.SCRIPT:
         return null; // No icon for script words
       case TrackItemType.PAUSE:

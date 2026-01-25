@@ -47,7 +47,7 @@ export interface VideoClipInput {
   volume?: number;   // Audio volume (0-1, default 1)
 }
 
-import { TextOverlay, StickerOverlay, ClipTransition } from '@/types/overlays';
+import { TextOverlay, StickerOverlay, MusicTrack, ClipTransition } from '@/types/overlays';
 
 export interface SnipCompositionProps {
   clips: VideoClipInput[];
@@ -65,6 +65,8 @@ export interface SnipCompositionProps {
   captionPositionY?: number;
   // Clip transitions
   clipTransitions?: ClipTransition[];
+  // Music tracks
+  musicTracks?: MusicTrack[];
 }
 
 export interface TranscriptSegment {

@@ -5,4 +5,5 @@ export { TextOverlayDrawer } from './TextOverlayDrawer';
 export { StickerDrawer } from './StickerDrawer';
 export { FilterDrawer } from './FilterDrawer';
 export { AudioDrawer } from './AudioDrawer';
+export { MusicDrawer } from './MusicDrawer';
 export { MobileCaptionsDrawer } from './MobileCaptionsDrawer';
