@@ -122,6 +122,8 @@ function HomeContent() {
   // Social connections state
   const [xConnection, setXConnection] = useState<{ connected: boolean; username?: string } | null>(null);
   const [xPosts, setXPosts] = useState<Array<{ id: string; text: string; likes: number }>>([]);
+  const [youtubeConnection, setYoutubeConnection] = useState<{ connected: boolean; channelName?: string } | null>(null);
+  const [youtubeVideos, setYoutubeVideos] = useState<Array<{ id: string; title: string; views: number; likes: number; engagementRate: number }>>([]);
 
   // Editor state
   const [step, setStep] = useState<EditorStep>("upload");
@@ -217,6 +219,29 @@ function HomeContent() {
     }
   }, [user]);
 
+  // Fetch YouTube connection status and videos
+  useEffect(() => {
+    if (user) {
+      fetch('/api/auth/youtube/status')
+        .then(res => res.json())
+        .then(data => {
+          setYoutubeConnection(data);
+          // If connected, fetch their videos for AI context
+          if (data.connected) {
+            fetch('/api/youtube/videos')
+              .then(res => res.json())
+              .then(videosData => {
+                if (videosData.topPerforming) {
+                  setYoutubeVideos(videosData.topPerforming);
+                }
+              })
+              .catch(() => setYoutubeVideos([]));
+          }
+        })
+        .catch(() => setYoutubeConnection({ connected: false }));
+    }
+  }, [user]);
+
   // Load theme from localStorage on mount
   useEffect(() => {
     const savedTheme = localStorage.getItem('snip-theme');
@@ -259,6 +284,30 @@ function HomeContent() {
       setXConnection({ connected: false });
     } catch (error) {
       console.error('Failed to disconnect X:', error);
+    }
+  };
+
+  // Handle YouTube connection
+  const handleConnectYouTube = async () => {
+    try {
+      const res = await fetch('/api/auth/youtube');
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (error) {
+      console.error('Failed to connect YouTube:', error);
+    }
+  };
+
+  // Handle YouTube disconnect
+  const handleDisconnectYouTube = async () => {
+    try {
+      await fetch('/api/auth/youtube/status', { method: 'DELETE' });
+      setYoutubeConnection({ connected: false });
+      setYoutubeVideos([]);
+    } catch (error) {
+      console.error('Failed to disconnect YouTube:', error);
     }
   };
 
@@ -1210,14 +1259,39 @@ function HomeContent() {
                 <p className="text-[#636366] text-xs font-medium uppercase tracking-wider mb-3">Connect to Socials</p>
                 <div className="space-y-1">
                   {/* YouTube */}
-                  <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group">
-                    <div className="w-8 h-8 rounded-lg bg-[#FF0000]/10 flex items-center justify-center">
+                  <button
+                    onClick={youtubeConnection?.connected ? handleDisconnectYouTube : handleConnectYouTube}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group"
+                  >
+                    <div className="relative w-8 h-8 rounded-lg bg-[#FF0000]/10 flex items-center justify-center">
                       <svg className="w-5 h-5 text-[#FF0000]" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                       </svg>
+                      {/* Green checkmark badge when connected */}
+                      {youtubeConnection?.connected && (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full flex items-center justify-center ring-2 ring-[var(--background-card)]">
+                          <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
                     </div>
-                    <span className="text-white text-sm font-medium">YouTube</span>
-                    <span className="ml-auto text-xs text-[#636366] group-hover:text-white">Connect</span>
+                    <div className="flex-1 text-left">
+                      <span className="text-white text-sm font-medium">YouTube</span>
+                      {youtubeConnection?.connected && youtubeConnection.channelName && (
+                        <p className="text-[#636366] text-xs">{youtubeConnection.channelName}</p>
+                      )}
+                    </div>
+                    {youtubeConnection?.connected ? (
+                      <span className="ml-auto text-xs text-green-400 flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        Connected
+                      </span>
+                    ) : (
+                      <span className="ml-auto text-xs text-[#636366] group-hover:text-white">Connect</span>
+                    )}
                   </button>
                   {/* TikTok */}
                   <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group">
@@ -2161,7 +2235,12 @@ function UploadStep({
 
   return (
     <div className="w-full max-w-md text-center px-4 animate-fade-in-up">
-      <h2 className="text-4xl font-bold mb-3 tracking-tight text-white">
+      <h2
+        className="text-4xl font-bold mb-3 tracking-tight text-white"
+        style={{
+          textShadow: '1px 1px 0px rgba(255, 0, 128, 0.5), -1px -1px 0px rgba(0, 212, 255, 0.5)',
+        }}
+      >
         Create something amazing
       </h2>
       <p className="text-[#8E8E93] mb-10 text-lg">
@@ -2403,6 +2482,8 @@ function EditStep({
   const [transcribeProgress, setTranscribeProgress] = useState(0);
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState<number | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [isVideoLoading, setIsVideoLoading] = useState(false);
+  const [xPosts, setXPosts] = useState<Array<{ id: string; text: string; likes: number }>>([]);
 
   // Undo/Redo state for deleted words
   const [undoStack, setUndoStack] = useState<Set<string>[]>([]);
@@ -3378,7 +3459,12 @@ function EditStep({
   // Handle video ready to play
   const handleVideoCanPlay = useCallback(() => {
     setIsVideoLoading(false);
-  }, []);
+    // Auto-play next video if playback was in progress
+    const video = getActiveVideoRef();
+    if (isPlaying && video) {
+      safeVideoPlay(video);
+    }
+  }, [isPlaying, getActiveVideoRef, safeVideoPlay]);
 
   // Reset video error and set loading when switching clips
   useEffect(() => {
@@ -3667,7 +3753,7 @@ function EditStep({
     <div className="w-full flex flex-col gap-0 lg:gap-6 animate-fade-in-up lg:px-6 isolate">
 
       {/* Mobile Video Panel */}
-      <div className="lg:hidden pt-0">
+      <div className="lg:hidden pt-14">
         <MobileVideoPanel
           activeClip={clips[activeClipIndex]}
           videoRef={mobileVideoRef}
@@ -3726,7 +3812,7 @@ function EditStep({
       )}
 
       {/* Desktop Layout */}
-      <div className="hidden lg:flex flex-col lg:flex-row gap-8">
+      <div className="hidden lg:flex flex-col lg:flex-row gap-8 pt-16">
         {/* Preview Panel - Fixed width on desktop */}
         <div className="w-full lg:w-[340px] flex-shrink-0">
           <p className="label mb-4">Preview</p>
@@ -4374,101 +4460,16 @@ function AutoCutOverlay({ status, message, currentClip, totalClips }: {
 
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10">
-      {/* Eddie with scissors animation */}
+      {/* Loading video animation */}
       <div className="relative mb-6">
-        {/* Glow effect */}
-        <div
-          className="absolute inset-0 blur-2xl opacity-30 rounded-full"
-          style={{
-            background: 'linear-gradient(135deg, #6366f1 0%, #4A8FE7 50%, #22d3bb 100%)',
-            transform: 'scale(2)',
-          }}
+        <video
+          src="/snip-loading.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="w-48 h-48 object-contain"
         />
-
-        {/* Eddie cutting scene */}
-        <div className="relative w-40 h-28">
-          {/* Film strip being cut */}
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center">
-            {/* Left film piece */}
-            <motion.div
-              className="flex gap-0.5"
-              animate={{ x: [-2, -8, -2] }}
-              transition={{ duration: 0.8, repeat: Infinity }}
-            >
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="w-6 h-4 bg-gradient-to-b from-[#3a3a4f] to-[#2a2a3f] rounded-sm border border-[#4a4a5f]">
-                  <div className="w-full h-0.5 bg-[#4a4a5f] mt-0.5" />
-                  <div className="w-full h-0.5 bg-[#4a4a5f] mt-1" />
-                </div>
-              ))}
-            </motion.div>
-            {/* Cut gap */}
-            <div className="w-2" />
-            {/* Right film piece */}
-            <motion.div
-              className="flex gap-0.5"
-              animate={{ x: [2, 8, 2] }}
-              transition={{ duration: 0.8, repeat: Infinity }}
-            >
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="w-6 h-4 bg-gradient-to-b from-[#3a3a4f] to-[#2a2a3f] rounded-sm border border-[#4a4a5f]">
-                  <div className="w-full h-0.5 bg-[#4a4a5f] mt-0.5" />
-                  <div className="w-full h-0.5 bg-[#4a4a5f] mt-1" />
-                </div>
-              ))}
-            </motion.div>
-          </div>
-
-          {/* Eddie character with scissors */}
-          <motion.div
-            className="absolute top-0 left-1/2 -translate-x-1/2"
-            animate={{ y: [0, -3, 0] }}
-            transition={{ duration: 0.8, repeat: Infinity }}
-          >
-            <div className="relative">
-              {/* Head */}
-              <motion.div
-                className="w-10 h-10 bg-gradient-to-br from-[#4A8FE7] to-[#6366f1] rounded-full mx-auto relative"
-              >
-                {/* Focused eyes (looking down at work) */}
-                <div
-                  className="absolute flex gap-2 left-1/2 -translate-x-1/2"
-                  style={{ top: '40%' }}
-                >
-                  <div className="w-1.5 h-1.5 bg-white rounded-full" />
-                  <div className="w-1.5 h-1.5 bg-white rounded-full" />
-                </div>
-                {/* Concentrated mouth */}
-                <div className="absolute w-2 h-0.5 bg-white rounded-full left-1/2 -translate-x-1/2" style={{ top: '65%' }} />
-              </motion.div>
-
-              {/* Arms holding scissors */}
-              <div className="flex justify-center -mt-1">
-                {/* Scissors */}
-                <motion.div
-                  className="relative"
-                  animate={{ rotate: [-5, 5, -5] }}
-                  transition={{ duration: 0.4, repeat: Infinity }}
-                >
-                  <svg className="w-8 h-8 text-[#FF6B6B]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
-                  </svg>
-                </motion.div>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Cut sparkles */}
-          <motion.div
-            className="absolute top-8 left-1/2 -translate-x-1/2"
-            animate={{ scale: [0, 1.5, 0], opacity: [0, 1, 0] }}
-            transition={{ duration: 0.8, repeat: Infinity }}
-          >
-            <svg className="w-4 h-4 text-[#22d3bb]" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0L14 8L22 10L14 12L12 20L10 12L2 10L10 8L12 0Z" />
-            </svg>
-          </motion.div>
-        </div>
       </div>
 
       {/* Animated progress text */}
@@ -4582,7 +4583,7 @@ function MobileVideoPanel({
   } | null;
 }) {
   return (
-    <div className="flex flex-col relative z-0 -mt-12">
+    <div className="flex flex-col relative z-0 mt-0">
       <div className="overflow-hidden relative w-full">
         <div ref={previewContainerRef} className="aspect-[9/16] bg-black relative max-h-[80vh] mx-auto">
           {/* Upload Progress Overlay */}
