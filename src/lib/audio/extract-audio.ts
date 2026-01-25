@@ -1,7 +1,7 @@
 'use client';
 
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { fetchFile } from '@ffmpeg/util';
 
 let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
@@ -37,11 +37,10 @@ async function loadFFmpeg(onProgress?: (progress: number) => void): Promise<FFmp
       onProgress?.(progress * 100);
     });
 
-    // Load FFmpeg core from CDN
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+    // Load FFmpeg core from local files (avoids CORS issues with cross-origin isolation)
     await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      coreURL: '/ffmpeg/ffmpeg-core.js',
+      wasmURL: '/ffmpeg/ffmpeg-core.wasm',
     });
 
     ffmpegLoaded = true;
