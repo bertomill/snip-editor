@@ -1,7 +1,7 @@
 'use client';
 
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
@@ -38,9 +38,10 @@ async function loadFFmpeg(onProgress?: (progress: number) => void): Promise<FFmp
     });
 
     // Load FFmpeg core from local files (avoids CORS issues with cross-origin isolation)
+    const baseURL = window.location.origin;
     await ffmpeg.load({
-      coreURL: '/ffmpeg/ffmpeg-core.js',
-      wasmURL: '/ffmpeg/ffmpeg-core.wasm',
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg/ffmpeg-core.wasm`, 'application/wasm'),
     });
 
     ffmpegLoaded = true;

@@ -306,14 +306,30 @@ Example flow:
 "Okay so your content is really solid - I love the value you're giving here. One thing though - your opening is a bit slow. What if you started with something like 'This one thing changed everything for me' to hook people right away? ... Also, I noticed there's no call to action at the end. Want me to suggest one that feels natural?"
 
 TOOLS YOU CAN USE:
-You have the ability to actually make changes to their video! When the user asks you to do something, use your tools to do it.
+You have the ability to actually make changes to their video! When the user asks you to do something, USE YOUR TOOLS IMMEDIATELY - don't just talk about it.
+
 - toggle_captions: Turn captions on or off
 - set_filter: Apply a visual filter (cinematic, vintage, vibrant, warm, cool, bw, dramatic, soft)
 - set_caption_style: Change caption style (classic, minimal, bold, neon)
 - add_sticker: Add an emoji/sticker to the video
-- add_text: Add text overlay with different styles
+- add_text: Add text overlay to the video
 
-After using a tool, confirm what you did in a friendly way.
+CRITICAL - ADD_TEXT TOOL:
+When the user asks to add ANY text, you MUST use the add_text tool. This includes:
+- "Add text that says..."
+- "Put some text..."
+- "Write [something] on the video"
+- "Add a title..."
+- "Can you add [words]..."
+- "Put [words] at the top/bottom"
+- Any request involving adding words/text to the video
+
+ALWAYS call add_text with: content (the text they want), style (bold/minimal/outline/neon/handwritten), position (top/center/bottom)
+If they don't specify style, use "bold". If they don't specify position, use "center".
+
+Example: User says "add text that says subscribe" → You call add_text with content="Subscribe", style="bold", position="bottom"
+
+After using ANY tool, confirm what you did in a friendly way like "Done! I added that text for you."
 Current state: Captions ${captionsEnabled ? "ON" : "OFF"}, Filter: ${currentFilter || "none"}`,
                 },
               ],
@@ -396,23 +412,23 @@ Current state: Captions ${captionsEnabled ? "ON" : "OFF"}, Filter: ${currentFilt
                   type: "function",
                   function: {
                     name: "add_text",
-                    description: "Add a text overlay to the video. Use when user wants to add text, titles, or labels.",
+                    description: "ALWAYS use this when user wants to add ANY text, words, titles, labels, or messages to the video. Triggers: 'add text', 'put text', 'write', 'add title', 'put words', 'add subscribe', etc.",
                     parameters: {
                       type: "object",
                       properties: {
                         content: {
                           type: "string",
-                          description: "The text content to display"
+                          description: "The exact text/words to display on the video"
                         },
                         style: {
                           type: "string",
                           enum: ["bold", "minimal", "outline", "neon", "handwritten"],
-                          description: "The visual style of the text"
+                          description: "Visual style. Default to 'bold' if not specified."
                         },
                         position: {
                           type: "string",
                           enum: ["top", "center", "bottom"],
-                          description: "Where to position the text"
+                          description: "Position on screen. Default to 'center' if not specified."
                         }
                       },
                       required: ["content"]
