@@ -507,37 +507,191 @@ textarea:focus-visible {
 }
 
 .light-mode .glass {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(240, 248, 255, 0.95);
 }
 
 .light-mode ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: #a0c0d8;
 }
 
-.light-mode .bg-\[\#1C1C1E\] {
-  background-color: #ffffff !important;
+/* Background color overrides */
+.light-mode .bg-\[\#1C1C1E\],
+.light-mode .bg-\[\#1a1a1a\],
+.light-mode .bg-\[\#181818\],
+.light-mode .bg-\[\#151515\],
+.light-mode .bg-\[\#121212\],
+.light-mode .bg-\[\#111111\],
+.light-mode .bg-\[\#0f0f0f\],
+.light-mode .bg-\[\#0e0e0e\],
+.light-mode .bg-\[\#0d0d0d\],
+.light-mode .bg-\[\#0D0D0D\],
+.light-mode .bg-\[\#0a0a0a\],
+.light-mode .bg-\[\#000000\],
+.light-mode .bg-\[\#000\],
+.light-mode .bg-black {
+  background-color: var(--background-card) !important;
 }
 
-.light-mode .bg-\[\#2C2C2E\] {
-  background-color: #f5f7fa !important;
+.light-mode .bg-\[\#2C2C2E\],
+.light-mode .bg-\[\#1e2536\],
+.light-mode .bg-\[\#171d2a\] {
+  background-color: var(--background) !important;
 }
 
-.light-mode .bg-\[\#3C3C3E\] {
-  background-color: #e5e7eb !important;
+.light-mode .bg-\[\#3C3C3E\],
+.light-mode .bg-\[\#232a3d\],
+.light-mode .bg-\[\#283042\],
+.light-mode .bg-\[\#2d3548\] {
+  background-color: var(--background-elevated) !important;
 }
 
-.light-mode .text-white {
+.light-mode .bg-\[\#252d40\],
+.light-mode .bg-\[\#343d52\] {
+  background-color: var(--background-input) !important;
+}
+
+/* CSS variable backgrounds */
+.light-mode [class*="bg-\[var(--background"] {
+  background-color: var(--background) !important;
+}
+
+/* Text color overrides - make all light text dark */
+.light-mode .text-white,
+.light-mode .text-\[\#FFFFFF\],
+.light-mode .text-\[\#ffffff\] {
   color: var(--text-primary) !important;
 }
 
-.light-mode .text-gray-400 {
+.light-mode .text-gray-100,
+.light-mode .text-gray-200,
+.light-mode .text-gray-300 {
+  color: var(--text-primary) !important;
+}
+
+.light-mode .text-gray-400,
+.light-mode .text-gray-500,
+.light-mode .text-\[\#8E8E93\],
+.light-mode .text-\[\#636366\],
+.light-mode .text-\[\#48484A\] {
   color: var(--text-secondary) !important;
 }
 
-.light-mode .text-\[\#8E8E93\] {
-  color: var(--text-secondary) !important;
-}
-
-.light-mode .border-\[\#2C2C2E\] {
+/* Border overrides */
+.light-mode .border-\[\#2C2C2E\],
+.light-mode .border-\[\#3a4358\],
+.light-mode .border-\[\#2d3548\],
+.light-mode .border-white\/10,
+.light-mode .border-white\/20 {
   border-color: var(--border) !important;
+}
+
+/* Divide colors */
+.light-mode .divide-\[\#2C2C2E\] > * + *,
+.light-mode .divide-white\/10 > * + * {
+  border-color: var(--border) !important;
+}
+
+/* Ring colors */
+.light-mode .ring-white\/10,
+.light-mode .ring-white\/20 {
+  --tw-ring-color: var(--border) !important;
+}
+
+/* Placeholder text */
+.light-mode ::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* SVG icons - invert stroke colors */
+.light-mode .text-white svg,
+.light-mode svg.text-white {
+  color: var(--text-primary) !important;
+}
+
+/* Timeline and editor specific */
+.light-mode [class*="bg-\[#1"] {
+  background-color: var(--background-card) !important;
+}
+
+.light-mode [class*="bg-\[#2"] {
+  background-color: var(--background-elevated) !important;
+}
+
+/* Opacity backgrounds */
+.light-mode .bg-black\/50,
+.light-mode .bg-black\/80,
+.light-mode .bg-black\/90,
+.light-mode .bg-\[\#1a1a1a\]\/95,
+.light-mode .bg-\[\#1a1a1a\]\/90,
+.light-mode .bg-\[\#0a0a0a\]\/80,
+.light-mode .bg-\[\#000000\]\/80,
+.light-mode .bg-\[\#1C1C1E\]\/90,
+.light-mode .bg-\[\#1C1C1E\]\/95 {
+  background-color: rgba(240, 248, 255, 0.95) !important;
+}
+
+/* Chat input specific */
+.light-mode input.text-white,
+.light-mode textarea.text-white,
+.light-mode .text-white input,
+.light-mode .text-white textarea {
+  color: var(--text-primary) !important;
+}
+
+.light-mode .placeholder\:text-white\/50::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Gradients - override dark gradients */
+.light-mode .from-\[\#1C1C1E\],
+.light-mode .from-black {
+  --tw-gradient-from: var(--background-card) !important;
+}
+
+.light-mode .to-\[\#1C1C1E\],
+.light-mode .to-black {
+  --tw-gradient-to: var(--background-card) !important;
+}
+
+/* Shadow adjustments for light mode */
+.light-mode .shadow-lg,
+.light-mode .shadow-xl,
+.light-mode .shadow-2xl {
+  --tw-shadow-color: rgba(0, 80, 120, 0.1) !important;
+}
+
+/* Hover states */
+.light-mode .hover\:bg-\[\#2C2C2E\]:hover,
+.light-mode .hover\:bg-\[\#3C3C3E\]:hover,
+.light-mode .hover\:bg-white\/5:hover,
+.light-mode .hover\:bg-white\/10:hover,
+.light-mode .hover\:bg-white\/20:hover {
+  background-color: var(--background-card-hover) !important;
+}
+
+/* Focus states */
+.light-mode .focus\:ring-white:focus {
+  --tw-ring-color: var(--accent) !important;
+}
+
+/* Backdrop blur elements */
+.light-mode .backdrop-blur-xl,
+.light-mode .backdrop-blur-2xl {
+  background-color: rgba(240, 248, 255, 0.9) !important;
+}
+
+/* Ensure all direct background colors are overridden */
+.light-mode [style*="background: #1"],
+.light-mode [style*="background: #0"],
+.light-mode [style*="background-color: #1"],
+.light-mode [style*="background-color: #0"],
+.light-mode [style*="background: rgb(0"],
+.light-mode [style*="background: rgb(1"],
+.light-mode [style*="background: rgb(2"] {
+  background-color: var(--background-card) !important;
+}
+
+/* White text on dark - ensure it inverts */
+.light-mode .bg-transparent.text-white {
+  color: var(--text-primary) !important;
 }

@@ -9,10 +9,13 @@ interface WordSpanProps {
   isActive: boolean;
   isSelected: boolean;
   onClick: (e: React.MouseEvent) => void;
+  onMouseDown?: (e: React.MouseEvent) => void;
+  onMouseEnter?: () => void;
 }
 
 /**
  * Individual word component with visual states for script-driven editing
+ * Supports click-and-drag selection
  */
 export const WordSpan = memo(function WordSpan({
   id,
@@ -21,6 +24,8 @@ export const WordSpan = memo(function WordSpan({
   isActive,
   isSelected,
   onClick,
+  onMouseDown,
+  onMouseEnter,
 }: WordSpanProps) {
   // Build class names based on state
   let className = 'inline cursor-pointer rounded px-0.5 py-0.5 transition-all duration-150 select-none ';
@@ -44,6 +49,8 @@ export const WordSpan = memo(function WordSpan({
       data-word-id={id}
       className={className}
       onClick={onClick}
+      onMouseDown={onMouseDown}
+      onMouseEnter={onMouseEnter}
     >
       {text}
     </span>

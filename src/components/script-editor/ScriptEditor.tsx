@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useMemo, useEffect } from 'react';
+import { useCallback, useRef, useMemo, useEffect, useState } from 'react';
 import { TranscriptWord } from '@/lib/types/composition';
 import { WordSpan } from './WordSpan';
 import { useScriptEditor } from './useScriptEditor';
@@ -15,6 +15,7 @@ interface ScriptEditorProps {
 /**
  * Descript-style transcript editor with word-level editing
  * Click to seek, select + Delete to remove, Cmd+Z to undo
+ * Click and drag to select multiple words
  */
 export function ScriptEditor({
   words,
@@ -24,6 +25,10 @@ export function ScriptEditor({
 }: ScriptEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const lastSelectedWordId = useRef<string | null>(null);
+
+  // Drag selection state
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartWordId = useRef<string | null>(null);
 
   const {
     deletedWordIds,
@@ -64,7 +69,42 @@ export function ScriptEditor({
   // All word IDs for range selection
   const allWordIds = useMemo(() => words.map(w => w.id), [words]);
 
-  // Handle word click
+  // Handle drag start (mouse down on word)
+  const handleWordMouseDown = useCallback((word: TranscriptWord, e: React.MouseEvent) => {
+    // Don't start drag on deleted words or with modifier keys
+    if (deletedWordIds.has(word.id)) return;
+    if (e.shiftKey || e.metaKey || e.ctrlKey) return;
+
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartWordId.current = word.id;
+    toggleWordSelection(word.id, false); // Start fresh selection
+    lastSelectedWordId.current = word.id;
+  }, [deletedWordIds, toggleWordSelection]);
+
+  // Handle drag over word (mouse enter while dragging)
+  const handleWordMouseEnter = useCallback((word: TranscriptWord) => {
+    if (!isDragging || !dragStartWordId.current) return;
+    if (deletedWordIds.has(word.id)) return;
+
+    // Select range from drag start to current word
+    selectWordRange(dragStartWordId.current, word.id, allWordIds);
+  }, [isDragging, deletedWordIds, selectWordRange, allWordIds]);
+
+  // Handle drag end (mouse up)
+  useEffect(() => {
+    const handleMouseUp = () => {
+      if (isDragging) {
+        setIsDragging(false);
+        dragStartWordId.current = null;
+      }
+    };
+
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => document.removeEventListener('mouseup', handleMouseUp);
+  }, [isDragging]);
+
+  // Handle word click (for seeking and other interactions)
   const handleWordClick = useCallback((word: TranscriptWord, e: React.MouseEvent) => {
     e.stopPropagation();
 
@@ -74,14 +114,17 @@ export function ScriptEditor({
     } else if (deletedWordIds.has(word.id)) {
       // Click on deleted word: restore it
       restoreWord(word.id);
-    } else {
-      // Normal click: seek to word and toggle selection
+    } else if (!isDragging) {
+      // Normal click (not from drag): seek to word
       onWordClick(word);
-      toggleWordSelection(word.id, e.metaKey || e.ctrlKey);
+      // Only toggle if using Cmd/Ctrl, otherwise selection is handled by drag
+      if (e.metaKey || e.ctrlKey) {
+        toggleWordSelection(word.id, true);
+      }
     }
 
     lastSelectedWordId.current = word.id;
-  }, [allWordIds, deletedWordIds, onWordClick, restoreWord, selectWordRange, toggleWordSelection]);
+  }, [allWordIds, deletedWordIds, isDragging, onWordClick, restoreWord, selectWordRange, toggleWordSelection]);
 
   // Handle container click to clear selection
   const handleContainerClick = useCallback((e: React.MouseEvent) => {
@@ -153,7 +196,7 @@ export function ScriptEditor({
       {/* Transcript content */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-y-auto px-1"
+        className={`flex-1 overflow-y-auto px-1 ${isDragging ? 'select-none cursor-default' : ''}`}
         onClick={handleContainerClick}
       >
         <div className="leading-relaxed text-base space-y-0.5">
@@ -172,6 +215,8 @@ export function ScriptEditor({
                 isActive={word.id === activeWordId}
                 isSelected={selectedWordIds.has(word.id)}
                 onClick={(e) => handleWordClick(word, e)}
+                onMouseDown={(e) => handleWordMouseDown(word, e)}
+                onMouseEnter={() => handleWordMouseEnter(word)}
               />
               {/* Add space between words */}
               {i < words.length - 1 && ' '}
