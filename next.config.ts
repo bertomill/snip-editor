@@ -9,6 +9,24 @@ const nextConfig: NextConfig = {
   },
   // Turbopack config (empty to silence warning, Remotion uses webpack directly)
   turbopack: {},
+  // Headers for cross-origin isolation (required for SharedArrayBuffer / FFmpeg.wasm)
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          {
+            key: "Cross-Origin-Opener-Policy",
+            value: "same-origin",
+          },
+          {
+            key: "Cross-Origin-Embedder-Policy",
+            value: "credentialless",
+          },
+        ],
+      },
+    ];
+  },
   // Externalize Remotion packages for server-side rendering
   serverExternalPackages: [
     "@remotion/bundler",
