@@ -1,11 +1,7 @@
 /**
  * FFmpeg binary path - tries multiple sources for Vercel/serverless compatibility
- * 1. @ffmpeg-installer/ffmpeg (best for serverless)
- * 2. ffmpeg-static (fallback)
- * 3. System ffmpeg (local development)
+ * Uses dynamic requires to avoid Turbopack bundling issues with native binaries
  */
-import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-import ffmpegStatic from "ffmpeg-static";
 import { existsSync } from "fs";
 
 let cachedPath: string | null = null;
@@ -15,17 +11,30 @@ export function getFFmpegPath(): string {
   if (cachedPath) return cachedPath;
 
   // Try @ffmpeg-installer/ffmpeg first (best for Vercel)
-  if (ffmpegInstaller?.path && existsSync(ffmpegInstaller.path)) {
-    console.log(`[ffmpeg] Using ffmpeg-installer: ${ffmpegInstaller.path}`);
-    cachedPath = ffmpegInstaller.path;
-    return cachedPath;
+  try {
+    // Dynamic require to avoid Turbopack bundling issues
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
+    if (ffmpegInstaller?.path && existsSync(ffmpegInstaller.path)) {
+      console.log(`[ffmpeg] Using ffmpeg-installer: ${ffmpegInstaller.path}`);
+      cachedPath = ffmpegInstaller.path;
+      return cachedPath;
+    }
+  } catch {
+    // ffmpeg-installer not available
   }
 
   // Try ffmpeg-static as fallback
-  if (ffmpegStatic && typeof ffmpegStatic === 'string' && existsSync(ffmpegStatic)) {
-    console.log(`[ffmpeg] Using ffmpeg-static: ${ffmpegStatic}`);
-    cachedPath = ffmpegStatic;
-    return cachedPath;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ffmpegStatic = require("ffmpeg-static");
+    if (ffmpegStatic && typeof ffmpegStatic === 'string' && existsSync(ffmpegStatic)) {
+      console.log(`[ffmpeg] Using ffmpeg-static: ${ffmpegStatic}`);
+      cachedPath = ffmpegStatic;
+      return cachedPath;
+    }
+  } catch {
+    // ffmpeg-static not available
   }
 
   // Fall back to system ffmpeg (for local dev)
