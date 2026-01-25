@@ -36,7 +36,6 @@ export function MusicDrawer({
   const [activeCategory, setActiveCategory] = useState("");
   const [tracks, setTracks] = useState<MusicSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isDemo, setIsDemo] = useState(false);
   const [playingTrackId, setPlayingTrackId] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -54,7 +53,6 @@ export function MusicDrawer({
       const data = await response.json();
 
       setTracks(data.tracks || []);
-      setIsDemo(data.isDemo || false);
     } catch (error) {
       console.error("Failed to fetch music:", error);
       setTracks([]);
@@ -179,11 +177,6 @@ export function MusicDrawer({
           </div>
         )}
 
-        {isDemo && (
-          <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-blue-400 text-sm">
-            Showing demo tracks. Add PIXABAY_API_KEY for full library access.
-          </div>
-        )}
 
         {/* Search */}
         <form onSubmit={handleSearch} className="mb-4">
