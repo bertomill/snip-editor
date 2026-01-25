@@ -1649,6 +1649,7 @@ function HomeContent() {
               showTranscriptDrawer={showTranscriptDrawer}
               setShowTranscriptDrawer={setShowTranscriptDrawer}
               setHasUnsavedChanges={setHasUnsavedChanges}
+              xPosts={xPosts}
             />
           )}
         </main>
@@ -2452,6 +2453,7 @@ function EditStep({
   showTranscriptDrawer,
   setShowTranscriptDrawer,
   setHasUnsavedChanges,
+  xPosts,
 }: {
   clips: VideoClip[];
   setClips: React.Dispatch<React.SetStateAction<VideoClip[]>>;
@@ -2482,6 +2484,7 @@ function EditStep({
   showTranscriptDrawer: boolean;
   setShowTranscriptDrawer: React.Dispatch<React.SetStateAction<boolean>>;
   setHasUnsavedChanges: React.Dispatch<React.SetStateAction<boolean>>;
+  xPosts: Array<{ id: string; text: string; likes: number }>;
 }) {
   const [activeClipIndex, setActiveClipIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
