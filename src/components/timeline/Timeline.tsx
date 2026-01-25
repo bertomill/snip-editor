@@ -10,6 +10,7 @@ import {
   useTimelineComposition,
   useTimelineDragAndDrop,
 } from './hooks';
+import { ClipTransition } from '@/types/overlays';
 
 export type { TimelineItem, TimelineTrack, TimelineProps } from './types';
 
@@ -40,6 +41,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   onRedo,
   canUndo = false,
   canRedo = false,
+  clipTransitions = [],
 }) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -199,6 +201,7 @@ export const Timeline: React.FC<TimelineProps> = ({
             onAddText={onAddText}
             onAddSticker={onAddSticker}
             onAddMedia={onAddMedia}
+            clipTransitions={clipTransitions}
           />
         </div>
       </div>

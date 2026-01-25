@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Vapi from "@vapi-ai/web";
 
@@ -24,6 +24,10 @@ interface VapiVoiceButtonProps {
   hasVideo?: boolean;
   /** Whether transcription is currently in progress */
   isTranscribing?: boolean;
+  /** Whether captions are currently enabled */
+  captionsEnabled?: boolean;
+  /** Callback to toggle captions on/off */
+  onToggleCaptions?: (enabled: boolean) => void;
 }
 
 export function VapiVoiceButton({
@@ -37,6 +41,8 @@ export function VapiVoiceButton({
   instagramPosts = [],
   hasVideo = false,
   isTranscribing = false,
+  captionsEnabled = true,
+  onToggleCaptions,
 }: VapiVoiceButtonProps) {
   const [vapi, setVapi] = useState<Vapi | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -44,6 +50,12 @@ export function VapiVoiceButton({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState("");
+
+  // Ref to store latest callback to avoid stale closures
+  const onToggleCaptionsRef = useRef(onToggleCaptions);
+  useEffect(() => {
+    onToggleCaptionsRef.current = onToggleCaptions;
+  }, [onToggleCaptions]);
 
   // Initialize VAPI
   useEffect(() => {
@@ -77,9 +89,60 @@ export function VapiVoiceButton({
       setIsSpeaking(false);
     });
 
-    vapiInstance.on("message", (message) => {
+    // Consolidated message handler for transcripts and tool calls
+    vapiInstance.on("message", (message: Record<string, unknown>) => {
+      console.log("[Vapi] Message received:", message.type, JSON.stringify(message, null, 2));
+
+      // Handle transcripts
       if (message.type === "transcript" && message.transcriptType === "final") {
-        setLiveTranscript(message.transcript || "");
+        setLiveTranscript((message.transcript as string) || "");
+      }
+
+      // Handle function/tool calls - try multiple formats
+      if (message.type === "function-call" || message.type === "tool-calls" || message.type === "tool-call-result") {
+        console.log("[Vapi] Tool call detected:", JSON.stringify(message, null, 2));
+
+        // Try to extract function name and parameters from various possible formats
+        let name: string | undefined;
+        let parameters: Record<string, unknown> | undefined;
+
+        // Format 1: function-call with functionCall object
+        const functionCall = message.functionCall as Record<string, unknown> | undefined;
+        if (functionCall) {
+          name = functionCall.name as string;
+          parameters = (functionCall.parameters || functionCall.arguments) as Record<string, unknown>;
+        }
+
+        // Format 2: Direct name and parameters on message
+        if (!name && message.name) {
+          name = message.name as string;
+          parameters = (message.parameters || message.arguments) as Record<string, unknown>;
+        }
+
+        // Format 3: toolCalls array
+        const toolCalls = message.toolCalls as Array<Record<string, unknown>> | undefined;
+        if (!name && toolCalls && toolCalls.length > 0) {
+          const toolCall = toolCalls[0];
+          const func = toolCall.function as Record<string, unknown> | undefined;
+          if (func) {
+            name = func.name as string;
+            parameters = (func.parameters || func.arguments) as Record<string, unknown>;
+          }
+        }
+
+        console.log("[Vapi] Extracted - name:", name, "params:", parameters);
+
+        if (name === "toggleCaptions") {
+          const enabled = (parameters?.enabled ?? true) as boolean;
+          console.log("[Vapi] Toggle captions to:", enabled);
+
+          if (onToggleCaptionsRef.current) {
+            onToggleCaptionsRef.current(enabled);
+            console.log("[Vapi] Caption toggle executed successfully");
+          } else {
+            console.warn("[Vapi] onToggleCaptionsRef.current is not set");
+          }
+        }
       }
     });
 
@@ -194,10 +257,39 @@ GOOD (supportive): "This is a great start! I think we could make the opening eve
 You know about their video:
 ${scriptContext}${editingContext}${socialAccountsContext}
 
-You can help with: hooks, filters, stickers, captions, pacing, and general creative direction. If you have access to their social accounts, reference what's worked well for them before and suggest ideas based on their top-performing content. Always be encouraging and make them feel good about their content while offering genuinely useful suggestions.`,
+You can help with: hooks, filters, stickers, captions, pacing, and general creative direction. If you have access to their social accounts, reference what's worked well for them before and suggest ideas based on their top-performing content. Always be encouraging and make them feel good about their content while offering genuinely useful suggestions.
+
+TOOLS YOU CAN USE:
+You have the ability to actually make changes to their video! When the user asks you to do something, use your tools to do it.
+- toggleCaptions: Turn captions on or off. Use this when they ask to show/hide/enable/disable captions.
+
+After using a tool, confirm what you did in a friendly way like "Done! I turned on the captions for you" or "Captions are hidden now".
+Current caption state: ${captionsEnabled ? "Captions are ON" : "Captions are OFF"}`,
                 },
               ],
+              tools: [
+                {
+                  type: "function",
+                  function: {
+                    name: "toggleCaptions",
+                    description: "Turn video captions on or off. Use when the user asks to show, hide, enable, or disable captions.",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        enabled: {
+                          type: "boolean",
+                          description: "true to show captions, false to hide them"
+                        }
+                      },
+                      required: ["enabled"]
+                    }
+                  },
+                  async: false, // Client-side tool, no server
+                }
+              ],
             },
+            // Enable client-side tool calls
+            clientMessages: ["tool-calls", "function-call", "transcript"],
             voice: {
               provider: "11labs",
               voiceId: "21m00Tcm4TlvDq8ikWAM", // Rachel voice
@@ -220,7 +312,7 @@ You can help with: hooks, filters, stickers, captions, pacing, and general creat
         setIsConnecting(false);
       }
     }
-  }, [vapi, isCallActive, isConnecting, assistantId, transcript, currentFilter, textOverlayCount, stickerCount, xPosts, youtubeVideos, instagramPosts, hasVideo, isTranscribing]);
+  }, [vapi, isCallActive, isConnecting, assistantId, transcript, currentFilter, textOverlayCount, stickerCount, xPosts, youtubeVideos, instagramPosts, hasVideo, isTranscribing, captionsEnabled]);
 
   const isActive = isCallActive || isConnecting;
 

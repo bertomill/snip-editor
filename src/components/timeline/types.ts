@@ -1,5 +1,7 @@
 // Timeline type definitions - simplified for Snip
 
+import { ClipTransition } from '@/types/overlays';
+
 export enum TrackItemType {
   TEXT = "text",
   VIDEO = "video",
@@ -62,6 +64,8 @@ export interface TimelineProps {
   onRedo?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
+  // Transitions
+  clipTransitions?: ClipTransition[];
 }
 
 // Timeline content area props

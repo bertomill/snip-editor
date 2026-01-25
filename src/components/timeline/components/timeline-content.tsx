@@ -9,6 +9,7 @@ import TimelineMarkers from './timeline-markers';
 import TimelineGhostElement from './timeline-ghost-element';
 import TimelinePlayhead from './timeline-playhead';
 import useTimelineStore from '../stores/use-timeline-store';
+import { ClipTransition } from '@/types/overlays';
 
 interface TimelineContentProps {
   tracks: TimelineTrackType[];
@@ -29,6 +30,7 @@ interface TimelineContentProps {
   onAddText?: () => void;
   onAddSticker?: () => void;
   onAddMedia?: () => void;
+  clipTransitions?: ClipTransition[];
 }
 
 export const TimelineContent: React.FC<TimelineContentProps> = ({
@@ -50,6 +52,7 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
   onAddText,
   onAddSticker,
   onAddMedia,
+  clipTransitions = [],
 }) => {
   const { ghostElement, isValidDrop, isDragging } = useTimelineStore();
   const isScrubbing = useRef(false);
@@ -303,6 +306,7 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
                 onDragEnd={onDragEnd}
                 isDragging={isDragging}
                 onAddContent={track.id === 'video-track' ? onAddContent : undefined}
+                clipTransitions={track.id === 'video-track' ? clipTransitions : undefined}
               />
             ))}
           </div>

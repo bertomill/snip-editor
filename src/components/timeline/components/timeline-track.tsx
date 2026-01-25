@@ -1,9 +1,11 @@
 'use client';
 
 import React from 'react';
-import { TimelineTrack as TimelineTrackType, TimelineItem as TimelineItemType } from '../types';
+import { TimelineTrack as TimelineTrackType, TimelineItem as TimelineItemType, TrackItemType } from '../types';
 import { TIMELINE_CONSTANTS } from '../constants';
 import TimelineItem from './timeline-item';
+import TransitionMarker from './transition-marker';
+import { ClipTransition } from '@/types/overlays';
 
 interface TimelineTrackProps {
   track: TimelineTrackType;
@@ -16,6 +18,7 @@ interface TimelineTrackProps {
   onDragEnd: () => void;
   isDragging: boolean;
   onAddContent?: () => void;
+  clipTransitions?: ClipTransition[];
 }
 
 export const TimelineTrack: React.FC<TimelineTrackProps> = ({
@@ -29,6 +32,7 @@ export const TimelineTrack: React.FC<TimelineTrackProps> = ({
   onDragEnd,
   isDragging,
   onAddContent,
+  clipTransitions = [],
 }) => {
   // Check if this is the script track (thinner styling)
   const isScriptTrack = track.id === 'script-track';
@@ -41,6 +45,25 @@ export const TimelineTrack: React.FC<TimelineTrackProps> = ({
     ? Math.max(...track.items.map(item => item.end))
     : 0;
   const addButtonLeftPercent = (lastItemEnd / totalDuration) * 100;
+
+  // Get video items sorted by start time to find transition positions
+  const videoItems = track.items
+    .filter(item => item.type === TrackItemType.VIDEO)
+    .sort((a, b) => a.start - b.start);
+
+  // Calculate transition marker positions (between video clips)
+  const transitionMarkers = clipTransitions
+    .filter(t => t.type !== 'none' && t.cutTimeMs === undefined) // Only clip-boundary transitions
+    .map(transition => {
+      // Find the clip this transition is after
+      const clipItem = videoItems[transition.clipIndex];
+      if (!clipItem) return null;
+
+      // Position at the end of the clip
+      const position = (clipItem.end / totalDuration) * 100;
+      return { transition, position };
+    })
+    .filter(Boolean) as { transition: ClipTransition; position: number }[];
 
   return (
     <div
@@ -59,6 +82,15 @@ export const TimelineTrack: React.FC<TimelineTrackProps> = ({
           onDrag={onDrag}
           onDragEnd={onDragEnd}
           isDragging={isDragging}
+        />
+      ))}
+
+      {/* Transition markers between clips */}
+      {transitionMarkers.map(({ transition, position }) => (
+        <TransitionMarker
+          key={transition.id}
+          transition={transition}
+          position={position}
         />
       ))}
 

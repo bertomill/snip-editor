@@ -122,16 +122,15 @@ export default function LoginPage() {
             <span className="absolute text-[#ff0050] glitch-text-pink">snip</span>
             <span className="relative text-white">snip</span>
           </h2>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight mb-3">
-            {showEmailForm
-              ? (isSignUp ? 'Create your account' : 'Welcome back')
-              : 'Create viral content in seconds'
-            }
-          </h1>
           {!showEmailForm && (
             <p className="text-white/60 text-center text-lg">
-              AI-powered editing for the next generation of creators
+              the viral content editor assistant
             </p>
+          )}
+          {showEmailForm && (
+            <h1 className="text-2xl sm:text-3xl font-bold text-white text-center leading-tight mb-3">
+              {isSignUp ? 'Create your account' : 'Welcome back'}
+            </h1>
           )}
         </div>
 
@@ -288,11 +287,8 @@ export default function LoginPage() {
             <span className="absolute text-[#ff0050] glitch-text-pink">snip</span>
             <span className="relative text-white">snip</span>
           </h2>
-          <h1 className="text-3xl md:text-4xl font-bold text-white text-center leading-tight mb-4">
-            Create viral content in seconds
-          </h1>
           <p className="text-white/60 text-center text-xl">
-            AI-powered editing for the next generation of creators
+            the viral content editor assistant
           </p>
         </div>
 

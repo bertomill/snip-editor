@@ -142,9 +142,12 @@ export function ProjectFeed({
   onBulkDelete,
   compact = false
 }: ProjectFeedProps) {
-  const { projects, isLoading, deleteProject } = useProjects();
+  const { projects, isLoading, deleteProject, updateProject } = useProjects();
   const [deleteConfirm, setDeleteConfirm] = useState<{ projectId: string; projectName: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [renameProject, setRenameProject] = useState<{ projectId: string; projectName: string } | null>(null);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
   // Use external search state if provided, otherwise use internal
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
   const searchQuery = externalSearchQuery ?? internalSearchQuery;
@@ -219,6 +222,28 @@ export function ProjectFeed({
 
   const handleDeleteCancel = () => {
     setDeleteConfirm(null);
+  };
+
+  const handleRenameClick = (projectId: string, projectName: string) => {
+    setRenameProject({ projectId, projectName });
+    setNewProjectName(projectName);
+  };
+
+  const handleRenameConfirm = async () => {
+    if (!renameProject || !newProjectName.trim()) return;
+    setIsRenaming(true);
+    try {
+      await updateProject(renameProject.projectId, { name: newProjectName.trim() });
+    } finally {
+      setIsRenaming(false);
+      setRenameProject(null);
+      setNewProjectName('');
+    }
+  };
+
+  const handleRenameCancel = () => {
+    setRenameProject(null);
+    setNewProjectName('');
   };
 
   // Loading skeleton
@@ -371,6 +396,7 @@ export function ProjectFeed({
                       project={project}
                       onClick={() => isSelectMode && onToggleSelectProject ? onToggleSelectProject(project.id) : onSelectProject(project.id)}
                       onDelete={() => handleDeleteClick(project.id, project.name)}
+                      onRename={() => handleRenameClick(project.id, project.name)}
                       onShowActions={setActionProject}
                       isSelectMode={isSelectMode}
                       isSelected={selectedProjectIds.has(project.id)}
@@ -401,6 +427,7 @@ export function ProjectFeed({
                     project={project}
                     onClick={() => isSelectMode && onToggleSelectProject ? onToggleSelectProject(project.id) : onSelectProject(project.id)}
                     onDelete={() => handleDeleteClick(project.id, project.name)}
+                    onRename={() => handleRenameClick(project.id, project.name)}
                     onShowActions={setActionProject}
                     variant="grid"
                     isSelectMode={isSelectMode}
@@ -493,6 +520,78 @@ export function ProjectFeed({
         </div>
       )}
 
+      {/* Rename Modal */}
+      {renameProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={handleRenameCancel}
+          />
+
+          {/* Modal */}
+          <div className="relative bg-[#1C1C1E] border border-[var(--border)] rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
+            {/* Icon */}
+            <div className="flex justify-center pt-6">
+              <div className="w-14 h-14 rounded-full bg-[#4A8FE7]/10 flex items-center justify-center">
+                <svg className="w-7 h-7 text-[#4A8FE7]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 pt-4 pb-6">
+              <h3 className="text-lg font-semibold text-white mb-4 text-center">Rename Project</h3>
+              <input
+                type="text"
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                placeholder="Project name"
+                autoFocus
+                className="w-full bg-[#2C2C2E] border border-[#3C3C3E] rounded-xl px-4 py-3 text-white placeholder:text-[#636366] focus:outline-none focus:border-[#4A8FE7] transition-colors"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newProjectName.trim()) {
+                    handleRenameConfirm();
+                  } else if (e.key === 'Escape') {
+                    handleRenameCancel();
+                  }
+                }}
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex border-t border-[var(--border)]">
+              <button
+                onClick={handleRenameCancel}
+                disabled={isRenaming}
+                className="flex-1 py-3.5 text-[#8E8E93] font-medium hover:bg-white/5 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <div className="w-px bg-[var(--border)]" />
+              <button
+                onClick={handleRenameConfirm}
+                disabled={isRenaming || !newProjectName.trim()}
+                className="flex-1 py-3.5 text-[#4A8FE7] font-medium hover:bg-[#4A8FE7]/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isRenaming ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  'Save'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Actions Bottom Drawer */}
       {actionProject && (
         <div className="fixed inset-0 z-50 md:hidden">
@@ -546,6 +645,20 @@ export function ProjectFeed({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                 </svg>
                 <span className="text-[15px]">Open</span>
+              </button>
+
+              {/* Rename */}
+              <button
+                onClick={() => {
+                  handleRenameClick(actionProject.id, actionProject.name);
+                  setActionProject(null);
+                }}
+                className="w-full flex items-center gap-4 px-4 py-3.5 text-white hover:bg-white/5 active:bg-white/10 transition-colors"
+              >
+                <svg className="w-5 h-5 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
+                </svg>
+                <span className="text-[15px]">Rename</span>
               </button>
 
               {/* Share */}

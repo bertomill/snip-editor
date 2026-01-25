@@ -7,6 +7,7 @@ interface ProjectCardProps {
   project: Project;
   onClick: () => void;
   onDelete: () => void;
+  onRename: () => void;
   onShowActions?: (project: Project) => void;
   variant?: 'list' | 'grid';
   isSelectMode?: boolean;
@@ -18,6 +19,7 @@ export function ProjectCard({
   project,
   onClick,
   onDelete,
+  onRename,
   onShowActions,
   variant = 'list',
   isSelectMode = false,
@@ -40,6 +42,12 @@ export function ProjectCard({
     e.stopPropagation();
     setShowMenu(false);
     onDelete();
+  };
+
+  const handleRename = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowMenu(false);
+    onRename();
   };
 
   // Grid variant
@@ -117,6 +125,15 @@ export function ProjectCard({
               onClick={() => setShowMenu(false)}
             />
             <div className="absolute right-2 top-10 w-40 bg-[var(--background-card)] border border-[var(--border)] rounded-xl shadow-xl z-50 overflow-hidden">
+              <button
+                onClick={handleRename}
+                className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-white/10 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
+                </svg>
+                <span className="text-sm">Rename</span>
+              </button>
               <button
                 onClick={handleDelete}
                 className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 transition-colors"
@@ -209,6 +226,15 @@ export function ProjectCard({
             onClick={() => setShowMenu(false)}
           />
           <div className="hidden md:block absolute right-4 top-14 w-40 bg-[var(--background-card)] border border-[var(--border)] rounded-xl shadow-xl z-50 overflow-hidden">
+            <button
+              onClick={handleRename}
+              className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-white/10 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
+              </svg>
+              <span className="text-sm">Rename</span>
+            </button>
             <button
               onClick={handleDelete}
               className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-400/10 transition-colors"

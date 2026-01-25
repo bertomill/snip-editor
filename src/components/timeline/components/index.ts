@@ -6,3 +6,4 @@ export { TimelineMarkers } from './timeline-markers';
 export { TimelineGhostElement } from './timeline-ghost-element';
 export { TimelinePlayhead } from './timeline-playhead';
 export { TimelineTrackHandles } from './timeline-track-handles';
+export { TransitionMarker } from './transition-marker';
