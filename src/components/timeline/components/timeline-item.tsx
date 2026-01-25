@@ -34,6 +34,11 @@ export const TimelineItem: React.FC<TimelineItemProps> = ({
   const leftPercent = (item.start / totalDuration) * 100;
   const widthPercent = ((item.end - item.start) / totalDuration) * 100;
 
+  // Check if this is a video clip (not the first one) to add gap
+  const isVideoClip = item.type === TrackItemType.VIDEO;
+  const clipIndex = isVideoClip && item.data?.clipIndex !== undefined ? item.data.clipIndex : -1;
+  const needsGap = isVideoClip && clipIndex > 0;
+
   // Check if this is a script/pause item (non-draggable)
   const isScriptItem = item.type === TrackItemType.SCRIPT || item.type === TrackItemType.PAUSE;
   const isDeleted = (item.type === TrackItemType.SCRIPT || item.type === TrackItemType.PAUSE) && item.data?.isDeleted;
@@ -47,8 +52,9 @@ export const TimelineItem: React.FC<TimelineItemProps> = ({
     switch (item.type) {
       case TrackItemType.VIDEO:
         // For video with filmstrip, use minimal styling to show thumbnails
+        // Added stronger border for clip separation visibility
         return isVideoWithFilmstrip
-          ? 'border border-white/30 shadow-lg overflow-hidden'
+          ? 'border-2 border-white/40 shadow-lg overflow-hidden rounded-lg'
           : `${baseGlass} bg-gradient-to-r from-blue-500/70 to-blue-600/60`;
       case TrackItemType.TEXT:
         return `${baseGlass} bg-gradient-to-r from-purple-500/70 to-purple-600/60`;
@@ -169,8 +175,8 @@ export const TimelineItem: React.FC<TimelineItemProps> = ({
         group
       `}
       style={{
-        left: `${leftPercent}%`,
-        width: `${widthPercent}%`,
+        left: needsGap ? `calc(${leftPercent}% + 3px)` : `${leftPercent}%`,
+        width: needsGap ? `calc(${widthPercent}% - 3px)` : `${widthPercent}%`,
         minWidth: isScriptItem ? '8px' : '20px',
         height: `${itemHeight}px`,
       }}
@@ -189,12 +195,19 @@ export const TimelineItem: React.FC<TimelineItemProps> = ({
         <div className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/20 rounded-l z-10" />
       )}
 
+      {/* Clip number badge for video clips */}
+      {isVideoClip && clipIndex >= 0 && (
+        <div className="absolute top-1 left-1 z-20 w-5 h-5 rounded-full bg-[var(--accent)] flex items-center justify-center shadow-lg">
+          <span className="text-[10px] font-bold text-white">{clipIndex + 1}</span>
+        </div>
+      )}
+
       {/* Content */}
-      <div className={`flex items-center h-full overflow-hidden relative z-10 ${isScriptItem ? 'px-1.5' : 'px-2.5'}`}>
+      <div className={`flex items-center h-full overflow-hidden relative z-10 ${isScriptItem ? 'px-1.5' : 'px-2.5'} ${isVideoClip && clipIndex >= 0 ? 'pl-7' : ''}`}>
         {/* Label with backdrop for filmstrip visibility */}
         {isVideoWithFilmstrip ? (
           <span className="truncate text-xs font-medium text-white px-1.5 py-0.5 rounded bg-black/50 backdrop-blur-sm">
-            {icon && `${icon} `}{item.label || item.type || 'Item'}
+            {item.label || item.type || 'Item'}
           </span>
         ) : (
           <span className={`

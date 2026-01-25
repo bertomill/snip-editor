@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import Image from "next/image";
 import { captionTemplates } from "@/lib/caption-templates";
 import {
   OverlayProvider,
@@ -14,7 +13,6 @@ import { getFilterById } from "@/lib/templates/filter-presets";
 import { getTextStyleById } from "@/lib/templates/text-templates";
 import { TextOverlay, StickerOverlay } from "@/types/overlays";
 import { generateAutoTransitions, generateInternalCutTransitions, CutPoint } from "@/lib/transitions/auto-transitions";
-import { Sidebar } from "@/components/Sidebar";
 import { useUser, useSignOut } from "@/lib/supabase/hooks";
 import { Timeline, TimelineTrack, TrackItemType } from "@/components/timeline";
 import { generateScriptTrack } from "@/components/timeline/utils/generate-script-track";
@@ -31,6 +29,8 @@ import { ProjectFeed } from "@/components/projects";
 import { ProjectData } from "@/types/project";
 import { ResizableBottomPanel } from "@/components/ResizableBottomPanel";
 import VideoProcessingLoader, { VideoProcessingLoaderCompact } from "@/components/VideoProcessingLoader";
+import { Sidebar } from "@/components/Sidebar";
+import { ChatPanel } from "@/components/ChatPanel";
 import { extractAudioFromVideo, isFFmpegSupported } from "@/lib/audio/extract-audio";
 import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
 
@@ -108,11 +108,16 @@ export default function Home() {
 }
 
 function HomeContent() {
-  // View switching state
-  const [view, setView] = useState<AppView>("feed");
+  // View switching state - default to editor (upload screen)
+  const [view, setView] = useState<AppView>("editor");
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showProjectsDrawer, setShowProjectsDrawer] = useState(false);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
+
+  // Social connections state
+  const [xConnection, setXConnection] = useState<{ connected: boolean; username?: string } | null>(null);
 
   // Editor state
   const [step, setStep] = useState<EditorStep>("upload");
@@ -122,16 +127,11 @@ function HomeContent() {
   const [deletedPauseIds, setDeletedPauseIds] = useState<Set<string>>(new Set());
   const [showUploads, setShowUploads] = useState(false);
   const [autoTriggerUpload, setAutoTriggerUpload] = useState(false);
-  const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [projectName, setProjectName] = useState("Untitled Project");
   const [isEditingName, setIsEditingName] = useState(false);
   const [autoCutEnabled, setAutoCutEnabled] = useState(false);
   const [silenceAggressiveness, setSilenceAggressiveness] = useState<SilenceDetectionOptions['aggressiveness']>('natural');
-  const [feedSearchQuery, setFeedSearchQuery] = useState("");
-  const [showFeedMenu, setShowFeedMenu] = useState(false);
-  const [feedViewMode, setFeedViewMode] = useState<'list' | 'gallery'>('list');
-  const [isSelectMode, setIsSelectMode] = useState(false);
-  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
+  const [customInstructions, setCustomInstructions] = useState("");
 
   // AutoCut processing state for loading overlay
   const [autoCutProcessing, setAutoCutProcessing] = useState<{
@@ -186,6 +186,39 @@ function HomeContent() {
       setHasUnsavedChanges(true);
     }
   }, [clips.length, deletedWordIds.size, deletedPauseIds.size, view]);
+
+  // Fetch X connection status
+  useEffect(() => {
+    if (user) {
+      fetch('/api/auth/x/status')
+        .then(res => res.json())
+        .then(data => setXConnection(data))
+        .catch(() => setXConnection({ connected: false }));
+    }
+  }, [user]);
+
+  // Handle X connection
+  const handleConnectX = async () => {
+    try {
+      const res = await fetch('/api/auth/x');
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (error) {
+      console.error('Failed to connect X:', error);
+    }
+  };
+
+  // Handle X disconnect
+  const handleDisconnectX = async () => {
+    try {
+      await fetch('/api/auth/x/status', { method: 'DELETE' });
+      setXConnection({ connected: false });
+    } catch (error) {
+      console.error('Failed to disconnect X:', error);
+    }
+  };
 
   // Handle creating a new project (local only - not saved to DB until user saves)
   const handleCreateProject = useCallback(async () => {
@@ -480,13 +513,19 @@ function HomeContent() {
     }
   }, [currentProjectId, projectName, createProject, clips, deletedWordIds, deletedPauseIds, overlayState]);
 
-  // Handle going back to feed - show dialog if unsaved changes
-  const handleBackToFeed = useCallback(() => {
+  // Handle starting a new project - reset to upload step
+  const handleNewProject = useCallback(() => {
     if (hasUnsavedChanges) {
       setShowExitDialog(true);
     } else {
       refreshProjects(); // Refresh to get updated thumbnails
-      setView("feed");
+      // Reset to upload step
+      setStep("upload");
+      setClips([]);
+      setDeletedSegments(new Set());
+      setDeletedWordIds(new Set());
+      setDeletedPauseIds(new Set());
+      setProjectName("Untitled Project");
       setCurrentProjectId(null);
       setAutoTriggerUpload(false);
     }
@@ -497,7 +536,13 @@ function HomeContent() {
     await saveProject();
     setShowExitDialog(false);
     refreshProjects(); // Refresh to get updated thumbnails
-    setView("feed");
+    // Reset to upload step
+    setStep("upload");
+    setClips([]);
+    setDeletedSegments(new Set());
+    setDeletedWordIds(new Set());
+    setDeletedPauseIds(new Set());
+    setProjectName("Untitled Project");
     setCurrentProjectId(null);
   }, [saveProject, refreshProjects]);
 
@@ -506,7 +551,13 @@ function HomeContent() {
     setShowExitDialog(false);
     setHasUnsavedChanges(false);
     refreshProjects(); // Refresh to get updated thumbnails
-    setView("feed");
+    // Reset to upload step
+    setStep("upload");
+    setClips([]);
+    setDeletedSegments(new Set());
+    setDeletedWordIds(new Set());
+    setDeletedPauseIds(new Set());
+    setProjectName("Untitled Project");
     setCurrentProjectId(null);
   }, [refreshProjects]);
 
@@ -1024,324 +1075,218 @@ function HomeContent() {
     return pausesToDelete.size;
   }, [allWords]);
 
-  // Feed view
-  if (view === "feed") {
-    return (
-      <MediaLibraryProvider>
-        <Sidebar
-          view="feed"
-          onOpenUploads={() => setShowUploads(true)}
-          onNavigateHome={() => setView("feed")}
-          onCreateProject={handleCreateProject}
-          searchQuery={feedSearchQuery}
-          onSearchChange={setFeedSearchQuery}
-        />
-        <MediaLibraryPanel
-          isOpen={showUploads}
-          onClose={() => setShowUploads(false)}
-          onSelectMedia={handleAddMediaToTimeline}
-        />
-        <div className="min-h-screen flex flex-col bg-canva-gradient md:pl-[72px] pb-24 md:pb-0">
-
-          {/* Header with logo and create button */}
-          <header className="relative flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[var(--border-subtle)] md:border-b">
-            <div className="flex items-center gap-2">
-              {/* Film strip S logo */}
-              <Image
-                src="/branding/snip-logo-white.svg"
-                alt="Snip"
-                width={100}
-                height={30}
-                className="h-7 w-auto"
-                priority
-              />
-            </div>
-            {/* Menu button (three dots) */}
-            <div className="relative">
-              <button
-                onClick={() => setShowFeedMenu(!showFeedMenu)}
-                className="w-10 h-10 flex items-center justify-center text-white"
-              >
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <circle cx="5" cy="12" r="2" />
-                  <circle cx="12" cy="12" r="2" />
-                  <circle cx="19" cy="12" r="2" />
-                </svg>
-              </button>
-
-              {/* Dropdown Menu */}
-              {showFeedMenu && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowFeedMenu(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-2 w-60 bg-[#1C1C1E]/70 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl shadow-black/60 z-50 animate-scale-in py-1">
-                    {/* View as Gallery / List */}
-                    <button
-                      onClick={() => {
-                        setFeedViewMode(feedViewMode === 'list' ? 'gallery' : 'list');
-                        setShowFeedMenu(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-4 text-white hover:bg-white/10 active:bg-white/15 transition-colors"
-                    >
-                      {feedViewMode === 'list' ? (
-                        <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-                        </svg>
-                      ) : (
-                        <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-                        </svg>
-                      )}
-                      <span className="text-[15px] font-medium">
-                        {feedViewMode === 'list' ? 'View as Gallery' : 'View as List'}
-                      </span>
-                    </button>
-
-                    {/* Divider */}
-                    <div className="mx-4 border-t border-white/10" />
-
-                    {/* Select Projects */}
-                    <button
-                      onClick={() => {
-                        setIsSelectMode(!isSelectMode);
-                        if (isSelectMode) {
-                          setSelectedProjectIds(new Set());
-                        }
-                        setShowFeedMenu(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-4 text-white hover:bg-white/10 active:bg-white/15 transition-colors"
-                    >
-                      <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-[15px] font-medium">
-                        {isSelectMode ? 'Cancel Selection' : 'Select Projects'}
-                      </span>
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </header>
-
-          {/* Mobile-only profile row below header */}
-          <div className="md:hidden relative flex items-center gap-3 px-5 py-3">
-            <button
-              onClick={() => user ? setShowProfilePanel(true) : router.push('/login')}
-              className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-[#4A8FE7] to-[#5F7BFD] flex items-center justify-center flex-shrink-0"
-            >
-              {user?.user_metadata?.avatar_url ? (
-                <img
-                  src={user.user_metadata.avatar_url}
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="text-white text-sm font-semibold">
-                  {user?.email?.charAt(0).toUpperCase() || '?'}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => user ? setShowProfilePanel(true) : router.push('/login')}
-              className="text-white font-medium truncate text-left"
-            >
-              {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Guest'}
-            </button>
-          </div>
-
-          {/* Mobile Profile Panel (Canva-style) */}
-          <AnimatePresence>
-            {showProfilePanel && (
-              <motion.div
-                initial={{ x: '-100%' }}
-                animate={{ x: 0 }}
-                exit={{ x: '-100%' }}
-                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="md:hidden fixed inset-0 z-[100] bg-[#0A0A0A] overflow-auto"
-              >
-                {/* Header with back button */}
-                <div className="sticky top-0 z-10 bg-[#0A0A0A]/95 backdrop-blur-sm border-b border-[#1C1C1E]">
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <button
-                      onClick={() => setShowProfilePanel(false)}
-                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#1C1C1E] transition-colors"
-                    >
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-                    <h1 className="text-lg font-semibold text-white">Account</h1>
-                  </div>
-                </div>
-
-                {/* User Profile Card */}
-                <div className="p-4">
-                  <div className="bg-[#1C1C1E] rounded-xl p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full overflow-hidden bg-[#4A8FE7] flex items-center justify-center flex-shrink-0">
-                        {user?.user_metadata?.avatar_url ? (
-                          <img
-                            src={user.user_metadata.avatar_url}
-                            alt="Profile"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-white text-lg font-semibold">
-                            {user?.email?.charAt(0).toUpperCase() || '?'}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-medium truncate">
-                          {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'}
-                        </p>
-                        <p className="text-[#8E8E93] text-sm truncate">
-                          {user?.email}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Menu Items */}
-                <div className="px-4">
-                  <div className="bg-[#1C1C1E] rounded-xl overflow-hidden">
-                    {/* Settings */}
-                    <button
-                      onClick={() => {
-                        setShowProfilePanel(false);
-                        // router.push('/settings');
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#2C2C2E] transition-colors border-b border-[#2C2C2E]"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-[#2C2C2E] flex items-center justify-center">
-                        <svg className="w-4 h-4 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      </div>
-                      <span className="text-white text-sm flex-1 text-left">Settings</span>
-                      <svg className="w-4 h-4 text-[#636366]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-
-                    {/* Help */}
-                    <button
-                      onClick={() => {
-                        setShowProfilePanel(false);
-                        window.open('mailto:support@snip.app', '_blank');
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#2C2C2E] transition-colors"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-[#2C2C2E] flex items-center justify-center">
-                        <svg className="w-4 h-4 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
-                        </svg>
-                      </div>
-                      <span className="text-white text-sm flex-1 text-left">Help & Support</span>
-                      <svg className="w-4 h-4 text-[#636366]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  {/* Sign Out - Separate card */}
-                  <div className="mt-4 bg-[#1C1C1E] rounded-xl overflow-hidden">
-                    <button
-                      onClick={() => {
-                        setShowProfilePanel(false);
-                        signOut();
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#2C2C2E] transition-colors"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-[#2C2C2E] flex items-center justify-center">
-                        <svg className="w-4 h-4 text-[#FF453A]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-                        </svg>
-                      </div>
-                      <span className="text-[#FF453A] text-sm flex-1 text-left">Sign Out</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* App version at bottom */}
-                <div className="absolute bottom-8 left-0 right-0 text-center">
-                  <p className="text-[#636366] text-xs">Snip v1.0</p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <main className="flex-1 p-4 sm:p-6">
-            <ProjectFeed
-              onSelectProject={handleSelectProject}
-              onCreateProject={handleCreateProject}
-              searchQuery={feedSearchQuery}
-              onSearchChange={setFeedSearchQuery}
-              viewMode={feedViewMode}
-              isSelectMode={isSelectMode}
-              selectedProjectIds={selectedProjectIds}
-              onToggleSelectProject={(projectId) => {
-                // Automatically enter select mode when first checkbox is clicked
-                if (!isSelectMode) {
-                  setIsSelectMode(true);
-                }
-                setSelectedProjectIds(prev => {
-                  const newSet = new Set(prev);
-                  if (newSet.has(projectId)) {
-                    newSet.delete(projectId);
-                    // Exit select mode if no items selected
-                    if (newSet.size === 0) {
-                      setIsSelectMode(false);
-                    }
-                  } else {
-                    newSet.add(projectId);
-                  }
-                  return newSet;
-                });
-              }}
-              onCancelSelection={() => {
-                setIsSelectMode(false);
-                setSelectedProjectIds(new Set());
-              }}
-              onBulkDelete={async () => {
-                // This will be handled by ProjectFeed
-              }}
-            />
-          </main>
-        </div>
-      </MediaLibraryProvider>
-    );
-  }
-
-  // Editor view
+  // Main editor view (upload is the landing page)
   return (
     <MediaLibraryProvider>
-      <Sidebar
-        view="editor"
-        editorStep={step}
-        onOpenUploads={() => setShowUploads(true)}
-        onNavigateHome={handleBackToFeed}
-        onCreateProject={handleCreateProject}
-        clipCount={clips.length}
-        onOpenTranscript={() => setShowTranscriptDrawer(true)}
-        transcript={clips.map(c => c.transcript || '').join(' ').trim()}
-        transcriptSegments={clips.flatMap((c, idx) =>
-          (c.segments || []).map(seg => ({
-            text: seg.text,
-            start: seg.start + clips.slice(0, idx).reduce((acc, clip) => acc + clip.duration, 0),
-            end: seg.end + clips.slice(0, idx).reduce((acc, clip) => acc + clip.duration, 0)
-          }))
-        )}
-      />
       <MediaLibraryPanel
         isOpen={showUploads}
         onClose={() => setShowUploads(false)}
         onSelectMedia={handleAddMediaToTimeline}
       />
+
+      {/* Projects Drawer */}
+      <AnimatePresence>
+        {showProjectsDrawer && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => { setShowProjectsDrawer(false); setShowAccountMenu(false); }}
+              className="fixed inset-0 z-[90] bg-black/40"
+            />
+            {/* Drawer */}
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed left-0 top-0 bottom-0 z-[95] w-80 max-w-[85vw] bg-[var(--background-card)] border-r border-[var(--border)] overflow-hidden flex flex-col"
+            >
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between px-5 py-4">
+                <button
+                  onClick={() => { setShowProjectsDrawer(false); setShowAccountMenu(false); }}
+                  className="p-1.5 -ml-1.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors"
+                >
+                  <svg className="w-5 h-5 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* New Project Button */}
+              <div className="px-4 pb-4">
+                <button
+                  onClick={() => {
+                    handleCreateProject();
+                    setShowProjectsDrawer(false);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#4A8FE7] hover:bg-[#5A9FF7] text-white font-medium rounded-xl transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  New Project
+                </button>
+              </div>
+
+              {/* Projects List */}
+              <div className="flex-1 overflow-y-auto">
+                <ProjectFeed
+                  onSelectProject={(project) => {
+                    handleSelectProject(project);
+                    setShowProjectsDrawer(false);
+                  }}
+                  onCreateProject={() => {
+                    handleCreateProject();
+                    setShowProjectsDrawer(false);
+                  }}
+                  searchQuery=""
+                  onSearchChange={() => {}}
+                  viewMode="list"
+                  isSelectMode={false}
+                  selectedProjectIds={new Set()}
+                  onToggleSelectProject={() => {}}
+                  onCancelSelection={() => {}}
+                  onBulkDelete={async () => {}}
+                  compact
+                />
+              </div>
+
+              {/* Connect to Socials Section */}
+              <div className="px-4 py-4 border-t border-[var(--border)]">
+                <p className="text-[#636366] text-xs font-medium uppercase tracking-wider mb-3">Connect to Socials</p>
+                <div className="space-y-1">
+                  {/* YouTube */}
+                  <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group">
+                    <div className="w-8 h-8 rounded-lg bg-[#FF0000]/10 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-[#FF0000]" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                      </svg>
+                    </div>
+                    <span className="text-white text-sm font-medium">YouTube</span>
+                    <span className="ml-auto text-xs text-[#636366] group-hover:text-white">Connect</span>
+                  </button>
+                  {/* TikTok */}
+                  <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group">
+                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+                      </svg>
+                    </div>
+                    <span className="text-white text-sm font-medium">TikTok</span>
+                    <span className="ml-auto text-xs text-[#636366] group-hover:text-white">Connect</span>
+                  </button>
+                  {/* Instagram */}
+                  <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#833AB4]/20 via-[#FD1D1D]/20 to-[#F77737]/20 flex items-center justify-center">
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="url(#instagram-gradient)">
+                        <defs>
+                          <linearGradient id="instagram-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#F77737"/>
+                            <stop offset="50%" stopColor="#FD1D1D"/>
+                            <stop offset="100%" stopColor="#833AB4"/>
+                          </linearGradient>
+                        </defs>
+                        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                      </svg>
+                    </div>
+                    <span className="text-white text-sm font-medium">Instagram</span>
+                    <span className="ml-auto text-xs text-[#636366] group-hover:text-white">Connect</span>
+                  </button>
+                  {/* X (Twitter) */}
+                  <button
+                    onClick={xConnection?.connected ? handleDisconnectX : handleConnectX}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group"
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${xConnection?.connected ? 'bg-green-500/20' : 'bg-white/10'}`}>
+                      <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1 text-left">
+                      <span className="text-white text-sm font-medium">X</span>
+                      {xConnection?.connected && xConnection.username && (
+                        <p className="text-[#636366] text-xs">@{xConnection.username}</p>
+                      )}
+                    </div>
+                    {xConnection?.connected ? (
+                      <span className="ml-auto text-xs text-green-400 flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        Connected
+                      </span>
+                    ) : (
+                      <span className="ml-auto text-xs text-[#636366] group-hover:text-white">Connect</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* User Account Section */}
+              {user && (
+                <div className="border-t border-[var(--border)]">
+                  <button
+                    onClick={() => setShowAccountMenu(!showAccountMenu)}
+                    className="w-full flex items-center gap-3 px-4 py-4 hover:bg-[var(--background-elevated)] transition-colors group"
+                  >
+                    <div className="w-11 h-11 rounded-full overflow-hidden bg-gradient-to-br from-[#3b82f6] to-[#1e3a8a] flex items-center justify-center text-white font-semibold text-base flex-shrink-0">
+                      {user.user_metadata?.avatar_url ? (
+                        <img
+                          src={user.user_metadata.avatar_url}
+                          alt="Profile"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        user.email?.[0].toUpperCase()
+                      )}
+                    </div>
+                    <div className="flex-1 text-left min-w-0">
+                      <p className="text-white font-medium text-base truncate">
+                        {user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'}
+                      </p>
+                      <p className="text-[#8E8E93] text-sm truncate">
+                        {user.email}
+                      </p>
+                    </div>
+                    <svg
+                      className={`w-4 h-4 text-[#636366] group-hover:text-white transition-all flex-shrink-0 ${showAccountMenu ? 'rotate-90' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+
+                  {/* Account Menu Options */}
+                  {showAccountMenu && (
+                    <div className="px-4 pb-3 space-y-1">
+                      <button
+                        onClick={() => {
+                          signOut();
+                          setShowProjectsDrawer(false);
+                          setShowAccountMenu(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4m7 14l5-5-5-5m5 5H9" />
+                        </svg>
+                        <span className="text-sm">Sign out</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Loading project overlay */}
       {isLoadingProject && (
@@ -1431,45 +1376,19 @@ function HomeContent() {
           </div>
         )}
 
-        <div className="min-h-screen flex flex-col bg-[var(--background-content)] md:pl-[72px] pb-24 md:pb-0">
-        <header className="sticky top-0 z-50 flex items-center justify-between px-3 sm:px-8 py-2 sm:py-4 border-b border-[var(--border-subtle)] bg-[var(--background-content)]">
+        <div className="min-h-screen flex flex-col bg-canva-gradient pb-24 md:pb-0">
+        <header className="sticky top-0 z-50 flex items-center justify-between px-3 sm:px-8 py-2 sm:py-4 bg-transparent">
           <div className="flex items-center gap-3">
-            {/* Back button */}
+            {/* Hamburger menu for projects */}
             <button
-              onClick={handleBackToFeed}
-              className="p-2 -ml-2 rounded-lg text-[#8E8E93] hover:text-white hover:bg-[#1C1C1E] transition-colors"
+              onClick={() => setShowProjectsDrawer(true)}
+              className="p-2 -ml-2 rounded-lg text-white hover:bg-[var(--background-elevated)] transition-colors"
+              title="Projects"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            {/* Editable project name */}
-            {isEditingName ? (
-              <input
-                type="text"
-                defaultValue={projectName}
-                autoFocus
-                onBlur={(e) => handleSaveProjectName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleSaveProjectName(e.currentTarget.value);
-                  } else if (e.key === 'Escape') {
-                    setIsEditingName(false);
-                  }
-                }}
-                className="text-base sm:text-xl font-semibold tracking-tight text-white bg-transparent border-b-2 border-[#4A8FE7] outline-none px-1 max-w-[120px] sm:max-w-[200px]"
-              />
-            ) : (
-              <button
-                onClick={() => setIsEditingName(true)}
-                className="text-base sm:text-xl font-semibold tracking-tight text-white hover:text-[#4A8FE7] transition-colors flex items-center gap-1 sm:gap-2 group max-w-[120px] sm:max-w-none truncate"
-              >
-                {projectName}
-                <svg className="w-4 h-4 text-[#636366] opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-              </button>
-            )}
           </div>
           {step === "edit" && (
             <div className="flex items-center gap-1.5 sm:gap-3">
@@ -1521,13 +1440,15 @@ function HomeContent() {
           )}
         </header>
 
-        <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6">
+        <main className={`flex-1 flex flex-col ${step === "upload" ? "items-center justify-center p-4 sm:p-6" : "p-0"}`}>
           {step === "upload" && (
             <UploadStep
               onFilesSelected={handleFilesSelected}
               autoTrigger={autoTriggerUpload}
               silenceAggressiveness={silenceAggressiveness}
               setSilenceAggressiveness={setSilenceAggressiveness}
+              customInstructions={customInstructions}
+              setCustomInstructions={setCustomInstructions}
             />
           )}
           {step === "edit" && (
@@ -1942,11 +1863,15 @@ function UploadStep({
   autoTrigger = false,
   silenceAggressiveness,
   setSilenceAggressiveness,
+  customInstructions,
+  setCustomInstructions,
 }: {
   onFilesSelected: (files: File[], autoCut?: boolean) => void;
   autoTrigger?: boolean;
   silenceAggressiveness: SilenceDetectionOptions['aggressiveness'];
   setSilenceAggressiveness: (value: SilenceDetectionOptions['aggressiveness']) => void;
+  customInstructions: string;
+  setCustomInstructions: (value: string) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
@@ -1971,59 +1896,108 @@ function UploadStep({
       const video = document.createElement('video');
       const url = URL.createObjectURL(file);
       video.src = url;
-      video.preload = 'metadata';
+      video.preload = 'auto'; // Load more data for better compatibility
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = 'anonymous';
 
-      video.onloadedmetadata = () => {
-        video.currentTime = 1; // Seek to 1 second for thumbnail
-      };
+      let resolved = false;
+      let seekAttempt = 0;
+      const seekTimes = [0.5, 1.0, 0.1, 0]; // Try multiple seek positions
 
-      video.onseeked = () => {
+      const captureFrame = (): string => {
         const canvas = document.createElement('canvas');
         canvas.width = 120;
         canvas.height = 160;
         const ctx = canvas.getContext('2d');
-        if (ctx) {
-          // Calculate center-crop to maintain aspect ratio
+
+        if (ctx && video.videoWidth > 0 && video.videoHeight > 0) {
           const videoAspect = video.videoWidth / video.videoHeight;
           const canvasAspect = canvas.width / canvas.height;
-
-          let sourceX = 0;
-          let sourceY = 0;
-          let sourceWidth = video.videoWidth;
-          let sourceHeight = video.videoHeight;
+          let sourceX = 0, sourceY = 0;
+          let sourceWidth = video.videoWidth, sourceHeight = video.videoHeight;
 
           if (videoAspect > canvasAspect) {
-            // Video is wider - crop horizontally
             sourceWidth = video.videoHeight * canvasAspect;
             sourceX = (video.videoWidth - sourceWidth) / 2;
           } else {
-            // Video is taller - crop vertically
             sourceHeight = video.videoWidth / canvasAspect;
             sourceY = (video.videoHeight - sourceHeight) / 2;
           }
 
-          ctx.drawImage(
-            video,
-            sourceX, sourceY, sourceWidth, sourceHeight,
-            0, 0, canvas.width, canvas.height
-          );
+          ctx.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+
+          // Check if image is mostly black (failed capture)
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          let totalBrightness = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            totalBrightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
+          }
+          const avgBrightness = totalBrightness / (data.length / 4);
+
+          // If image is too dark (avg brightness < 10), return empty to try again
+          if (avgBrightness < 10) {
+            return '';
+          }
+
+          return canvas.toDataURL('image/jpeg', 0.7);
         }
-        const thumbnail = canvas.toDataURL('image/jpeg', 0.7);
-        URL.revokeObjectURL(url);
-        resolve({
-          file,
-          thumbnail,
-          duration: video.duration,
-        });
+        return '';
       };
 
-      video.onerror = () => {
+      const tryCapture = () => {
+        if (resolved) return;
+
+        const thumbnail = captureFrame();
+
+        // If capture failed and we have more seek positions to try
+        if (!thumbnail && seekAttempt < seekTimes.length - 1) {
+          seekAttempt++;
+          const nextTime = Math.min(seekTimes[seekAttempt], video.duration * 0.5);
+          video.currentTime = nextTime;
+          return; // Will trigger onseeked again
+        }
+
+        // Final attempt or successful capture
+        resolved = true;
         URL.revokeObjectURL(url);
-        resolve({
-          file,
-          thumbnail: '',
-          duration: 0,
-        });
+        resolve({ file, thumbnail, duration: video.duration || 0 });
+      };
+
+      video.onloadedmetadata = () => {
+        // Start with first seek position, adjusted for video duration
+        const targetTime = Math.min(seekTimes[0], video.duration * 0.3);
+        video.currentTime = targetTime;
+      };
+
+      video.onseeked = tryCapture;
+
+      // Fallback: try to capture on canplaythrough (video is fully buffered)
+      video.oncanplaythrough = () => {
+        setTimeout(() => { if (!resolved) tryCapture(); }, 200);
+      };
+
+      // Fallback: capture on loadeddata if seeking doesn't work
+      video.onloadeddata = () => {
+        setTimeout(() => { if (!resolved) tryCapture(); }, 500);
+      };
+
+      // Timeout fallback after 5s (increased for slower formats)
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          URL.revokeObjectURL(url);
+          resolve({ file, thumbnail: '', duration: video.duration || 0 });
+        }
+      }, 5000);
+
+      video.onerror = () => {
+        if (!resolved) {
+          resolved = true;
+          URL.revokeObjectURL(url);
+          resolve({ file, thumbnail: '', duration: 0 });
+        }
       };
     });
   };
@@ -2069,26 +2043,29 @@ function UploadStep({
   };
 
   return (
-    <div className="w-full max-w-lg text-center px-4 animate-fade-in-up">
-      <p className="label mb-5">Get Started</p>
-      <h2 className="text-3xl font-bold mb-3 tracking-tight text-white">Drop your clips</h2>
-      <p className="text-[#8E8E93] mb-2 text-base">
-        Upload your video clips to begin editing
-      </p>
-      <p className="text-[#636366] mb-6 text-sm">
-        Max file size: 100MB per clip
+    <div className="w-full max-w-md text-center px-4 animate-fade-in-up">
+      <h2 className="text-4xl font-bold mb-3 tracking-tight text-white">
+        Create something amazing
+      </h2>
+      <p className="text-[#8E8E93] mb-10 text-lg">
+        Your next viral moment starts here
       </p>
 
-      {/* Upload button - always visible as fallback */}
-      <button
-        onClick={() => fileInputRef.current?.click()}
-        className="mb-8 px-6 py-3 bg-[#4A8FE7] hover:bg-[#5A9FF7] text-white font-medium rounded-full transition-all flex items-center gap-2 mx-auto"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-        </svg>
-        Choose Files
-      </button>
+      {/* Upload button - primary action */}
+      <div className="mb-6">
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full max-w-xs px-8 py-4 bg-[#4A8FE7] hover:bg-[#5A9FF7] text-white font-semibold rounded-2xl transition-all flex items-center justify-center gap-3 mx-auto shadow-lg shadow-[#4A8FE7]/25 hover:shadow-[#4A8FE7]/40 hover:scale-[1.02] active:scale-[0.98]"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          Upload Videos
+        </button>
+        <p className="text-[#636366] text-sm mt-4">
+          or drag and drop
+        </p>
+      </div>
 
       {/* Hidden file input for auto-trigger */}
       <input
@@ -2147,49 +2124,66 @@ function UploadStep({
             )}
           </div>
 
-          {/* Action buttons - TikTok style */}
-          <div className="flex gap-3 justify-center items-stretch">
-            {/* AutoCut with aggressiveness dropdown */}
-            <div className="flex items-stretch h-12">
-              <button
-                onClick={handleAutoCut}
-                disabled={isProcessing}
-                className="flex items-center gap-2 px-5 bg-[#2C2C2E] hover:bg-[#3C3C3E] border border-[#3C3C3E] rounded-l-full text-white font-medium transition-all disabled:opacity-50"
-              >
-                <svg className="w-5 h-5 text-[#FF3B30]" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 9l-7 7-7-7" />
-                  <rect x="3" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="3" width="7" height="7" rx="1" />
-                  <rect x="3" y="14" width="7" height="7" rx="1" />
-                  <rect x="14" y="14" width="7" height="7" rx="1" />
+          {/* Quick select chips */}
+          <div className="flex flex-wrap gap-2 justify-center mb-4 px-4">
+            <button className="flex items-center gap-2 px-4 py-2 bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border border-[var(--border)] rounded-full text-white text-sm font-medium transition-all">
+              <span className="text-base">🎬</span>
+              Compose clips
+            </button>
+            <button className="flex items-center gap-2 px-4 py-2 bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border border-[var(--border)] rounded-full text-white text-sm font-medium transition-all">
+              <span className="text-base">✨</span>
+              Flashy video
+            </button>
+            <button className="flex items-center gap-2 px-4 py-2 bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border border-[var(--border)] rounded-full text-white text-sm font-medium transition-all">
+              <span className="text-base">📋</span>
+              Conservative
+            </button>
+            <button className="flex items-center gap-2 px-4 py-2 bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border border-[var(--border)] rounded-full text-white text-sm font-medium transition-all">
+              <span className="text-base">🎯</span>
+              Highlight reel
+            </button>
+          </div>
+
+          {/* Prompt input */}
+          <div className="px-4 mb-6">
+            <div className="flex items-center gap-2 px-4 py-3 bg-[var(--background-card)] border border-[var(--border)] rounded-full focus-within:border-[var(--border)]">
+              <input
+                type="text"
+                placeholder="What do you want to create?"
+                className="flex-1 bg-transparent text-white placeholder-[#636366] text-sm outline-none border-none focus:ring-0 focus:outline-none"
+              />
+              <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
+                <svg className="w-5 h-5 text-[#636366]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
-                AutoCut
               </button>
-              <select
-                value={silenceAggressiveness}
-                onChange={(e) => setSilenceAggressiveness(e.target.value as SilenceDetectionOptions['aggressiveness'])}
-                disabled={isProcessing}
-                className="px-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] border border-l-0 border-[#3C3C3E] rounded-r-full text-white text-sm font-medium transition-all disabled:opacity-50 cursor-pointer appearance-none"
-                title="Silence removal aggressiveness"
-              >
-                <option value="tight">Tight</option>
-                <option value="natural">Natural</option>
-                <option value="conservative">Safe</option>
-              </select>
+              <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
+                <svg className="w-5 h-5 text-[#636366]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              </button>
+              <button className="w-8 h-8 bg-[var(--accent)] hover:bg-[var(--accent-hover)] rounded-full flex items-center justify-center transition-colors">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+                </svg>
+              </button>
             </div>
+          </div>
+
+          {/* AutoCut button - Primary action */}
+          <div className="flex justify-center">
             <button
-              onClick={handleNext}
+              onClick={handleAutoCut}
               disabled={isProcessing}
-              className="h-12 px-8 bg-[#FF2D55] hover:bg-[#FF375F] rounded-full text-white font-medium transition-all disabled:opacity-50 flex items-center gap-2"
+              className="h-12 flex items-center gap-2 px-8 bg-[var(--accent)] hover:bg-[var(--accent-hover)] rounded-full text-white font-medium transition-all disabled:opacity-50 shadow-lg"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="6" cy="6" r="3"/>
-                <path d="M8.12 8.12 12 12"/>
-                <path d="M20 4 8.12 15.88"/>
-                <circle cx="6" cy="18" r="3"/>
-                <path d="M14.8 14.8 20 20"/>
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
               </svg>
-              Edit ({selectedFiles.length})
+              AutoCut ({selectedFiles.length})
             </button>
           </div>
         </div>
@@ -2254,6 +2248,12 @@ function EditStep({
   const [transcribeProgress, setTranscribeProgress] = useState(0);
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState<number | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
+
+  // Undo/Redo state for deleted words
+  const [undoStack, setUndoStack] = useState<Set<string>[]>([]);
+  const [redoStack, setRedoStack] = useState<Set<string>[]>([]);
+  const lastDeletedWordIds = useRef<Set<string>>(new Set());
+
   const desktopVideoRef = useRef<HTMLVideoElement>(null);
   const mobileVideoRef = useRef<HTMLVideoElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -2269,10 +2269,73 @@ function EditStep({
     return mobileVideoRef.current;
   }, []);
 
+  // Safe video play helper that handles various error states
+  const safeVideoPlay = useCallback((video: HTMLVideoElement) => {
+    if (!video || video.readyState < 2) return; // HAVE_CURRENT_DATA or higher
+
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((e) => {
+        // Ignore common non-critical errors
+        if (e.name !== 'AbortError' && e.name !== 'NotSupportedError') {
+          console.error('Video play error:', e);
+        }
+      });
+    }
+  }, []);
+
+  // Undo handler
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    const previousState = undoStack[undoStack.length - 1];
+    setRedoStack(prev => [...prev, deletedWordIds]);
+    setUndoStack(prev => prev.slice(0, -1));
+    setDeletedWordIds(previousState);
+  }, [undoStack, deletedWordIds, setDeletedWordIds]);
+
+  // Redo handler
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    const nextState = redoStack[redoStack.length - 1];
+    setUndoStack(prev => [...prev, deletedWordIds]);
+    setRedoStack(prev => prev.slice(0, -1));
+    setDeletedWordIds(nextState);
+  }, [redoStack, deletedWordIds, setDeletedWordIds]);
+
+  // Track deletedWordIds changes for undo stack
+  useEffect(() => {
+    // Skip if this is from an undo/redo operation
+    if (lastDeletedWordIds.current.size !== deletedWordIds.size ||
+        ![...lastDeletedWordIds.current].every(id => deletedWordIds.has(id))) {
+      // Only push to undo stack if there was a real change (not from undo/redo)
+      const lastSize = lastDeletedWordIds.current.size;
+      const currentSize = deletedWordIds.size;
+      if (lastSize !== currentSize || lastSize === 0) {
+        // Don't add initial empty state
+        if (lastDeletedWordIds.current.size > 0 || deletedWordIds.size > 0) {
+          setUndoStack(prev => {
+            // Avoid duplicate consecutive states
+            const lastState = prev[prev.length - 1];
+            if (lastState && lastState.size === lastDeletedWordIds.current.size &&
+                [...lastState].every(id => lastDeletedWordIds.current.has(id))) {
+              return prev;
+            }
+            return [...prev, new Set(lastDeletedWordIds.current)];
+          });
+          setRedoStack([]); // Clear redo on new action
+        }
+      }
+      lastDeletedWordIds.current = new Set(deletedWordIds);
+    }
+  }, [deletedWordIds]);
+
   // Timeline selection state
   const [selectedTimelineItems, setSelectedTimelineItems] = useState<string[]>([]);
 
-  const { state: overlayState, updateTextOverlay, updateSticker, removeTextOverlay, removeSticker, setCaptionPosition, setTransitions, setFilter, toggleCaptionPreview } = useOverlay();
+  const { state: overlayState, updateTextOverlay, updateSticker, removeTextOverlay, removeSticker, setCaptionPosition, setTransitions, setFilter, toggleCaptionPreview, addTextOverlay, addSticker, setCaptionTemplate, setAudioSettings } = useOverlay();
+
+  // AI Chat state
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const activeClip = clips[activeClipIndex];
 
@@ -2293,12 +2356,16 @@ function EditStep({
     }
   }, [clips.length]); // Only run when clip count changes
 
-  // Spacebar to toggle play/pause
+  // Keyboard shortcuts: Spacebar for play/pause, Cmd+Z for undo, Cmd+Shift+Z for redo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only trigger if spacebar and not typing in an input/textarea
-      if (e.code === 'Space' &&
-          !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
+      // Don't trigger if typing in an input/textarea
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
+        return;
+      }
+
+      // Spacebar to toggle play/pause
+      if (e.code === 'Space') {
         e.preventDefault();
         const video = getActiveVideoRef();
         if (video) {
@@ -2306,18 +2373,28 @@ function EditStep({
             video.pause();
             setIsPlaying(false);
           } else {
-            video.play().catch((err) => {
-              if (err.name !== 'AbortError') console.error('Video play error:', err);
-            });
+            safeVideoPlay(video);
             setIsPlaying(true);
           }
         }
+      }
+
+      // Cmd/Ctrl + Z for undo
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+
+      // Cmd/Ctrl + Shift + Z for redo
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
+        e.preventDefault();
+        handleRedo();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying, getActiveVideoRef]);
+  }, [isPlaying, getActiveVideoRef, safeVideoPlay, handleUndo, handleRedo]);
 
   // Apply clip volume to video element
   useEffect(() => {
@@ -2551,18 +2628,23 @@ function EditStep({
       effectiveDuration = collapsed.totalDuration;
     } else {
       // No deletions - show original tracks
+      // Add small gap between clips for visual separation
+      const CLIP_GAP = 0.05; // 50ms gap between clips
       videoTrack = {
         id: 'video-track',
         name: 'Video',
         items: clips.map((clip, i) => {
-          const clipStartTime = clips.slice(0, i).reduce((acc, c) => acc + c.duration, 0);
+          // Calculate start time with gaps
+          const clipStartTime = clips.slice(0, i).reduce((acc, c, idx) => {
+            return acc + c.duration + (idx < i - 1 ? 0 : 0); // No gap in timeline data, handled visually
+          }, 0);
           return {
             id: `clip-${i}`,
             trackId: 'video-track',
             start: clipStartTime,
             end: clipStartTime + clip.duration,
             type: TrackItemType.VIDEO,
-            label: (clip.file?.name || `Clip ${i + 1}`).slice(0, 15),
+            label: `${i + 1}. ${(clip.file?.name || `Clip`).replace(/\.[^/.]+$/, '').slice(0, 12)}`,
             data: {
               clipIndex: i,
               url: clip.url,
@@ -2615,7 +2697,7 @@ function EditStep({
     };
 
     return {
-      timelineTracks: [videoTrack, scriptTrack, textTrack, stickerTrack],
+      timelineTracks: [videoTrack, textTrack, stickerTrack],
       collapsedDuration: effectiveDuration,
     };
   }, [clips, allWords, deletedWordIds, deletedPauseIds, overlayState.textOverlays, overlayState.stickers, totalDuration]);
@@ -2780,13 +2862,132 @@ function EditStep({
       if (isPlaying) {
         video.pause();
       } else {
-        video.play().catch((e) => {
-          if (e.name !== 'AbortError') console.error('Video play error:', e);
-        });
+        safeVideoPlay(video);
       }
       setIsPlaying(!isPlaying);
     }
   };
+
+  // AI Chat command handler
+  const handleChatCommand = useCallback((command: { name: string; input: Record<string, unknown> }) => {
+    const { name, input } = command;
+
+    switch (name) {
+      case "add_text": {
+        const position = input.position as string || "center";
+        const positionMap = { top: { x: 50, y: 15 }, center: { x: 50, y: 50 }, bottom: { x: 50, y: 85 } };
+        const styleMap: Record<string, string> = {
+          bold: "bold-impact",
+          minimal: "minimal-clean",
+          outline: "outline-pop",
+          neon: "neon-glow",
+          handwritten: "handwritten",
+          gradient: "gradient-flow",
+          shadow: "shadow-depth",
+          retro: "retro-vibe",
+        };
+        const templateId = styleMap[input.style as string] || "bold-impact";
+
+        addTextOverlay({
+          id: `text-${Date.now()}`,
+          content: input.content as string,
+          templateId,
+          enterAnimation: "fade",
+          exitAnimation: "fade",
+          position: positionMap[position as keyof typeof positionMap] || positionMap.center,
+          startMs: currentTime * 1000,
+          durationMs: ((input.duration as number) || 3) * 1000,
+        });
+        break;
+      }
+
+      case "set_filter": {
+        const filterMap: Record<string, string | null> = {
+          none: null,
+          cinematic: "cinematic",
+          vibrant: "vibrant",
+          vintage: "vintage",
+          warm: "warm",
+          cool: "cool",
+          bw: "bw",
+          sepia: "sepia",
+          dramatic: "dramatic",
+          soft: "soft",
+          hdr: "hdr",
+        };
+        setFilter(filterMap[input.filter as string] ?? null);
+        break;
+      }
+
+      case "toggle_captions": {
+        const shouldEnable = input.enabled as boolean;
+        if (shouldEnable !== overlayState.showCaptionPreview) {
+          toggleCaptionPreview();
+        }
+        break;
+      }
+
+      case "set_caption_style": {
+        setCaptionTemplate(input.style as string);
+        if (!overlayState.showCaptionPreview) {
+          toggleCaptionPreview();
+        }
+        break;
+      }
+
+      case "add_sticker": {
+        const pos = input.position as { x?: number; y?: number } || {};
+        addSticker({
+          id: `sticker-${Date.now()}`,
+          stickerId: input.emoji as string,
+          position: { x: pos.x ?? 50, y: pos.y ?? 30 },
+          startMs: currentTime * 1000,
+          durationMs: 3000,
+          scale: 1,
+        });
+        break;
+      }
+
+      case "seek_to_time": {
+        const targetTime = input.seconds as number;
+        let accumulatedTime = 0;
+        for (let i = 0; i < clips.length; i++) {
+          if (targetTime < accumulatedTime + clips[i].duration) {
+            setActiveClipIndex(i);
+            const video = getActiveVideoRef();
+            if (video) {
+              video.currentTime = targetTime - accumulatedTime;
+            }
+            setCurrentTime(targetTime);
+            break;
+          }
+          accumulatedTime += clips[i].duration;
+        }
+        break;
+      }
+
+      case "set_audio_enhancement": {
+        setAudioSettings({
+          enhanceAudio: input.enabled as boolean,
+          noiseReduction: input.noiseReduction as boolean ?? true,
+        });
+        break;
+      }
+
+      case "remove_silence": {
+        // Trigger auto-cut functionality
+        // This would need to be connected to the existing autocut logic
+        console.log("Remove silence requested with aggressiveness:", input.aggressiveness);
+        break;
+      }
+
+      case "export_video": {
+        // Navigate to export step
+        console.log("Export requested");
+        break;
+      }
+    }
+  }, [addTextOverlay, addSticker, setFilter, toggleCaptionPreview, setCaptionTemplate, setAudioSettings, currentTime, clips, getActiveVideoRef, overlayState.showCaptionPreview]);
 
   const handleTimeUpdate = useCallback(() => {
     const video = getActiveVideoRef();
@@ -2922,7 +3123,7 @@ function EditStep({
               .reduce((acc, clip) => acc + clip.duration, 0);
             video.currentTime = nextWord.start - clipStartTime;
             // Ensure video keeps playing after seek
-            video.play().catch(() => {});
+            safeVideoPlay(video);
             return; // Exit to avoid duplicate processing
           } else {
             // No more words, end playback
@@ -2955,7 +3156,7 @@ function EditStep({
               .reduce((acc, clip) => acc + clip.duration, 0);
             video.currentTime = nextSegment.start - clipStartTime;
             // Ensure video keeps playing after seek
-            video.play().catch(() => {});
+            safeVideoPlay(video);
             return; // Exit to avoid duplicate processing
           } else {
             // No more segments, end playback
@@ -2979,14 +3180,9 @@ function EditStep({
   useEffect(() => {
     const video = getActiveVideoRef();
     if (isPlaying && video) {
-      video.play().catch((e) => {
-        // Ignore AbortError - happens when play() is interrupted by pause()
-        if (e.name !== 'AbortError') {
-          console.error('Video play error:', e);
-        }
-      });
+      safeVideoPlay(video);
     }
-  }, [activeClipIndex, isPlaying, getActiveVideoRef]);
+  }, [activeClipIndex, isPlaying, getActiveVideoRef, safeVideoPlay]);
 
   // Keyboard handler for Delete key
   useEffect(() => {
@@ -3293,7 +3489,17 @@ function EditStep({
 
   return (
     <>
-    <div className="w-full lg:max-w-6xl lg:mx-auto flex flex-col gap-0 lg:gap-8 animate-fade-in-up pb-[240px]">
+    {/* Bottom Toolbar */}
+    <Sidebar
+      view="editor"
+      editorStep="edit"
+      totalDurationMs={totalDuration * 1000}
+      currentTimeMs={currentTime * 1000}
+      clipCount={clips.length}
+      onOpenTranscript={() => setShowTranscriptDrawer(true)}
+    />
+
+    <div className="w-full flex flex-col gap-0 lg:gap-6 animate-fade-in-up lg:px-6">
 
       {/* Mobile Video Panel */}
       <div className="lg:hidden">
@@ -3387,15 +3593,17 @@ function EditStep({
                     words={allWords}
                     deletedWordIds={deletedWordIds}
                     currentTime={currentTime}
+                    templateId={overlayState.captionTemplateId}
                     showCaptions={overlayState.showCaptionPreview}
                     positionY={overlayState.captionPositionY}
                     onPositionChange={setCaptionPosition}
                   />
-                  {/* Text overlay preview - draggable */}
+                  {/* Text overlay preview - draggable and editable */}
                   <TextOverlayPreview
                     textOverlays={overlayState.textOverlays}
                     currentTimeMs={currentTime * 1000}
                     onUpdatePosition={(id, position) => updateTextOverlay(id, { position })}
+                    onUpdateContent={(id, content) => updateTextOverlay(id, { content })}
                     containerRef={desktopPreviewContainerRef}
                   />
                 </>
@@ -3459,7 +3667,7 @@ function EditStep({
             </div>
           </div>
 
-          <div className="card p-5 h-[520px]">
+          <div className="bg-black/40 backdrop-blur-xl border border-[var(--border)] rounded-2xl p-5 h-[520px]">
             {autoCutProcessing?.active ? (
               /* AutoCut skeleton - shows animated placeholder lines */
               <div className="space-y-3 h-full overflow-hidden">
@@ -3751,9 +3959,7 @@ function EditStep({
             onPlay={() => {
               const video = getActiveVideoRef();
               if (video) {
-                video.play().catch((e) => {
-                  if (e.name !== 'AbortError') console.error('Video play error:', e);
-                });
+                safeVideoPlay(video);
                 setIsPlaying(true);
               }
             }}
@@ -3769,11 +3975,42 @@ function EditStep({
               console.log('Add content clicked');
             }}
             onOpenTranscript={() => setShowTranscriptDrawer(true)}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            canUndo={undoStack.length > 0}
+            canRedo={redoStack.length > 0}
           />
           </>
         )}
       </div>
     </ResizableBottomPanel>
+
+    {/* AI Chat Button - Floating */}
+    <button
+      onClick={() => setIsChatOpen(true)}
+      className="fixed bottom-24 right-4 lg:bottom-8 lg:right-8 z-40 w-14 h-14 bg-gradient-to-br from-[#4A8FE7] to-[#1e3a8a] hover:from-[#5A9FF7] hover:to-[#2e4a9a] rounded-full shadow-lg shadow-[#4A8FE7]/30 flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+      title="Ask Eddie"
+    >
+      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+      </svg>
+    </button>
+
+    {/* AI Chat Panel */}
+    <ChatPanel
+      isOpen={isChatOpen}
+      onClose={() => setIsChatOpen(false)}
+      context={{
+        duration: totalDuration,
+        currentTime,
+        captionsEnabled: overlayState.showCaptionPreview,
+        currentFilter: overlayState.filterId,
+        textOverlayCount: overlayState.textOverlays.length,
+        stickerCount: overlayState.stickers.length,
+        hasTranscript: allWords.length > 0,
+      }}
+      onCommand={handleChatCommand}
+    />
     </>
   );
 }
@@ -3788,94 +4025,129 @@ function RollingLoadingMessageCompact() {
   return <VideoProcessingLoaderCompact stage="transcribing" className="text-sm text-white" />;
 }
 
-// Uploading Overlay Component - CapCut-style loading animation
+// Uploading Overlay Component - Eddie working animation
 function UploadingOverlay({ progress }: { progress: number }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10">
-      {/* Animated Video Icon with Gradient */}
-      <motion.div
-        className="relative mb-8"
-        animate={{ y: [0, -6, 0] }}
-        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-      >
-        {/* Glow effect behind icon */}
+      {/* Eddie Working Animation */}
+      <div className="relative mb-6">
+        {/* Glow effect */}
         <div
-          className="absolute inset-0 blur-xl opacity-40 rounded-xl"
+          className="absolute inset-0 blur-2xl opacity-30 rounded-full"
           style={{
             background: 'linear-gradient(135deg, #6366f1 0%, #4A8FE7 50%, #22d3bb 100%)',
-            transform: 'scale(1.5)',
+            transform: 'scale(2)',
           }}
         />
 
-        {/* Main video icon container */}
-        <div className="relative w-24 h-16">
-          {/* Gradient video frame */}
-          <div
-            className="absolute inset-0 rounded-xl shadow-lg"
-            style={{
-              background: 'linear-gradient(135deg, #6366f1 0%, #4A8FE7 50%, #22d3bb 100%)',
-            }}
-          />
-          {/* Inner dark area with subtle gradient */}
-          <div
-            className="absolute inset-1.5 rounded-lg"
-            style={{
-              background: 'linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.4) 100%)',
-            }}
-          />
-          {/* Play button triangle */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <svg className="w-7 h-7 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </div>
-        </div>
+        {/* Eddie at desk scene */}
+        <div className="relative w-40 h-32">
+          {/* Desk */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-32 h-3 bg-gradient-to-r from-[#3a3a4f] via-[#4a4a5f] to-[#3a3a4f] rounded-sm" />
 
-        {/* Sparkle effect - top right with rotation */}
-        <motion.div
-          className="absolute -top-3 -right-3"
-          animate={{ rotate: [0, 15, 0], scale: [1, 1.2, 1] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <svg className="w-6 h-6 text-white drop-shadow-md" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0L14.59 8.41L23 11L14.59 13.59L12 22L9.41 13.59L1 11L9.41 8.41L12 0Z" />
-          </svg>
-        </motion.div>
-
-        {/* Small sparkle - top */}
-        <motion.div
-          className="absolute -top-1 right-4"
-          animate={{ opacity: [0, 1, 0], scale: [0.5, 1, 0.5] }}
-          transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }}
-        >
-          <div className="w-1.5 h-1.5 bg-white rounded-full" />
-        </motion.div>
-      </motion.div>
-
-      {/* Animated timeline bars */}
-      <div className="flex items-center gap-1 mb-8">
-        {/* Left circle */}
-        <motion.div
-          className="w-2 h-2 bg-[#4a4a4f] rounded-full"
-          animate={{ scale: [1, 1.2, 1] }}
-          transition={{ duration: 1, repeat: Infinity, delay: 0 }}
-        />
-        {/* Timeline bars */}
-        {[0, 0.15, 0.3, 0.45].map((delay, i) => (
+          {/* Monitor/Screen */}
           <motion.div
-            key={i}
-            className="h-2 bg-[#4a4a4f] rounded-full"
-            style={{ width: i === 1 ? '48px' : i === 2 ? '32px' : '24px' }}
-            animate={{ opacity: [0.4, 1, 0.4] }}
-            transition={{ duration: 1.2, repeat: Infinity, delay }}
-          />
-        ))}
-        {/* Right circle */}
-        <motion.div
-          className="w-2 h-2 bg-[#4a4a4f] rounded-full"
-          animate={{ scale: [1, 1.2, 1] }}
-          transition={{ duration: 1, repeat: Infinity, delay: 0.5 }}
-        />
+            className="absolute bottom-7 left-1/2 -translate-x-1/2 w-20 h-14 bg-gradient-to-br from-[#2a2a3a] to-[#1a1a2a] rounded-lg border-2 border-[#4a4a5f] overflow-hidden"
+            animate={{
+              boxShadow: ['0 0 10px rgba(74,143,231,0.3)', '0 0 20px rgba(74,143,231,0.5)', '0 0 10px rgba(74,143,231,0.3)']
+            }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            {/* Screen content - timeline bars */}
+            <div className="absolute inset-1 flex flex-col justify-center gap-1 p-1">
+              <motion.div
+                className="h-1.5 bg-[#4A8FE7] rounded-full"
+                animate={{ width: ['40%', '70%', '40%'] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              />
+              <motion.div
+                className="h-1.5 bg-[#6366f1] rounded-full"
+                animate={{ width: ['60%', '30%', '60%'] }}
+                transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }}
+              />
+              <motion.div
+                className="h-1.5 bg-[#22d3bb] rounded-full"
+                animate={{ width: ['30%', '80%', '30%'] }}
+                transition={{ duration: 1.5, repeat: Infinity, delay: 0.6 }}
+              />
+            </div>
+          </motion.div>
+
+          {/* Eddie character - sitting at desk */}
+          <motion.div
+            className="absolute bottom-6 left-1/2 -translate-x-1/2"
+            animate={{ y: [0, -2, 0] }}
+            transition={{ duration: 0.5, repeat: Infinity }}
+          >
+            {/* Body */}
+            <div className="relative">
+              {/* Head */}
+              <motion.div
+                className="w-8 h-8 bg-gradient-to-br from-[#4A8FE7] to-[#6366f1] rounded-full mx-auto relative"
+                animate={{ rotate: [-3, 3, -3] }}
+                transition={{ duration: 1, repeat: Infinity }}
+              >
+                {/* Eyes */}
+                <motion.div
+                  className="absolute flex gap-1.5 left-1/2 -translate-x-1/2"
+                  style={{ top: '35%' }}
+                  animate={{ scaleY: [1, 0.1, 1] }}
+                  transition={{ duration: 0.15, repeat: Infinity, repeatDelay: 2.5 }}
+                >
+                  <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                  <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                </motion.div>
+                {/* Smile */}
+                <svg className="absolute w-3 h-3 text-white left-1/2 -translate-x-1/2" style={{ top: '55%' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round">
+                  <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                </svg>
+              </motion.div>
+
+              {/* Arms - typing animation */}
+              <div className="flex justify-center gap-4 -mt-1">
+                <motion.div
+                  className="w-2 h-4 bg-[#4A8FE7] rounded-full origin-top"
+                  animate={{ rotate: [-15, 15, -15] }}
+                  transition={{ duration: 0.3, repeat: Infinity }}
+                />
+                <motion.div
+                  className="w-2 h-4 bg-[#4A8FE7] rounded-full origin-top"
+                  animate={{ rotate: [15, -15, 15] }}
+                  transition={{ duration: 0.3, repeat: Infinity, delay: 0.15 }}
+                />
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Sparkles around Eddie */}
+          <motion.div
+            className="absolute top-2 right-4"
+            animate={{ scale: [0, 1, 0], opacity: [0, 1, 0] }}
+            transition={{ duration: 1.5, repeat: Infinity, delay: 0 }}
+          >
+            <svg className="w-4 h-4 text-[#22d3bb]" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0L14 8L22 10L14 12L12 20L10 12L2 10L10 8L12 0Z" />
+            </svg>
+          </motion.div>
+          <motion.div
+            className="absolute top-4 left-4"
+            animate={{ scale: [0, 1, 0], opacity: [0, 1, 0] }}
+            transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
+          >
+            <svg className="w-3 h-3 text-[#4A8FE7]" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0L14 8L22 10L14 12L12 20L10 12L2 10L10 8L12 0Z" />
+            </svg>
+          </motion.div>
+          <motion.div
+            className="absolute bottom-16 right-2"
+            animate={{ scale: [0, 1, 0], opacity: [0, 1, 0] }}
+            transition={{ duration: 1.5, repeat: Infinity, delay: 1 }}
+          >
+            <svg className="w-3 h-3 text-[#6366f1]" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0L14 8L22 10L14 12L12 20L10 12L2 10L10 8L12 0Z" />
+            </svg>
+          </motion.div>
+        </div>
       </div>
 
       {/* Animated progress text */}
@@ -3895,92 +4167,127 @@ function AutoCutOverlay({ status, message, currentClip, totalClips }: {
   currentClip: number;
   totalClips: number;
 }) {
+  // Calculate progress percentage based on status stages
+  const getProgress = () => {
+    switch (status) {
+      case 'preparing':
+        return 5;
+      case 'converting':
+        return 15;
+      case 'transcribing':
+        // 20-70% range, distributed across clips
+        const clipProgress = totalClips > 0 ? (currentClip / totalClips) : 0;
+        return 20 + (clipProgress * 50);
+      case 'detecting':
+        return 75;
+      case 'applying':
+        return 90;
+      case 'done':
+        return 100;
+      default:
+        return 0;
+    }
+  };
+
+  const progress = getProgress();
+
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10">
-      {/* Animated Scissors Icon with Gradient */}
-      <motion.div
-        className="relative mb-8"
-        animate={{ y: [0, -6, 0] }}
-        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-      >
-        {/* Glow effect behind icon */}
+      {/* Eddie with scissors animation */}
+      <div className="relative mb-6">
+        {/* Glow effect */}
         <div
-          className="absolute inset-0 blur-xl opacity-40 rounded-xl"
+          className="absolute inset-0 blur-2xl opacity-30 rounded-full"
           style={{
             background: 'linear-gradient(135deg, #6366f1 0%, #4A8FE7 50%, #22d3bb 100%)',
-            transform: 'scale(1.5)',
+            transform: 'scale(2)',
           }}
         />
 
-        {/* Main scissors icon container */}
-        <div className="relative w-24 h-16">
-          {/* Gradient frame */}
-          <div
-            className="absolute inset-0 rounded-xl shadow-lg"
-            style={{
-              background: 'linear-gradient(135deg, #6366f1 0%, #4A8FE7 50%, #22d3bb 100%)',
-            }}
-          />
-          {/* Inner dark area with subtle gradient */}
-          <div
-            className="absolute inset-1.5 rounded-lg"
-            style={{
-              background: 'linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.4) 100%)',
-            }}
-          />
-          {/* Scissors icon */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <svg className="w-8 h-8 text-white drop-shadow-lg" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7.848 8.25l1.536.887M7.848 8.25a3 3 0 11-5.196-3 3 3 0 015.196 3zm1.536.887a2.165 2.165 0 011.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 11-5.196 3 3 3 0 015.196-3zm1.536-.887a2.165 2.165 0 001.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863l2.077-1.199m0-3.328a4.323 4.323 0 012.068-1.379l5.325-1.628a4.5 4.5 0 012.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.331 4.331 0 0010.607 12m3.736 0l7.794 4.5-.802.215a4.5 4.5 0 01-2.48-.043l-5.326-1.629a4.324 4.324 0 01-2.068-1.379M14.343 12l-2.882 1.664" />
-            </svg>
+        {/* Eddie cutting scene */}
+        <div className="relative w-40 h-28">
+          {/* Film strip being cut */}
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center">
+            {/* Left film piece */}
+            <motion.div
+              className="flex gap-0.5"
+              animate={{ x: [-2, -8, -2] }}
+              transition={{ duration: 0.8, repeat: Infinity }}
+            >
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="w-6 h-4 bg-gradient-to-b from-[#3a3a4f] to-[#2a2a3f] rounded-sm border border-[#4a4a5f]">
+                  <div className="w-full h-0.5 bg-[#4a4a5f] mt-0.5" />
+                  <div className="w-full h-0.5 bg-[#4a4a5f] mt-1" />
+                </div>
+              ))}
+            </motion.div>
+            {/* Cut gap */}
+            <div className="w-2" />
+            {/* Right film piece */}
+            <motion.div
+              className="flex gap-0.5"
+              animate={{ x: [2, 8, 2] }}
+              transition={{ duration: 0.8, repeat: Infinity }}
+            >
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="w-6 h-4 bg-gradient-to-b from-[#3a3a4f] to-[#2a2a3f] rounded-sm border border-[#4a4a5f]">
+                  <div className="w-full h-0.5 bg-[#4a4a5f] mt-0.5" />
+                  <div className="w-full h-0.5 bg-[#4a4a5f] mt-1" />
+                </div>
+              ))}
+            </motion.div>
           </div>
-        </div>
 
-        {/* Sparkle effect - top right with rotation */}
-        <motion.div
-          className="absolute -top-3 -right-3"
-          animate={{ rotate: [0, 15, 0], scale: [1, 1.2, 1] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <svg className="w-6 h-6 text-white drop-shadow-md" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0L14.59 8.41L23 11L14.59 13.59L12 22L9.41 13.59L1 11L9.41 8.41L12 0Z" />
-          </svg>
-        </motion.div>
-
-        {/* Small sparkle - top */}
-        <motion.div
-          className="absolute -top-1 right-4"
-          animate={{ opacity: [0, 1, 0], scale: [0.5, 1, 0.5] }}
-          transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }}
-        >
-          <div className="w-1.5 h-1.5 bg-white rounded-full" />
-        </motion.div>
-      </motion.div>
-
-      {/* Animated timeline bars */}
-      <div className="flex items-center gap-1 mb-8">
-        {/* Left circle */}
-        <motion.div
-          className="w-2 h-2 bg-[#4a4a4f] rounded-full"
-          animate={{ scale: [1, 1.2, 1] }}
-          transition={{ duration: 1, repeat: Infinity, delay: 0 }}
-        />
-        {/* Timeline bars */}
-        {[0, 0.15, 0.3, 0.45].map((delay, i) => (
+          {/* Eddie character with scissors */}
           <motion.div
-            key={i}
-            className="h-2 bg-[#4a4a4f] rounded-full"
-            style={{ width: i === 1 ? '48px' : i === 2 ? '32px' : '24px' }}
-            animate={{ opacity: [0.4, 1, 0.4] }}
-            transition={{ duration: 1.2, repeat: Infinity, delay }}
-          />
-        ))}
-        {/* Right circle */}
-        <motion.div
-          className="w-2 h-2 bg-[#4a4a4f] rounded-full"
-          animate={{ scale: [1, 1.2, 1] }}
-          transition={{ duration: 1, repeat: Infinity, delay: 0.5 }}
-        />
+            className="absolute top-0 left-1/2 -translate-x-1/2"
+            animate={{ y: [0, -3, 0] }}
+            transition={{ duration: 0.8, repeat: Infinity }}
+          >
+            <div className="relative">
+              {/* Head */}
+              <motion.div
+                className="w-10 h-10 bg-gradient-to-br from-[#4A8FE7] to-[#6366f1] rounded-full mx-auto relative"
+              >
+                {/* Focused eyes (looking down at work) */}
+                <div
+                  className="absolute flex gap-2 left-1/2 -translate-x-1/2"
+                  style={{ top: '40%' }}
+                >
+                  <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                  <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                </div>
+                {/* Concentrated mouth */}
+                <div className="absolute w-2 h-0.5 bg-white rounded-full left-1/2 -translate-x-1/2" style={{ top: '65%' }} />
+              </motion.div>
+
+              {/* Arms holding scissors */}
+              <div className="flex justify-center -mt-1">
+                {/* Scissors */}
+                <motion.div
+                  className="relative"
+                  animate={{ rotate: [-5, 5, -5] }}
+                  transition={{ duration: 0.4, repeat: Infinity }}
+                >
+                  <svg className="w-8 h-8 text-[#FF6B6B]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
+                  </svg>
+                </motion.div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Cut sparkles */}
+          <motion.div
+            className="absolute top-8 left-1/2 -translate-x-1/2"
+            animate={{ scale: [0, 1.5, 0], opacity: [0, 1, 0] }}
+            transition={{ duration: 0.8, repeat: Infinity }}
+          >
+            <svg className="w-4 h-4 text-[#22d3bb]" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0L14 8L22 10L14 12L12 20L10 12L2 10L10 8L12 0Z" />
+            </svg>
+          </motion.div>
+        </div>
       </div>
 
       {/* Animated progress text */}
@@ -3990,6 +4297,19 @@ function AutoCutOverlay({ status, message, currentClip, totalClips }: {
         currentClip={status === 'transcribing' && totalClips > 1 ? currentClip : undefined}
         className="text-lg"
       />
+
+      {/* Progress bar */}
+      <div className="w-48 h-1.5 bg-[#252A35] rounded-full overflow-hidden mt-6">
+        <motion.div
+          className="h-full bg-gradient-to-r from-[#4A8FE7] to-[#6366f1] rounded-full"
+          initial={{ width: 0 }}
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+        />
+      </div>
+
+      {/* Progress percentage */}
+      <p className="text-[#636366] text-xs mt-2">{Math.round(progress)}%</p>
 
       {/* Done state with checkmark */}
       {status === 'done' && (
@@ -4107,15 +4427,17 @@ function MobileVideoPanel({
               words={allWords}
               deletedWordIds={deletedWordIds}
               currentTime={currentTime}
+              templateId={overlayState.captionTemplateId}
               showCaptions={overlayState.showCaptionPreview}
               positionY={overlayState.captionPositionY}
               onPositionChange={setCaptionPosition}
             />
-            {/* Text overlay preview - draggable */}
+            {/* Text overlay preview - draggable and editable */}
             <TextOverlayPreview
               textOverlays={overlayState.textOverlays}
               currentTimeMs={currentTime * 1000}
               onUpdatePosition={(id, position) => updateTextOverlay(id, { position })}
+              onUpdateContent={(id, content) => updateTextOverlay(id, { content })}
               containerRef={previewContainerRef}
             />
           </>
@@ -4147,18 +4469,6 @@ function MobileVideoPanel({
           </div>
         </button>
 
-        </div>
-        <div className="py-2 px-3 flex items-center justify-end text-sm bg-[#111111]">
-          {/* Transcript Button */}
-          <button
-            onClick={onOpenTranscript}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#282828] hover:bg-[#333] text-white text-xs font-medium transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Transcript
-          </button>
         </div>
       </div>
     </div>
@@ -4209,23 +4519,75 @@ function TranscriptDrawer({
   deletedPauseIds: Set<string>;
   handleRestoreAll: () => void;
 }) {
+  const [drawerHeight, setDrawerHeight] = useState(50); // percentage of viewport height
+  const isDragging = useRef(false);
+  const startY = useRef(0);
+  const startHeight = useRef(50);
+
+  const handleDragStart = (e: React.TouchEvent | React.MouseEvent) => {
+    isDragging.current = true;
+    startY.current = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    startHeight.current = drawerHeight;
+    document.body.style.userSelect = 'none';
+  };
+
+  const handleDrag = useCallback((e: TouchEvent | MouseEvent) => {
+    if (!isDragging.current) return;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const deltaY = startY.current - clientY;
+    const deltaPercent = (deltaY / window.innerHeight) * 100;
+    const newHeight = Math.min(85, Math.max(30, startHeight.current + deltaPercent));
+    setDrawerHeight(newHeight);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    isDragging.current = false;
+    document.body.style.userSelect = '';
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      window.addEventListener('mousemove', handleDrag);
+      window.addEventListener('mouseup', handleDragEnd);
+      window.addEventListener('touchmove', handleDrag);
+      window.addEventListener('touchend', handleDragEnd);
+      return () => {
+        window.removeEventListener('mousemove', handleDrag);
+        window.removeEventListener('mouseup', handleDragEnd);
+        window.removeEventListener('touchmove', handleDrag);
+        window.removeEventListener('touchend', handleDragEnd);
+      };
+    }
+  }, [isOpen, handleDrag, handleDragEnd]);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center lg:hidden">
       {/* Tap to dismiss area (above drawer) */}
       <div
-        className="absolute inset-0 bottom-[50vh]"
+        className="absolute inset-0"
+        style={{ bottom: `${drawerHeight}vh` }}
         onClick={onClose}
       />
 
       {/* Semi-transparent drawer that slides up over video */}
       <div
-        className="relative w-full bg-black/70 backdrop-blur-md rounded-t-2xl p-4 max-h-[50vh] overflow-hidden animate-slide-up"
-        style={{ boxShadow: '0 -4px 30px rgba(0,0,0,0.3)' }}
+        className="relative w-full bg-black/50 backdrop-blur-xl rounded-t-2xl p-4 overflow-hidden animate-slide-up flex flex-col"
+        style={{
+          boxShadow: '0 -4px 30px rgba(0,0,0,0.3)',
+          height: `${drawerHeight}vh`,
+          maxHeight: '85vh',
+        }}
       >
-        {/* Drag handle indicator */}
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 bg-white/30 rounded-full" />
+        {/* Drag handle indicator - interactive */}
+        <div
+          className="absolute top-0 left-0 right-0 h-6 cursor-ns-resize flex items-center justify-center touch-none"
+          onMouseDown={handleDragStart}
+          onTouchStart={handleDragStart}
+        >
+          <div className="w-10 h-1 bg-white/40 rounded-full" />
+        </div>
 
         {/* Header */}
         <div className="flex items-center justify-between mb-3 mt-2">
@@ -4251,7 +4613,7 @@ function TranscriptDrawer({
         </div>
 
         {/* Content */}
-        <div className="h-[calc(50vh-70px)] overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" style={{ height: `calc(${drawerHeight}vh - 70px)` }}>
           {isTranscribing ? (
             <div className="flex flex-col items-center justify-center h-full gap-4">
               <div className="w-12 h-12 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin" />
@@ -4287,7 +4649,7 @@ function TranscriptDrawer({
                         ? "bg-red-950/30 text-[#636366]"
                         : isActive
                         ? "bg-[#4A8FE7]/15 text-white"
-                        : "text-[#8E8E93] hover:bg-[#242430]"
+                        : "text-white/80 hover:text-white hover:bg-[#242430]"
                     }`}
                   >
                     <span className={`text-[10px] font-medium mr-2 ${isDeleted ? "text-[#45454F]" : "text-[#4A8FE7]"}`}>

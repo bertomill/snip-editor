@@ -20,7 +20,6 @@ import { HookSuggestionsPanel } from '@/components/HookSuggestionsPanel'
 type PanelType = 'text' | 'stickers' | 'filters' | 'audio' | 'cuts' | 'captions' | 'suggestions' | null;
 
 interface SidebarProps {
-  onOpenUploads?: () => void;
   onNavigateHome?: () => void;
   onCreateProject?: () => void;
   // View state - determines which mobile bottom bar to show
@@ -43,7 +42,6 @@ interface SidebarProps {
 }
 
 export function Sidebar({
-  onOpenUploads,
   onNavigateHome,
   onCreateProject,
   view = 'feed',
@@ -71,7 +69,8 @@ export function Sidebar({
 
   return (
     <>
-      {/* Desktop Sidebar - hidden on mobile */}
+      {/* Desktop Sidebar - only show in feed view, hidden in editor */}
+      {view === 'feed' && (
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[72px] bg-[var(--background-sidebar)] border-r border-[var(--border-subtle)] flex-col items-center py-4 z-50">
         {/* Logo */}
         <Link href="/" className="mb-4">
@@ -185,16 +184,6 @@ export function Sidebar({
             active
           />
 
-          {/* Uploads */}
-          <NavButton
-            icon={<UploadsIcon />}
-            label="Uploads"
-            onClick={() => onOpenUploads?.()}
-          />
-
-          {/* Discover/Explore */}
-          <NavItem href="/" icon={<ExploreIcon />} label="Explore" />
-
           {/* Create - Primary Action */}
           <button
             onClick={() => onCreateProject?.()}
@@ -267,7 +256,31 @@ export function Sidebar({
           )}
         </nav>
 
+        {/* User name at bottom */}
+        {!loading && user && (
+          <button
+            onClick={() => setShowProfileMenu(!showProfileMenu)}
+            className="mt-auto pt-4 flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors group"
+          >
+            <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-[#3b82f6] to-[#1e3a8a] flex items-center justify-center text-white font-medium text-xs group-hover:scale-105 transition-transform">
+              {user.user_metadata?.avatar_url ? (
+                <img
+                  src={user.user_metadata.avatar_url}
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                user.email?.[0].toUpperCase()
+              )}
+            </div>
+            <span className="text-[9px] font-medium truncate max-w-[60px] text-center">
+              {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'Account'}
+            </span>
+          </button>
+        )}
+
       </aside>
+      )}
 
       {/* Secondary Panel - Canva style slide-out */}
       {activePanel !== 'suggestions' && (
@@ -299,26 +312,14 @@ export function Sidebar({
         />
       )}
 
-      {/* Mobile Bottom Bar - different for feed vs editor */}
-      {view === 'feed' ? (
+      {/* Mobile Bottom Bar - only for feed view */}
+      {view === 'feed' && (
         <MobileProjectsBottomBar
           onCreateProject={onCreateProject}
           searchQuery={searchQuery}
           onSearchChange={onSearchChange}
         />
-      ) : editorStep !== 'upload' ? (
-        <MobileBottomToolbar
-          onNavigateHome={onNavigateHome}
-          onCreateProject={onCreateProject}
-          onOpenTextDrawer={() => togglePanel('text')}
-          onOpenStickerDrawer={() => togglePanel('stickers')}
-          onOpenAudioDrawer={() => togglePanel('audio')}
-          onOpenCaptionsDrawer={() => togglePanel('captions')}
-          onOpenTranscript={onOpenTranscript}
-          captionsEnabled={overlayState.showCaptionPreview}
-          audioEnabled={overlayState.audioSettings?.enhanceAudio ?? false}
-        />
-      ) : null}
+      )}
 
       {/* Mobile Text Drawer - CapCut style slide-up */}
       <MobileTextDrawer
@@ -390,6 +391,7 @@ function MobileBottomToolbar({
   onNavigateHome,
   onCreateProject,
   onOpenTextDrawer,
+  onAddTextDirect,
   onOpenStickerDrawer,
   onOpenAudioDrawer,
   onOpenCaptionsDrawer,
@@ -400,6 +402,7 @@ function MobileBottomToolbar({
   onNavigateHome?: () => void
   onCreateProject?: () => void
   onOpenTextDrawer?: () => void
+  onAddTextDirect?: () => void
   onOpenStickerDrawer?: () => void
   onOpenAudioDrawer?: () => void
   onOpenCaptionsDrawer?: () => void
@@ -407,9 +410,15 @@ function MobileBottomToolbar({
   captionsEnabled?: boolean
   audioEnabled?: boolean
 }) {
+  const handleTextClick = () => {
+    // Add text directly to the video, then open drawer for styling
+    onAddTextDirect?.()
+    onOpenTextDrawer?.()
+  }
+
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#1C1C1E]/95 backdrop-blur-xl border-t border-white/10 safe-area-pb">
-      <div className="flex items-center justify-evenly py-2">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--background-card)]/95 backdrop-blur-xl border-t border-[var(--border)] safe-area-pb">
+      <div className="flex items-center justify-evenly py-2 max-w-3xl mx-auto">
         <ToolbarButton
           icon={<EditIcon />}
           label="Edit"
@@ -424,7 +433,7 @@ function MobileBottomToolbar({
         <ToolbarButton
           icon={<MobileTextIcon />}
           label="Text"
-          onClick={onOpenTextDrawer}
+          onClick={handleTextClick}
         />
         <ToolbarButton
           icon={<EffectsIcon />}
@@ -1225,23 +1234,6 @@ function HomeIcon() {
   )
 }
 
-function UploadsIcon() {
-  return (
-    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-    </svg>
-  )
-}
-
-function ExploreIcon() {
-  return (
-    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="10" />
-      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="currentColor" />
-    </svg>
-  )
-}
-
 function CreateIcon() {
   return (
     <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -1323,8 +1315,10 @@ function LogoutIcon() {
 // Overlay Tool Icons
 function TextIcon() {
   return (
-    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16m-7 6h7" />
+    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+      {/* Serif T with underline */}
+      <path d="M5 4h14v3h-2V6H13v12h2v2H9v-2h2V6H7v1H5V4z" />
+      <rect x="6" y="20" width="12" height="1.5" rx="0.75" />
     </svg>
   )
 }
@@ -1408,8 +1402,10 @@ function AudioIcon() {
 
 function MobileTextIcon() {
   return (
-    <svg className="w-full h-full" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M12 6v14M8 6v2M16 6v2" />
+    <svg className="w-full h-full" viewBox="0 0 24 24" fill="currentColor">
+      {/* Serif T with underline - more distinctive */}
+      <path d="M5 4h14v3h-2V6H13v12h2v2H9v-2h2V6H7v1H5V4z" />
+      <rect x="6" y="20" width="12" height="1.5" rx="0.75" />
     </svg>
   )
 }

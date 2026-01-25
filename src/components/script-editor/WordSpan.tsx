@@ -36,7 +36,7 @@ export const WordSpan = memo(function WordSpan({
     className += 'bg-[#4A8FE7]/30 text-white font-semibold';
   } else {
     // Normal state
-    className += 'text-[#8E8E93] hover:text-white hover:bg-[#242430]';
+    className += 'text-white/80 hover:text-white hover:bg-[#242430]';
   }
 
   return (

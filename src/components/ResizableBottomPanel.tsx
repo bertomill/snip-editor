@@ -84,7 +84,7 @@ export function ResizableBottomPanel({
   return (
     <div
       ref={panelRef}
-      className={`fixed left-0 right-0 md:left-[72px] bg-[#0D0D0D] border-t border-[var(--border-subtle)] z-30 bottom-[60px] md:bottom-0 ${className}`}
+      className={`fixed left-0 right-0 bg-[#0D0D0D] border-t border-[var(--border-subtle)] z-30 bottom-0 ${className}`}
       style={{ height }}
     >
       {/* Drag Handle */}
