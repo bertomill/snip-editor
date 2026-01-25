@@ -21,17 +21,11 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user) {
-      return NextResponse.redirect(new URL('/login?error=unauthorized', request.url));
-    }
-
-    // Verify state and get code verifier
+    // Look up state first (state is cryptographically random and unique)
     const { data: oauthState } = await supabase
       .from('oauth_states')
-      .select('code_verifier')
-      .eq('user_id', user.id)
+      .select('code_verifier, user_id')
       .eq('provider', 'youtube')
       .eq('state', state)
       .single();
@@ -39,6 +33,8 @@ export async function GET(request: NextRequest) {
     if (!oauthState) {
       return NextResponse.redirect(new URL('/?error=youtube_auth_invalid_state', request.url));
     }
+
+    const userId = oauthState.user_id;
 
     // Exchange code for tokens
     const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
@@ -84,7 +80,7 @@ export async function GET(request: NextRequest) {
 
     // Store the connection in database
     await supabase.from('social_connections').upsert({
-      user_id: user.id,
+      user_id: userId,
       provider: 'youtube',
       provider_user_id: channelInfo?.id || null,
       provider_username: channelInfo?.snippet?.title || null,
@@ -100,7 +96,7 @@ export async function GET(request: NextRequest) {
     await supabase
       .from('oauth_states')
       .delete()
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('provider', 'youtube');
 
     // Redirect back to app with success

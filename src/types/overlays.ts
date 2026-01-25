@@ -72,7 +72,23 @@ export interface StickerTemplate {
 }
 
 // Transition Types for clip boundaries
-export type TransitionType = 'none' | 'zoom-punch' | 'flash' | 'shake' | 'glitch' | 'whip-pan' | 'speed-ramp';
+export type TransitionType =
+  | 'none'
+  | 'zoom-punch'
+  | 'flash'
+  | 'shake'
+  | 'glitch'
+  | 'whip-pan'
+  | 'speed-ramp'
+  // New dramatic transitions
+  | 'zoom-blur'      // Heavy zoom with motion blur
+  | 'rgb-split'      // Color channel separation
+  | 'spin-zoom'      // Rotation + zoom combo
+  | 'bounce-pop'     // Bouncy scale with overshoot
+  | 'slide-push'     // Push old content out
+  | 'lens-distort'   // Barrel/pincushion distortion
+  | 'strobe'         // Rapid flash strobe effect
+  | 'color-flash';   // Colored flash (pink/cyan)
 
 export interface ClipTransition {
   id: string;
