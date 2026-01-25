@@ -181,3 +181,118 @@ export function validateTransitions(
     .sort((a, b) => a.clipIndex - b.clipIndex)
     .filter((t, i, arr) => i === 0 || arr[i - 1].clipIndex !== t.clipIndex);
 }
+
+/**
+ * Cut point representing where a silence was removed
+ */
+export interface CutPoint {
+  clipIndex: number;
+  cutTimeMs: number;  // Timestamp in the OUTPUT video where the cut occurs
+  silenceDuration: number; // How long the removed silence was (for selecting transition type)
+}
+
+/**
+ * Generate transitions for internal cuts (silence removal points)
+ *
+ * These transitions are applied WITHIN a clip where silences were removed,
+ * making the jump cuts smoother with visual effects.
+ *
+ * @param cutPoints - Array of cut point info
+ * @param transitionType - 'auto' selects based on silence duration, or specify a type
+ */
+export function generateInternalCutTransitions(
+  cutPoints: CutPoint[],
+  transitionType: TransitionType | 'auto' = 'auto'
+): ClipTransition[] {
+  if (cutPoints.length === 0) {
+    return [];
+  }
+
+  const transitions: ClipTransition[] = [];
+
+  for (let i = 0; i < cutPoints.length; i++) {
+    const cut = cutPoints[i];
+
+    // Select transition type based on silence duration or use specified type
+    let type: TransitionType;
+    if (transitionType === 'auto') {
+      // Longer silences = more noticeable jumps = stronger transitions
+      if (cut.silenceDuration > 1.5) {
+        // Long pause: use flash or zoom-punch for emphasis
+        type = Math.random() > 0.5 ? 'flash' : 'zoom-punch';
+      } else if (cut.silenceDuration > 0.8) {
+        // Medium pause: mostly zoom-punch
+        type = 'zoom-punch';
+      } else {
+        // Short pause: subtle zoom-punch with lower intensity
+        type = 'zoom-punch';
+      }
+    } else {
+      type = transitionType;
+    }
+
+    const template = transitionTemplates[type];
+    const durationFrames = template?.durationFrames || 6;
+
+    // Adjust intensity based on silence duration
+    // Shorter silences get subtler transitions
+    const intensity = cut.silenceDuration > 1.0 ? 1.0 :
+                     cut.silenceDuration > 0.5 ? 0.8 : 0.6;
+
+    transitions.push({
+      id: `internal-cut-${cut.clipIndex}-${i}-${Date.now()}`,
+      type,
+      clipIndex: cut.clipIndex,
+      durationFrames,
+      intensity,
+      cutTimeMs: cut.cutTimeMs,
+    });
+  }
+
+  return transitions;
+}
+
+/**
+ * Calculate cut points from deleted pauses/silences
+ *
+ * Given the original word timings and deleted ranges, calculates where
+ * the cuts will appear in the output video.
+ *
+ * @param words - Original word timings (before cuts)
+ * @param deletedRanges - Array of {start, end} ranges that were deleted
+ * @param clipIndex - Which clip these cuts belong to
+ * @param clipStartMs - When this clip starts in the output timeline
+ */
+export function calculateCutPoints(
+  words: { start: number; end: number }[],
+  deletedRanges: { start: number; end: number; duration: number }[],
+  clipIndex: number,
+  clipStartMs: number = 0
+): CutPoint[] {
+  if (deletedRanges.length === 0) {
+    return [];
+  }
+
+  const cutPoints: CutPoint[] = [];
+  let cumulativeRemoved = 0;
+
+  // Sort ranges by start time
+  const sortedRanges = [...deletedRanges].sort((a, b) => a.start - b.start);
+
+  for (const range of sortedRanges) {
+    // The cut point in output video is where the deletion starts,
+    // adjusted for all previous deletions
+    const cutTimeInClip = (range.start - cumulativeRemoved) * 1000;
+    const cutTimeMs = clipStartMs + cutTimeInClip;
+
+    cutPoints.push({
+      clipIndex,
+      cutTimeMs,
+      silenceDuration: range.duration,
+    });
+
+    cumulativeRemoved += range.duration;
+  }
+
+  return cutPoints;
+}

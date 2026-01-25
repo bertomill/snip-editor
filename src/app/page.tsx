@@ -13,7 +13,7 @@ import {
 import { getFilterById } from "@/lib/templates/filter-presets";
 import { getTextStyleById } from "@/lib/templates/text-templates";
 import { TextOverlay, StickerOverlay } from "@/types/overlays";
-import { generateAutoTransitions } from "@/lib/transitions/auto-transitions";
+import { generateAutoTransitions, generateInternalCutTransitions, CutPoint } from "@/lib/transitions/auto-transitions";
 import { Sidebar } from "@/components/Sidebar";
 import { useUser, useSignOut } from "@/lib/supabase/hooks";
 import { Timeline, TimelineTrack, TrackItemType } from "@/components/timeline";
@@ -29,9 +29,45 @@ import { ProjectFeed } from "@/components/projects";
 import { ProjectData } from "@/types/project";
 import { ResizableBottomPanel } from "@/components/ResizableBottomPanel";
 import { extractAudioFromVideo, isFFmpegSupported } from "@/lib/audio/extract-audio";
+import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
 
 type AppView = "feed" | "editor";
 type EditorStep = "upload" | "edit" | "export";
+
+// Generate a smart project name from video filename
+function generateProjectName(filename: string): string {
+  // Remove extension
+  const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
+
+  // Clean up common patterns
+  const cleaned = nameWithoutExt
+    // Replace underscores and dashes with spaces
+    .replace(/[_-]/g, ' ')
+    // Remove common video prefixes/suffixes
+    .replace(/^(vid|video|clip|mov|img|dsc|dcim|screen.?record(ing)?)\s*/i, '')
+    .replace(/\s*(final|edit|v\d+|copy|hd|4k|1080p|720p)$/i, '')
+    // Remove timestamps like 2024-01-15 or 20240115
+    .replace(/\d{4}[-_]?\d{2}[-_]?\d{2}/g, '')
+    // Remove time patterns like 10-30-45 or 103045
+    .replace(/\d{2}[-_]?\d{2}[-_]?\d{2}/g, '')
+    // Clean up multiple spaces
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // If result is empty or just numbers, use date-based name
+  if (!cleaned || /^\d*$/.test(cleaned)) {
+    const now = new Date();
+    const month = now.toLocaleString('default', { month: 'short' });
+    const day = now.getDate();
+    return `Project ${month} ${day}`;
+  }
+
+  // Capitalize first letter of each word
+  return cleaned
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
 
 interface TranscriptSegment {
   text: string;
@@ -51,6 +87,10 @@ interface VideoClip {
   blobReady: boolean;          // track if blob is downloaded
   storagePath?: string;        // path in Supabase storage for transcription
   uploadStatus?: 'pending' | 'uploading' | 'complete' | 'error';  // storage upload status
+  // Silence detection data for AutoCut
+  silenceSegments?: SilenceSegment[];
+  totalSilenceDuration?: number;
+  audioDuration?: number;
 }
 
 export default function Home() {
@@ -77,13 +117,29 @@ function HomeContent() {
   const [deletedWordIds, setDeletedWordIds] = useState<Set<string>>(new Set());
   const [deletedPauseIds, setDeletedPauseIds] = useState<Set<string>>(new Set());
   const [showUploads, setShowUploads] = useState(false);
+  const [autoTriggerUpload, setAutoTriggerUpload] = useState(false);
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [projectName, setProjectName] = useState("Untitled Project");
   const [isEditingName, setIsEditingName] = useState(false);
   const [autoCutEnabled, setAutoCutEnabled] = useState(false);
+  const [silenceAggressiveness, setSilenceAggressiveness] = useState<SilenceDetectionOptions['aggressiveness']>('natural');
   const [feedSearchQuery, setFeedSearchQuery] = useState("");
   const [showFeedMenu, setShowFeedMenu] = useState(false);
   const [feedViewMode, setFeedViewMode] = useState<'list' | 'gallery'>('list');
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
+
+  // AutoCut processing state for loading overlay
+  const [autoCutProcessing, setAutoCutProcessing] = useState<{
+    active: boolean;
+    status: 'preparing' | 'transcribing' | 'detecting' | 'applying' | 'done';
+    currentClip: number;
+    totalClips: number;
+    message: string;
+  } | null>(null);
+
+  // Mobile transcript drawer state (hoisted from EditStep for Sidebar access)
+  const [showTranscriptDrawer, setShowTranscriptDrawer] = useState(false);
 
   // Save/Load state
   const [isSaving, setIsSaving] = useState(false);
@@ -120,7 +176,7 @@ function HomeContent() {
     }
   }, [clips.length, deletedWordIds.size, deletedPauseIds.size, view]);
 
-  // Handle creating a new project
+  // Handle creating a new project (local only - not saved to DB until user saves)
   const handleCreateProject = useCallback(async () => {
     // Redirect to login if not authenticated
     if (!user) {
@@ -128,21 +184,21 @@ function HomeContent() {
       return;
     }
 
-    const project = await createProject(`Untitled Project`);
-    if (project) {
-      setCurrentProjectId(project.id);
-      setProjectName(project.name);
-      setStep("upload");
-      setClips([]);
-      setDeletedSegments(new Set());
-      setDeletedWordIds(new Set());
-      setDeletedPauseIds(new Set());
-      setHasUnsavedChanges(false);
-      savedClipNames.current = new Set();
-      resetOverlays();
-      setView("editor");
-    }
-  }, [user, router, createProject, resetOverlays]);
+    // Don't create in database yet - just set up local state
+    // Project will be created when user explicitly saves
+    setCurrentProjectId(null); // No DB record yet
+    setProjectName('Untitled Project');
+    setStep("upload");
+    setAutoTriggerUpload(true);
+    setClips([]);
+    setDeletedSegments(new Set());
+    setDeletedWordIds(new Set());
+    setDeletedPauseIds(new Set());
+    setHasUnsavedChanges(false);
+    savedClipNames.current = new Set();
+    resetOverlays();
+    setView("editor");
+  }, [user, router, resetOverlays]);
 
   // Background download blobs for loaded project clips
   const downloadClipBlobs = useCallback(async (
@@ -198,6 +254,7 @@ function HomeContent() {
     setCurrentProjectId(projectId);
     setIsLoadingProject(true);
     setStep("upload");
+    setAutoTriggerUpload(false);
     setClips([]);
     setDeletedSegments(new Set());
     setDeletedWordIds(new Set());
@@ -306,13 +363,22 @@ function HomeContent() {
 
   // Save project data (optimistic + background clip upload)
   const saveProject = useCallback(async () => {
-    if (!currentProjectId) return;
-
     // Optimistic: mark as saved immediately
     setHasUnsavedChanges(false);
     setIsSaving(true);
 
     try {
+      // If no project exists in DB yet, create it first
+      let projectId = currentProjectId;
+      if (!projectId) {
+        const project = await createProject(projectName || 'Untitled Project');
+        if (!project) {
+          throw new Error('Failed to create project');
+        }
+        projectId = project.id;
+        setCurrentProjectId(projectId);
+      }
+
       // Build project metadata (fast operation)
       const projectData: ProjectData = {
         overlays: {
@@ -330,7 +396,7 @@ function HomeContent() {
       };
 
       // Save metadata first (fast) - don't await, let it run in parallel
-      const metadataPromise = fetch(`/api/projects/${currentProjectId}`, {
+      const metadataPromise = fetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -374,7 +440,7 @@ function HomeContent() {
           })
         );
 
-        clipsPromise = fetch(`/api/projects/${currentProjectId}/clips`, {
+        clipsPromise = fetch(`/api/projects/${projectId}/clips`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ clips: clipData }),
@@ -401,7 +467,7 @@ function HomeContent() {
     } finally {
       setIsSaving(false);
     }
-  }, [currentProjectId, clips, deletedWordIds, deletedPauseIds, overlayState]);
+  }, [currentProjectId, projectName, createProject, clips, deletedWordIds, deletedPauseIds, overlayState]);
 
   // Handle going back to feed - show dialog if unsaved changes
   const handleBackToFeed = useCallback(() => {
@@ -411,6 +477,7 @@ function HomeContent() {
       refreshProjects(); // Refresh to get updated thumbnails
       setView("feed");
       setCurrentProjectId(null);
+      setAutoTriggerUpload(false);
     }
   }, [hasUnsavedChanges, refreshProjects]);
 
@@ -708,8 +775,20 @@ function HomeContent() {
   }, []);
 
   const handleFilesSelected = async (files: File[], autoCut: boolean = false) => {
+    setAutoTriggerUpload(false);
     setStep("edit");
     setAutoCutEnabled(autoCut);
+
+    // Initialize AutoCut processing overlay if enabled
+    if (autoCut) {
+      setAutoCutProcessing({
+        active: true,
+        status: 'preparing',
+        currentClip: 0,
+        totalClips: files.length,
+        message: 'Preparing your clips...'
+      });
+    }
 
     const videoClips: VideoClip[] = await Promise.all(
       files.map(async (file) => {
@@ -728,7 +807,35 @@ function HomeContent() {
           processedFile = new File([file], file.name, { type: mimeType });
         }
 
-        const url = URL.createObjectURL(processedFile);
+        // Check if file needs conversion for browser preview (MOV/HEVC)
+        const filename = processedFile.name.toLowerCase();
+        const needsConversion = filename.endsWith('.mov') || filename.endsWith('.hevc') || processedFile.type === 'video/quicktime';
+
+        let url: string;
+        if (needsConversion) {
+          // Convert for browser preview
+          try {
+            const formData = new FormData();
+            formData.append('video', processedFile);
+            const response = await fetch('/api/convert-preview', {
+              method: 'POST',
+              body: formData,
+            });
+            if (response.ok) {
+              const data = await response.json();
+              url = data.url;
+            } else {
+              // Fallback to blob URL (will show error but transcription still works)
+              url = URL.createObjectURL(processedFile);
+            }
+          } catch {
+            // Fallback to blob URL
+            url = URL.createObjectURL(processedFile);
+          }
+        } else {
+          url = URL.createObjectURL(processedFile);
+        }
+
         const duration = await getVideoDuration(url);
         // Initialize with pending upload status for large files
         const shouldUploadToStorage = processedFile.size > 4 * 1024 * 1024; // >4MB
@@ -743,6 +850,20 @@ function HomeContent() {
     );
 
     setClips(videoClips);
+
+    // Auto-generate project name from first video filename if still untitled
+    if (projectName === "Untitled Project" && files.length > 0) {
+      const suggestedName = generateProjectName(files[0].name);
+      setProjectName(suggestedName);
+      // Also update the project in the database if we have one
+      if (currentProjectId) {
+        fetch(`/api/projects/${currentProjectId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: suggestedName }),
+        }).catch(console.error);
+      }
+    }
 
     // Start background upload for large files
     videoClips.forEach((clip, index) => {
@@ -867,16 +988,16 @@ function HomeContent() {
                 priority
               />
             </div>
-            {/* Mobile menu button (three dots) */}
-            <div className="md:hidden relative">
+            {/* Menu button (three dots) */}
+            <div className="relative">
               <button
                 onClick={() => setShowFeedMenu(!showFeedMenu)}
                 className="w-10 h-10 flex items-center justify-center text-white"
               >
                 <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="5" r="2" />
+                  <circle cx="5" cy="12" r="2" />
                   <circle cx="12" cy="12" r="2" />
-                  <circle cx="12" cy="19" r="2" />
+                  <circle cx="19" cy="12" r="2" />
                 </svg>
               </button>
 
@@ -887,7 +1008,7 @@ function HomeContent() {
                     className="fixed inset-0 z-40"
                     onClick={() => setShowFeedMenu(false)}
                   />
-                  <div className="absolute right-0 top-full mt-2 w-60 bg-[#1C1C1E]/70 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl shadow-black/60 z-50 overflow-hidden animate-scale-in">
+                  <div className="absolute right-0 top-full mt-2 w-60 bg-[#1C1C1E]/70 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl shadow-black/60 z-50 animate-scale-in py-1">
                     {/* View as Gallery / List */}
                     <button
                       onClick={() => {
@@ -916,7 +1037,10 @@ function HomeContent() {
                     {/* Select Projects */}
                     <button
                       onClick={() => {
-                        // TODO: Implement select mode
+                        setIsSelectMode(!isSelectMode);
+                        if (isSelectMode) {
+                          setSelectedProjectIds(new Set());
+                        }
                         setShowFeedMenu(false);
                       }}
                       className="w-full flex items-center gap-3 px-4 py-4 text-white hover:bg-white/10 active:bg-white/15 transition-colors"
@@ -924,7 +1048,9 @@ function HomeContent() {
                       <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <span className="text-[15px] font-medium">Select Projects</span>
+                      <span className="text-[15px] font-medium">
+                        {isSelectMode ? 'Cancel Selection' : 'Select Projects'}
+                      </span>
                     </button>
                   </div>
                 </>
@@ -1080,6 +1206,34 @@ function HomeContent() {
               searchQuery={feedSearchQuery}
               onSearchChange={setFeedSearchQuery}
               viewMode={feedViewMode}
+              isSelectMode={isSelectMode}
+              selectedProjectIds={selectedProjectIds}
+              onToggleSelectProject={(projectId) => {
+                // Automatically enter select mode when first checkbox is clicked
+                if (!isSelectMode) {
+                  setIsSelectMode(true);
+                }
+                setSelectedProjectIds(prev => {
+                  const newSet = new Set(prev);
+                  if (newSet.has(projectId)) {
+                    newSet.delete(projectId);
+                    // Exit select mode if no items selected
+                    if (newSet.size === 0) {
+                      setIsSelectMode(false);
+                    }
+                  } else {
+                    newSet.add(projectId);
+                  }
+                  return newSet;
+                });
+              }}
+              onCancelSelection={() => {
+                setIsSelectMode(false);
+                setSelectedProjectIds(new Set());
+              }}
+              onBulkDelete={async () => {
+                // This will be handled by ProjectFeed
+              }}
             />
           </main>
         </div>
@@ -1092,10 +1246,20 @@ function HomeContent() {
     <MediaLibraryProvider>
       <Sidebar
         view="editor"
+        editorStep={step}
         onOpenUploads={() => setShowUploads(true)}
         onNavigateHome={handleBackToFeed}
         onCreateProject={handleCreateProject}
         clipCount={clips.length}
+        onOpenTranscript={() => setShowTranscriptDrawer(true)}
+        transcript={clips.map(c => c.transcript || '').join(' ').trim()}
+        transcriptSegments={clips.flatMap((c, idx) =>
+          (c.segments || []).map(seg => ({
+            text: seg.text,
+            start: seg.start + clips.slice(0, idx).reduce((acc, clip) => acc + clip.duration, 0),
+            end: seg.end + clips.slice(0, idx).reduce((acc, clip) => acc + clip.duration, 0)
+          }))
+        )}
       />
       <MediaLibraryPanel
         isOpen={showUploads}
@@ -1192,7 +1356,7 @@ function HomeContent() {
         )}
 
         <div className="min-h-screen flex flex-col bg-[var(--background-content)] md:pl-[72px] pb-24 md:pb-0">
-        <header className="sticky top-0 z-50 flex items-center justify-between px-5 sm:px-8 py-4 border-b border-[var(--border-subtle)] bg-[var(--background-content)]">
+        <header className="sticky top-0 z-50 flex items-center justify-between px-3 sm:px-8 py-2 sm:py-4 border-b border-[var(--border-subtle)] bg-[var(--background-content)]">
           <div className="flex items-center gap-3">
             {/* Back button */}
             <button
@@ -1217,12 +1381,12 @@ function HomeContent() {
                     setIsEditingName(false);
                   }
                 }}
-                className="text-xl font-semibold tracking-tight text-white bg-transparent border-b-2 border-[#4A8FE7] outline-none px-1 max-w-[200px]"
+                className="text-base sm:text-xl font-semibold tracking-tight text-white bg-transparent border-b-2 border-[#4A8FE7] outline-none px-1 max-w-[120px] sm:max-w-[200px]"
               />
             ) : (
               <button
                 onClick={() => setIsEditingName(true)}
-                className="text-xl font-semibold tracking-tight text-white hover:text-[#4A8FE7] transition-colors flex items-center gap-2 group"
+                className="text-base sm:text-xl font-semibold tracking-tight text-white hover:text-[#4A8FE7] transition-colors flex items-center gap-1 sm:gap-2 group max-w-[120px] sm:max-w-none truncate"
               >
                 {projectName}
                 <svg className="w-4 h-4 text-[#636366] opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -1232,41 +1396,23 @@ function HomeContent() {
             )}
           </div>
           {step === "edit" && (
-            <div className="flex items-center gap-2 sm:gap-3">
-              {/* Auto Cut Button - removes silent pauses */}
-              <button
-                onClick={() => {
-                  const count = handleAutoRemoveSilence();
-                  if (count === 0) {
-                    // Could show a toast, but for now just log
-                    console.log('No pauses to remove');
-                  }
-                }}
-                disabled={allWords.length === 0}
-                className="text-sm px-4 py-2.5 rounded-full bg-amber-500/10 backdrop-blur-xl border border-amber-500/30 text-amber-400 font-medium disabled:opacity-50 flex items-center gap-2 transition-all duration-300 hover:bg-amber-500/20 hover:border-amber-500/50"
-                title="Auto remove silent pauses"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
-                </svg>
-                <span className="hidden sm:inline">Auto Cut</span>
-              </button>
+            <div className="flex items-center gap-1.5 sm:gap-3">
               <button
                 onClick={saveProject}
                 disabled={isSaving || !hasUnsavedChanges}
-                className={`text-sm px-5 py-2.5 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 font-medium disabled:opacity-50 flex items-center gap-2 transition-all duration-300 hover:bg-white/10 ${
+                className={`text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 font-medium disabled:opacity-50 flex items-center gap-1.5 sm:gap-2 transition-all duration-300 hover:bg-white/10 ${
                   showSaveSuccess ? 'text-green-400 border-green-400/30' : 'text-white'
                 }`}
               >
                 {isSaving ? (
                   <>
-                    <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    Saving...
+                    <span className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    <span className="hidden sm:inline">Saving...</span>
                   </>
                 ) : showSaveSuccess ? (
                   <>
                     <svg
-                      className="w-4 h-4 text-green-400 animate-scale-in"
+                      className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-400 animate-scale-in"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -1278,7 +1424,7 @@ function HomeContent() {
                         d="M5 13l4 4L19 7"
                       />
                     </svg>
-                    Saved
+                    <span className="hidden sm:inline">Saved</span>
                   </>
                 ) : (
                   <>
@@ -1289,7 +1435,7 @@ function HomeContent() {
               <button
                 onClick={startBackgroundExport}
                 disabled={exportState.status !== 'idle' && exportState.status !== 'done' && exportState.status !== 'error'}
-                className="text-sm px-6 py-2.5 rounded-full bg-[#4A8FE7]/90 backdrop-blur-xl text-white font-medium border border-[#4A8FE7]/50 shadow-lg shadow-[#4A8FE7]/25 hover:bg-[#4A8FE7] hover:shadow-[#4A8FE7]/40 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-full bg-[#4A8FE7]/90 backdrop-blur-xl text-white font-medium border border-[#4A8FE7]/50 shadow-lg shadow-[#4A8FE7]/25 hover:bg-[#4A8FE7] hover:shadow-[#4A8FE7]/40 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {exportState.status !== 'idle' && exportState.status !== 'done' && exportState.status !== 'error'
                   ? 'Exporting...'
@@ -1301,7 +1447,12 @@ function HomeContent() {
 
         <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6">
           {step === "upload" && (
-            <UploadStep onFilesSelected={handleFilesSelected} />
+            <UploadStep
+              onFilesSelected={handleFilesSelected}
+              autoTrigger={autoTriggerUpload}
+              silenceAggressiveness={silenceAggressiveness}
+              setSilenceAggressiveness={setSilenceAggressiveness}
+            />
           )}
           {step === "edit" && (
             <EditStep
@@ -1316,6 +1467,12 @@ function HomeContent() {
               allWords={allWords}
               autoCutEnabled={autoCutEnabled}
               setAutoCutEnabled={setAutoCutEnabled}
+              silenceAggressiveness={silenceAggressiveness}
+              autoCutProcessing={autoCutProcessing}
+              setAutoCutProcessing={setAutoCutProcessing}
+              showTranscriptDrawer={showTranscriptDrawer}
+              setShowTranscriptDrawer={setShowTranscriptDrawer}
+              setHasUnsavedChanges={setHasUnsavedChanges}
             />
           )}
         </main>
@@ -1474,12 +1631,31 @@ interface SelectedFile {
 
 function UploadStep({
   onFilesSelected,
+  autoTrigger = false,
+  silenceAggressiveness,
+  setSilenceAggressiveness,
 }: {
   onFilesSelected: (files: File[], autoCut?: boolean) => void;
+  autoTrigger?: boolean;
+  silenceAggressiveness: SilenceDetectionOptions['aggressiveness'];
+  setSilenceAggressiveness: (value: SilenceDetectionOptions['aggressiveness']) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const hasTriggered = useRef(false);
+
+  // Auto-trigger file picker on mount when autoTrigger is true
+  useEffect(() => {
+    if (autoTrigger && !hasTriggered.current && fileInputRef.current) {
+      hasTriggered.current = true;
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        fileInputRef.current?.click();
+      }, 100);
+    }
+  }, [autoTrigger]);
 
   // Generate thumbnail and get duration for a video file
   const processFile = async (file: File): Promise<SelectedFile> => {
@@ -1569,44 +1745,15 @@ function UploadStep({
         Upload your video clips to begin editing
       </p>
 
-      <label
-        className={`card-glow flex flex-col items-center justify-center w-full h-72 cursor-pointer border-2 border-dashed transition-all duration-300 ${
-          isDragging
-            ? "border-[#4A8FE7] bg-[#4A8FE7]/10 scale-[1.02]"
-            : "border-[#2C2C2E] hover:border-[#4A8FE7]/50 hover:bg-[#181818]"
-        }`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={handleDrop}
-      >
-        <input
-          type="file"
-          accept="video/*"
-          multiple
-          className="hidden"
-          onChange={handleFileInput}
-        />
-        <div className={`w-16 h-16 rounded-full bg-[#4A8FE7]/15 flex items-center justify-center mb-5 transition-all duration-300 ${isDragging ? "scale-110 bg-[#4A8FE7]/25" : ""}`}>
-          <svg
-            className="w-7 h-7 text-[#4A8FE7]"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-            />
-          </svg>
-        </div>
-        <p className="text-white font-semibold text-lg mb-1">Click or drag to upload</p>
-        <p className="text-[#636366] text-sm">MOV, MP4, and more</p>
-      </label>
+      {/* Hidden file input for auto-trigger */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/*"
+        multiple
+        className="hidden"
+        onChange={handleFileInput}
+      />
 
       {/* Selected Files Preview */}
       {(selectedFiles.length > 0 || isProcessing) && (
@@ -1657,26 +1804,47 @@ function UploadStep({
 
           {/* Action buttons - TikTok style */}
           <div className="flex gap-3 justify-center">
-            <button
-              onClick={handleAutoCut}
-              disabled={isProcessing}
-              className="flex items-center gap-2 px-6 py-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] border border-[#3C3C3E] rounded-full text-white font-medium transition-all disabled:opacity-50"
-            >
-              <svg className="w-5 h-5 text-[#FF3B30]" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 9l-7 7-7-7" />
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-              </svg>
-              AutoCut
-            </button>
+            {/* AutoCut with aggressiveness dropdown */}
+            <div className="flex items-center">
+              <button
+                onClick={handleAutoCut}
+                disabled={isProcessing}
+                className="flex items-center gap-2 px-5 py-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] border border-[#3C3C3E] rounded-l-full text-white font-medium transition-all disabled:opacity-50"
+              >
+                <svg className="w-5 h-5 text-[#FF3B30]" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 9l-7 7-7-7" />
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+                AutoCut
+              </button>
+              <select
+                value={silenceAggressiveness}
+                onChange={(e) => setSilenceAggressiveness(e.target.value as SilenceDetectionOptions['aggressiveness'])}
+                disabled={isProcessing}
+                className="px-3 py-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] border border-l-0 border-[#3C3C3E] rounded-r-full text-white text-sm font-medium transition-all disabled:opacity-50 cursor-pointer appearance-none"
+                title="Silence removal aggressiveness"
+              >
+                <option value="tight">Tight</option>
+                <option value="natural">Natural</option>
+                <option value="conservative">Safe</option>
+              </select>
+            </div>
             <button
               onClick={handleNext}
               disabled={isProcessing}
-              className="px-8 py-3 bg-[#FF2D55] hover:bg-[#FF375F] rounded-full text-white font-medium transition-all disabled:opacity-50"
+              className="px-8 py-3 bg-[#FF2D55] hover:bg-[#FF375F] rounded-full text-white font-medium transition-all disabled:opacity-50 flex items-center gap-2"
             >
-              Next ({selectedFiles.length})
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="6" cy="6" r="3"/>
+                <path d="M8.12 8.12 12 12"/>
+                <path d="M20 4 8.12 15.88"/>
+                <circle cx="6" cy="18" r="3"/>
+                <path d="M14.8 14.8 20 20"/>
+              </svg>
+              Edit ({selectedFiles.length})
             </button>
           </div>
         </div>
@@ -1697,6 +1865,12 @@ function EditStep({
   allWords,
   autoCutEnabled,
   setAutoCutEnabled,
+  silenceAggressiveness,
+  autoCutProcessing,
+  setAutoCutProcessing,
+  showTranscriptDrawer,
+  setShowTranscriptDrawer,
+  setHasUnsavedChanges,
 }: {
   clips: VideoClip[];
   setClips: React.Dispatch<React.SetStateAction<VideoClip[]>>;
@@ -1709,6 +1883,24 @@ function EditStep({
   allWords: TranscriptWord[];
   autoCutEnabled: boolean;
   setAutoCutEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  silenceAggressiveness: SilenceDetectionOptions['aggressiveness'];
+  autoCutProcessing: {
+    active: boolean;
+    status: 'preparing' | 'transcribing' | 'detecting' | 'applying' | 'done';
+    currentClip: number;
+    totalClips: number;
+    message: string;
+  } | null;
+  setAutoCutProcessing: React.Dispatch<React.SetStateAction<{
+    active: boolean;
+    status: 'preparing' | 'transcribing' | 'detecting' | 'applying' | 'done';
+    currentClip: number;
+    totalClips: number;
+    message: string;
+  } | null>>;
+  showTranscriptDrawer: boolean;
+  setShowTranscriptDrawer: React.Dispatch<React.SetStateAction<boolean>>;
+  setHasUnsavedChanges: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const [activeClipIndex, setActiveClipIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1729,40 +1921,6 @@ function EditStep({
     }
     return mobileVideoRef.current;
   }, []);
-
-  // Mobile tab state
-  const [mobileTab, setMobileTab] = useState<'video' | 'transcript'>('video');
-  const touchStartX = useRef<number | null>(null);
-  const touchEndX = useRef<number | null>(null);
-
-  // Handle swipe gestures for mobile tabs
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.targetTouches[0].clientX;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    touchEndX.current = e.targetTouches[0].clientX;
-  };
-
-  const handleTouchEnd = () => {
-    if (!touchStartX.current || !touchEndX.current) return;
-
-    const distance = touchStartX.current - touchEndX.current;
-    const minSwipeDistance = 50;
-
-    if (Math.abs(distance) > minSwipeDistance) {
-      if (distance > 0 && mobileTab === 'video') {
-        // Swiped left - go to transcript
-        setMobileTab('transcript');
-      } else if (distance < 0 && mobileTab === 'transcript') {
-        // Swiped right - go to video
-        setMobileTab('video');
-      }
-    }
-
-    touchStartX.current = null;
-    touchEndX.current = null;
-  };
 
   // Timeline selection state
   const [selectedTimelineItems, setSelectedTimelineItems] = useState<string[]>([]);
@@ -1822,28 +1980,106 @@ function EditStep({
     const allTranscribed = clips.length > 0 && clips.every(clip => clip.words && clip.words.length > 0);
     if (!allTranscribed) return;
 
+    // Update processing status to detecting
+    if (autoCutProcessing?.active) {
+      setAutoCutProcessing(prev => prev ? {
+        ...prev,
+        status: 'detecting',
+        message: 'Detecting silence and pauses...'
+      } : null);
+    }
+
     // Apply auto-cut effects once
     setAutoCutEnabled(false); // Disable to prevent re-triggering
 
-    // 1. Auto-delete long pauses (>0.5s) - creates jump cuts
-    const pauseThreshold = 0.5; // seconds
+    // 1. Auto-delete silences using enhanced detection (FFmpeg + Whisper merged)
+    // Also track cut points for internal transitions
     const pausesToDelete = new Set<string>();
+    const allCutPoints: CutPoint[] = [];
+    let totalSilenceRemoved = 0;
+
+    // Calculate cumulative clip start times in output timeline
+    let cumulativeStartMs = 0;
 
     clips.forEach((clip, clipIndex) => {
-      if (!clip.words) return;
-      for (let i = 0; i < clip.words.length - 1; i++) {
-        const currentWord = clip.words[i];
-        const nextWord = clip.words[i + 1];
-        const gap = nextWord.start - currentWord.end;
-        if (gap > pauseThreshold) {
-          // Create a pause ID to mark for deletion
-          pausesToDelete.add(`pause-clip-${clipIndex}-${currentWord.id}-${nextWord.id}`);
+      const clipCutPoints: CutPoint[] = [];
+      let clipSilenceRemoved = 0;
+
+      // Use enhanced silence segments if available (from FFmpeg + Whisper merge)
+      if (clip.silenceSegments && clip.silenceSegments.length > 0) {
+        clip.silenceSegments.forEach((silence) => {
+          // Only delete silences above the confidence threshold (already filtered by aggressiveness)
+          pausesToDelete.add(`silence-${clipIndex}-${silence.id}`);
+          totalSilenceRemoved += silence.duration;
+          clipSilenceRemoved += silence.duration;
+
+          // Track cut point for internal transition
+          // Calculate where this cut will appear in the output video
+          // (silence start time minus all previous silences removed in this clip)
+          const previousSilencesInClip = clipCutPoints.reduce(
+            (sum, cp) => sum + cp.silenceDuration,
+            0
+          );
+          const cutTimeInClipMs = (silence.start - previousSilencesInClip) * 1000;
+          const cutTimeMs = cumulativeStartMs + cutTimeInClipMs;
+
+          clipCutPoints.push({
+            clipIndex,
+            cutTimeMs,
+            silenceDuration: silence.duration,
+          });
+        });
+        console.log(`[AutoCut] Clip ${clipIndex}: Found ${clip.silenceSegments.length} silence segments (${clip.totalSilenceDuration?.toFixed(1)}s total)`);
+      } else if (clip.words) {
+        // Fallback: Use word gap detection if no silence segments available
+        const pauseThreshold = silenceAggressiveness === 'tight' ? 0.3 :
+                               silenceAggressiveness === 'conservative' ? 0.8 : 0.5;
+        for (let i = 0; i < clip.words.length - 1; i++) {
+          const currentWord = clip.words[i];
+          const nextWord = clip.words[i + 1];
+          const gap = nextWord.start - currentWord.end;
+          if (gap > pauseThreshold) {
+            pausesToDelete.add(`pause-clip-${clipIndex}-${currentWord.id}-${nextWord.id}`);
+            totalSilenceRemoved += gap;
+            clipSilenceRemoved += gap;
+
+            // Track cut point for internal transition
+            const previousSilencesInClip = clipCutPoints.reduce(
+              (sum, cp) => sum + cp.silenceDuration,
+              0
+            );
+            const cutTimeInClipMs = (currentWord.end - previousSilencesInClip) * 1000;
+            const cutTimeMs = cumulativeStartMs + cutTimeInClipMs;
+
+            clipCutPoints.push({
+              clipIndex,
+              cutTimeMs,
+              silenceDuration: gap,
+            });
+          }
         }
+        console.log(`[AutoCut] Clip ${clipIndex}: Using fallback word gap detection`);
       }
+
+      // Add this clip's cut points to the total
+      allCutPoints.push(...clipCutPoints);
+
+      // Update cumulative start for next clip (original duration minus silences removed)
+      cumulativeStartMs += (clip.duration - clipSilenceRemoved) * 1000;
     });
 
     if (pausesToDelete.size > 0) {
       setDeletedPauseIds(prev => new Set([...prev, ...pausesToDelete]));
+      console.log(`[AutoCut] Removed ${pausesToDelete.size} silence segments (${totalSilenceRemoved.toFixed(1)}s total)`);
+    }
+
+    // Update processing status to applying
+    if (autoCutProcessing?.active) {
+      setAutoCutProcessing(prev => prev ? {
+        ...prev,
+        status: 'applying',
+        message: 'Removing silence and applying effects...'
+      } : null);
     }
 
     // 2. Apply a creative filter (random selection from good options)
@@ -1851,22 +2087,50 @@ function EditStep({
     const randomFilter = creativeFilters[Math.floor(Math.random() * creativeFilters.length)];
     setFilter(randomFilter);
 
-    // 3. Apply varied transitions if multiple clips
+    // 3. Apply transitions - both between clips AND at internal cut points
+    const allTransitions = [];
+
+    // 3a. Transitions between clips (if multiple clips)
     if (clips.length >= 2) {
       const clipInfos = clips.map((clip, i) => ({
         duration: clip.duration,
         index: i,
       }));
-      const autoTransitions = generateAutoTransitions(clipInfos, 'varied');
-      setTransitions(autoTransitions);
+      const clipTransitions = generateAutoTransitions(clipInfos, 'varied');
+      allTransitions.push(...clipTransitions);
+    }
+
+    // 3b. Transitions at internal cut points (silence removal locations)
+    if (allCutPoints.length > 0) {
+      const internalTransitions = generateInternalCutTransitions(allCutPoints, 'auto');
+      allTransitions.push(...internalTransitions);
+      console.log(`[AutoCut] Applied ${internalTransitions.length} internal cut transitions`);
+    }
+
+    // Set all transitions
+    if (allTransitions.length > 0) {
+      setTransitions(allTransitions);
     }
 
     console.log('AutoCut applied:', {
       pausesDeleted: pausesToDelete.size,
       filter: randomFilter,
-      transitionsApplied: clips.length >= 2,
+      clipTransitions: clips.length >= 2 ? clips.length - 1 : 0,
+      internalCutTransitions: allCutPoints.length,
     });
-  }, [autoCutEnabled, clips, setAutoCutEnabled, setDeletedPauseIds, setFilter, setTransitions]);
+
+    // Update processing status to done and clear after delay
+    if (autoCutProcessing?.active) {
+      setAutoCutProcessing(prev => prev ? {
+        ...prev,
+        status: 'done',
+        message: 'AutoCut complete!'
+      } : null);
+
+      // Clear overlay after short delay
+      setTimeout(() => setAutoCutProcessing(null), 1500);
+    }
+  }, [autoCutEnabled, clips, setAutoCutEnabled, setDeletedPauseIds, setFilter, setTransitions, silenceAggressiveness, autoCutProcessing, setAutoCutProcessing]);
 
   // Merged transcript from all clips
   const fullTranscript = useMemo(() => {
@@ -1984,9 +2248,52 @@ function EditStep({
         startMs: newStart * 1000,
         durationMs: (newEnd - newStart) * 1000,
       });
+    } else if (trackId === 'video-track' && itemId.startsWith('clip-')) {
+      // Video clip reordering based on drag position
+      const clipIndex = parseInt(itemId.replace('clip-', ''), 10);
+      if (isNaN(clipIndex) || clipIndex < 0 || clipIndex >= clips.length) return;
+
+      // Calculate cumulative start times for all clips
+      const clipStarts: number[] = [];
+      let cumulative = 0;
+      clips.forEach((clip) => {
+        clipStarts.push(cumulative);
+        cumulative += clip.duration;
+      });
+
+      // Find the new position based on where the clip was dropped
+      // The clip should be inserted where its new start time falls
+      let newIndex = 0;
+      const draggedClipDuration = clips[clipIndex].duration;
+
+      // Find where this clip should go based on the drop position
+      for (let i = 0; i < clips.length; i++) {
+        if (i === clipIndex) continue; // Skip the dragged clip itself
+
+        const clipMidpoint = clipStarts[i] + (clips[i].duration / 2);
+        if (newStart < clipMidpoint) {
+          newIndex = i;
+          break;
+        }
+        newIndex = i + 1;
+      }
+
+      // Adjust index if moving after original position
+      if (newIndex > clipIndex) {
+        newIndex--;
+      }
+
+      // Only reorder if position changed
+      if (newIndex !== clipIndex) {
+        setClips(prevClips => {
+          const newClips = [...prevClips];
+          const [movedClip] = newClips.splice(clipIndex, 1);
+          newClips.splice(newIndex, 0, movedClip);
+          return newClips;
+        });
+      }
     }
-    // Video clips are not moveable (yet)
-  }, [updateTextOverlay, updateSticker]);
+  }, [updateTextOverlay, updateSticker, clips]);
 
   // Handle timeline item resize
   const handleTimelineItemResize = useCallback((itemId: string, newStart: number, newEnd: number) => {
@@ -2332,6 +2639,16 @@ function EditStep({
       const baseProgress = (i / clips.length) * 100;
       setTranscribeProgress(baseProgress);
 
+      // Update AutoCut processing status for transcription progress
+      if (autoCutProcessing?.active) {
+        setAutoCutProcessing(prev => prev ? {
+          ...prev,
+          status: 'transcribing',
+          currentClip: i + 1,
+          message: `Transcribing clip ${i + 1} of ${clips.length}...`
+        } : null);
+      }
+
       // Skip clips that don't have blobs downloaded yet
       if (!clip.file) {
         console.warn(`Skipping clip ${i} - blob not yet downloaded`);
@@ -2355,6 +2672,8 @@ function EditStep({
               noiseReduction: audioSettings.noiseReduction,
               noiseReductionStrength: audioSettings.noiseReductionStrength,
               loudnessNormalization: audioSettings.loudnessNormalization,
+              detectSilence: true,
+              silenceAggressiveness,
             }),
           });
         } else {
@@ -2405,6 +2724,10 @@ function EditStep({
             formData.append("loudnessNormalization", String(audioSettings.loudnessNormalization));
           }
 
+          // Add silence detection settings
+          formData.append("detectSilence", "true");
+          formData.append("silenceAggressiveness", silenceAggressiveness);
+
           setTranscribeProgress(baseProgress + (100 / clips.length) * 0.6);
 
           response = await fetch("/api/transcribe", {
@@ -2436,6 +2759,13 @@ function EditStep({
               clipIndex: i,
             })),
             words: data.words,  // Word-level timestamps for script-driven editing
+            // Silence detection data for AutoCut
+            silenceSegments: data.silenceSegments?.map((seg: SilenceSegment) => ({
+              ...seg,
+              clipIndex: i,  // Update clipIndex to match actual clip position
+            })),
+            totalSilenceDuration: data.totalSilenceDuration,
+            audioDuration: data.audioDuration,
           };
         } else {
           console.error(`Clip ${i + 1} error:`, data.error, data.details);
@@ -2463,7 +2793,7 @@ function EditStep({
 
     setClips(updatedClips);
     setIsTranscribing(false);
-  }, [clips, setClips, overlayState.audioSettings]);
+  }, [clips, setClips, overlayState.audioSettings, silenceAggressiveness, autoCutProcessing?.active, setAutoCutProcessing]);
 
   // Check if any clips are still uploading to storage
   const isUploading = useMemo(() => {
@@ -2539,108 +2869,62 @@ function EditStep({
 
   return (
     <>
-    {/* Mobile Tab Header - Fixed below main header */}
-    <div className="lg:hidden sticky top-[65px] z-40 bg-[var(--background-content)] pt-2 pb-1 px-4">
-      <div className="flex items-center justify-center gap-1 bg-white/5 backdrop-blur-xl border border-white/10 p-1.5 rounded-full shadow-lg">
-        <button
-          onClick={() => setMobileTab('video')}
-          className="relative flex-1 py-2.5 px-6 rounded-full text-sm font-medium transition-colors duration-200"
-        >
-          {mobileTab === 'video' && (
-            <motion.div
-              layoutId="activeTab"
-              className="absolute inset-0 bg-[#4A8FE7]/90 rounded-full shadow-lg shadow-[#4A8FE7]/25"
-              transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
-            />
-          )}
-          <span className={`relative z-10 ${mobileTab === 'video' ? 'text-white' : 'text-[#8E8E93]'}`}>
-            Video
-          </span>
-        </button>
-        <button
-          onClick={() => setMobileTab('transcript')}
-          className="relative flex-1 py-2.5 px-6 rounded-full text-sm font-medium transition-colors duration-200"
-        >
-          {mobileTab === 'transcript' && (
-            <motion.div
-              layoutId="activeTab"
-              className="absolute inset-0 bg-[#4A8FE7]/90 rounded-full shadow-lg shadow-[#4A8FE7]/25"
-              transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
-            />
-          )}
-          <span className={`relative z-10 ${mobileTab === 'transcript' ? 'text-white' : 'text-[#8E8E93]'}`}>
-            Transcript
-          </span>
-        </button>
+    <div className="w-full lg:max-w-6xl lg:mx-auto flex flex-col gap-0 lg:gap-8 animate-fade-in-up pb-[240px]">
+
+      {/* Mobile Video Panel */}
+      <div className="lg:hidden">
+        <MobileVideoPanel
+          activeClip={clips[activeClipIndex]}
+          videoRef={mobileVideoRef}
+          filterStyle={overlayState.filterId ? getFilterById(overlayState.filterId)?.filter : undefined}
+          handleTimeUpdate={handleTimeUpdate}
+          handleVideoEnded={handleVideoEnded}
+          handleVideoError={handleVideoError}
+          videoError={videoError}
+          handlePlayPause={handlePlayPause}
+          isPlaying={isPlaying}
+          allWords={allWords}
+          deletedWordIds={deletedWordIds}
+          currentTime={currentTime}
+          overlayState={overlayState}
+          setCaptionPosition={setCaptionPosition}
+          formatTime={formatTime}
+          activeDuration={activeDuration}
+          deletedSegments={deletedSegments}
+          totalDuration={totalDuration}
+          onToggleCaptions={toggleCaptionPreview}
+          onOpenTranscript={() => setShowTranscriptDrawer(true)}
+          isUploading={isUploading}
+          uploadProgress={uploadProgress}
+          autoCutProcessing={autoCutProcessing}
+        />
       </div>
-    </div>
 
-    <div className="w-full max-w-6xl mx-auto flex flex-col gap-2 sm:gap-8 animate-fade-in-up pb-[240px]">
-
-      {/* Mobile Swipeable Content */}
-      <div
-        className="lg:hidden relative overflow-hidden"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        <motion.div
-          className="flex"
-          animate={{ x: mobileTab === 'video' ? '0%' : '-100%' }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        >
-          {/* Mobile Video Tab */}
-          <div className="w-full flex-shrink-0 px-4">
-            <MobileVideoPanel
-              activeClip={clips[activeClipIndex]}
-              videoRef={mobileVideoRef}
-              filterStyle={overlayState.filterId ? getFilterById(overlayState.filterId)?.filter : undefined}
-              handleTimeUpdate={handleTimeUpdate}
-              handleVideoEnded={handleVideoEnded}
-              handleVideoError={handleVideoError}
-              videoError={videoError}
-              handlePlayPause={handlePlayPause}
-              isPlaying={isPlaying}
-              allWords={allWords}
-              deletedWordIds={deletedWordIds}
-              currentTime={currentTime}
-              overlayState={overlayState}
-              setCaptionPosition={setCaptionPosition}
-              formatTime={formatTime}
-              activeDuration={activeDuration}
-              deletedSegments={deletedSegments}
-              totalDuration={totalDuration}
-              onToggleCaptions={toggleCaptionPreview}
-              isUploading={isUploading}
-              uploadProgress={uploadProgress}
-            />
-          </div>
-
-          {/* Mobile Transcript Tab */}
-          <div className="w-full flex-shrink-0 px-4">
-            <MobileTranscriptPanel
-              isTranscribing={isTranscribing}
-              transcribeProgress={transcribeProgress}
-              isUploading={isUploading}
-              uploadProgress={uploadProgress}
-              clips={clips}
-              allWords={allWords}
-              currentTime={currentTime}
-              handleWordClick={handleWordClick}
-              handleDeletedWordsChange={handleDeletedWordsChange}
-              allSegments={allSegments}
-              deletedSegments={deletedSegments}
-              selectedSegmentIndex={selectedSegmentIndex}
-              activeSegmentIndex={activeSegmentIndex}
-              handleSegmentClick={handleSegmentClick}
-              formatTime={formatTime}
-              deletedWordIds={deletedWordIds}
-              deletedPauseIds={deletedPauseIds}
-              handleRestoreAll={handleRestoreAll}
-            />
-          </div>
-        </motion.div>
-      </div>
+      {/* Mobile Transcript Drawer */}
+      {showTranscriptDrawer && (
+        <TranscriptDrawer
+          isOpen={showTranscriptDrawer}
+          onClose={() => setShowTranscriptDrawer(false)}
+          isTranscribing={isTranscribing}
+          transcribeProgress={transcribeProgress}
+          isUploading={isUploading}
+          uploadProgress={uploadProgress}
+          clips={clips}
+          allWords={allWords}
+          currentTime={currentTime}
+          handleWordClick={handleWordClick}
+          handleDeletedWordsChange={handleDeletedWordsChange}
+          allSegments={allSegments}
+          deletedSegments={deletedSegments}
+          selectedSegmentIndex={selectedSegmentIndex}
+          activeSegmentIndex={activeSegmentIndex}
+          handleSegmentClick={handleSegmentClick}
+          formatTime={formatTime}
+          deletedWordIds={deletedWordIds}
+          deletedPauseIds={deletedPauseIds}
+          handleRestoreAll={handleRestoreAll}
+        />
+      )}
 
       {/* Desktop Layout */}
       <div className="hidden lg:flex flex-col lg:flex-row gap-8">
@@ -2651,7 +2935,16 @@ function EditStep({
             <div className="aspect-[9/16] bg-black relative">
               {/* Upload Progress Overlay */}
               {isUploading && <UploadingOverlay progress={uploadProgress} />}
-              {activeClip && !isUploading && (
+              {/* AutoCut Processing Overlay */}
+              {autoCutProcessing?.active && !isUploading && (
+                <AutoCutOverlay
+                  status={autoCutProcessing.status}
+                  message={autoCutProcessing.message}
+                  currentClip={autoCutProcessing.currentClip}
+                  totalClips={autoCutProcessing.totalClips}
+                />
+              )}
+              {activeClip && !isUploading && !autoCutProcessing?.active && (
                 <>
                   <video
                     ref={desktopVideoRef}
@@ -2742,12 +3035,33 @@ function EditStep({
           </div>
 
           <div className="card p-5 h-[520px]">
-            {isTranscribing ? (
+            {autoCutProcessing?.active ? (
+              /* AutoCut skeleton - shows animated placeholder lines */
+              <div className="space-y-3 h-full overflow-hidden">
+                {[...Array(12)].map((_, i) => (
+                  <div key={i} className="flex items-start gap-3 animate-pulse" style={{ animationDelay: `${i * 50}ms` }}>
+                    <div className="w-10 h-4 bg-[#2A2A2E] rounded" />
+                    <div className="flex-1 space-y-2">
+                      <div
+                        className="h-4 bg-[#2A2A2E] rounded"
+                        style={{ width: `${60 + Math.random() * 40}%` }}
+                      />
+                      {i % 3 === 0 && (
+                        <div
+                          className="h-4 bg-[#2A2A2E] rounded"
+                          style={{ width: `${30 + Math.random() * 30}%` }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : isTranscribing ? (
               <div className="flex flex-col items-center justify-center h-full gap-5">
                 <div className="w-14 h-14 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin" />
                 <div className="text-center">
-                  <p className="text-white text-base mb-1">Transcribing...</p>
-                  <p className="text-[#636366] text-sm">
+                  <RollingLoadingMessage />
+                  <p className="text-[#636366] text-sm mt-1">
                     Clip {Math.ceil((transcribeProgress / 100) * clips.length)} of {clips.length}
                   </p>
                 </div>
@@ -2855,46 +3169,211 @@ function EditStep({
       maxHeight={400}
       defaultHeight={220}
     >
-      <div className="h-full px-4">
-        <Timeline
-          tracks={timelineTracks}
-          totalDuration={totalDuration}
-          currentFrame={Math.round(currentTime * 30)}
-          fps={30}
-          onFrameChange={handleTimelineFrameChange}
-          onItemMove={handleTimelineItemMove}
-          onItemResize={handleTimelineItemResize}
-          onItemSelect={handleTimelineItemSelect}
-          onDeleteItems={handleTimelineItemDelete}
-          selectedItemIds={selectedTimelineItems}
-          onSelectedItemsChange={setSelectedTimelineItems}
-          showZoomControls
-          showPlaybackControls
-          isPlaying={isPlaying}
-          onPlay={() => {
-            const video = getActiveVideoRef();
-            if (video) {
-              video.play().catch((e) => {
-                if (e.name !== 'AbortError') console.error('Video play error:', e);
-              });
-              setIsPlaying(true);
-            }
-          }}
-          onPause={() => {
-            const video = getActiveVideoRef();
-            if (video) {
-              video.pause();
-              setIsPlaying(false);
-            }
-          }}
-          onAddContent={() => {
-            // TODO: Open add content menu (clips, text, stickers, etc.)
-            console.log('Add content clicked');
-          }}
-        />
+      <div className="h-full">
+        {autoCutProcessing?.active ? (
+          /* Timeline Skeleton - shows animated placeholder tracks */
+          <div className="h-full bg-[#0A0A0A] p-4">
+            {/* Toolbar skeleton */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-[#1A1A1A] rounded animate-pulse" />
+                <div className="w-8 h-8 bg-[#1A1A1A] rounded animate-pulse" />
+                <div className="w-px h-6 bg-[#2A2A2E] mx-1" />
+                <div className="w-8 h-8 bg-[#1A1A1A] rounded animate-pulse" />
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-16 h-6 bg-[#1A1A1A] rounded animate-pulse" />
+                <div className="w-24 h-6 bg-[#1A1A1A] rounded animate-pulse" />
+              </div>
+            </div>
+            {/* Time ruler skeleton */}
+            <div className="h-6 bg-[#111] rounded mb-2 flex items-end px-2 gap-8">
+              {[...Array(10)].map((_, i) => (
+                <div key={i} className="flex flex-col items-center">
+                  <div className="w-px h-3 bg-[#2A2A2E]" />
+                  <div className="w-6 h-2 bg-[#1A1A1A] rounded mt-1 animate-pulse" style={{ animationDelay: `${i * 100}ms` }} />
+                </div>
+              ))}
+            </div>
+            {/* Track skeletons */}
+            <div className="space-y-2">
+              {/* Video track */}
+              <div className="flex items-center gap-2">
+                <div className="w-20 h-8 bg-[#1A1A1A] rounded flex items-center px-2 gap-1">
+                  <div className="w-4 h-4 bg-[#2A2A2E] rounded animate-pulse" />
+                  <div className="w-10 h-3 bg-[#2A2A2E] rounded animate-pulse" />
+                </div>
+                <div className="flex-1 h-16 bg-[#1A1A1A] rounded overflow-hidden">
+                  <div className="h-full flex">
+                    {[...Array(8)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="h-full bg-gradient-to-r from-[#2A2A2E] to-[#1F1F23] animate-pulse"
+                        style={{
+                          width: `${12 + Math.random() * 8}%`,
+                          animationDelay: `${i * 100}ms`
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {/* Audio track */}
+              <div className="flex items-center gap-2">
+                <div className="w-20 h-8 bg-[#1A1A1A] rounded flex items-center px-2 gap-1">
+                  <div className="w-4 h-4 bg-[#2A2A2E] rounded animate-pulse" />
+                  <div className="w-10 h-3 bg-[#2A2A2E] rounded animate-pulse" />
+                </div>
+                <div className="flex-1 h-10 bg-[#1A1A1A] rounded overflow-hidden flex items-center px-2">
+                  {/* Waveform skeleton */}
+                  {[...Array(50)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="w-1 mx-px bg-[#2A2A2E] rounded-full animate-pulse"
+                      style={{
+                        height: `${20 + Math.random() * 60}%`,
+                        animationDelay: `${i * 30}ms`
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+              {/* Script track */}
+              <div className="flex items-center gap-2">
+                <div className="w-20 h-8 bg-[#1A1A1A] rounded flex items-center px-2 gap-1">
+                  <div className="w-4 h-4 bg-[#2A2A2E] rounded animate-pulse" />
+                  <div className="w-10 h-3 bg-[#2A2A2E] rounded animate-pulse" />
+                </div>
+                <div className="flex-1 h-8 bg-[#1A1A1A] rounded overflow-hidden flex items-center gap-1 px-2">
+                  {[...Array(15)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-5 bg-[#2A2A2E] rounded animate-pulse"
+                      style={{
+                        width: `${30 + Math.random() * 50}px`,
+                        animationDelay: `${i * 50}ms`
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <Timeline
+            tracks={timelineTracks}
+            totalDuration={totalDuration}
+            currentFrame={Math.round(currentTime * 30)}
+            fps={30}
+            onFrameChange={handleTimelineFrameChange}
+            onItemMove={handleTimelineItemMove}
+            onItemResize={handleTimelineItemResize}
+            onItemSelect={handleTimelineItemSelect}
+            onDeleteItems={handleTimelineItemDelete}
+            selectedItemIds={selectedTimelineItems}
+            onSelectedItemsChange={setSelectedTimelineItems}
+            showZoomControls
+            showPlaybackControls
+            isPlaying={isPlaying}
+            onPlay={() => {
+              const video = getActiveVideoRef();
+              if (video) {
+                video.play().catch((e) => {
+                  if (e.name !== 'AbortError') console.error('Video play error:', e);
+                });
+                setIsPlaying(true);
+              }
+            }}
+            onPause={() => {
+              const video = getActiveVideoRef();
+              if (video) {
+                video.pause();
+                setIsPlaying(false);
+              }
+            }}
+            onAddContent={() => {
+              // TODO: Open add content menu (clips, text, stickers, etc.)
+              console.log('Add content clicked');
+            }}
+          />
+        )}
       </div>
     </ResizableBottomPanel>
     </>
+  );
+}
+
+// Rolling Loading Message Component - cycles through processing steps
+function RollingLoadingMessage() {
+  const messages = [
+    "Cutting filler words",
+    "Cutting blank space",
+    "Adding effects",
+    "Adding music",
+    "Analyzing speech",
+    "Processing audio"
+  ];
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % messages.length);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [messages.length]);
+
+  return (
+    <div className="h-6 overflow-hidden">
+      <AnimatePresence mode="wait">
+        <motion.p
+          key={currentIndex}
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -20, opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="text-white text-base"
+        >
+          {messages[currentIndex]}...
+        </motion.p>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Compact rolling message for mobile
+function RollingLoadingMessageCompact() {
+  const messages = [
+    "Cutting filler words",
+    "Cutting blank space",
+    "Adding effects",
+    "Adding music",
+  ];
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % messages.length);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [messages.length]);
+
+  return (
+    <div className="h-5 overflow-hidden">
+      <AnimatePresence mode="wait">
+        <motion.p
+          key={currentIndex}
+          initial={{ y: 16, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -16, opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="text-white text-sm"
+        >
+          {messages[currentIndex]}...
+        </motion.p>
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -2996,6 +3475,124 @@ function UploadingOverlay({ progress }: { progress: number }) {
   );
 }
 
+// AutoCut Processing Overlay - Same style as UploadingOverlay but with scissors icon
+function AutoCutOverlay({ status, message, currentClip, totalClips }: {
+  status: 'preparing' | 'transcribing' | 'detecting' | 'applying' | 'done';
+  message: string;
+  currentClip: number;
+  totalClips: number;
+}) {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10">
+      {/* Animated Scissors Icon with Gradient */}
+      <motion.div
+        className="relative mb-8"
+        animate={{ y: [0, -6, 0] }}
+        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+      >
+        {/* Glow effect behind icon */}
+        <div
+          className="absolute inset-0 blur-xl opacity-40 rounded-xl"
+          style={{
+            background: 'linear-gradient(135deg, #6366f1 0%, #4A8FE7 50%, #22d3bb 100%)',
+            transform: 'scale(1.5)',
+          }}
+        />
+
+        {/* Main scissors icon container */}
+        <div className="relative w-24 h-16">
+          {/* Gradient frame */}
+          <div
+            className="absolute inset-0 rounded-xl shadow-lg"
+            style={{
+              background: 'linear-gradient(135deg, #6366f1 0%, #4A8FE7 50%, #22d3bb 100%)',
+            }}
+          />
+          {/* Inner dark area with subtle gradient */}
+          <div
+            className="absolute inset-1.5 rounded-lg"
+            style={{
+              background: 'linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.4) 100%)',
+            }}
+          />
+          {/* Scissors icon */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <svg className="w-8 h-8 text-white drop-shadow-lg" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7.848 8.25l1.536.887M7.848 8.25a3 3 0 11-5.196-3 3 3 0 015.196 3zm1.536.887a2.165 2.165 0 011.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 11-5.196 3 3 3 0 015.196-3zm1.536-.887a2.165 2.165 0 001.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863l2.077-1.199m0-3.328a4.323 4.323 0 012.068-1.379l5.325-1.628a4.5 4.5 0 012.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.331 4.331 0 0010.607 12m3.736 0l7.794 4.5-.802.215a4.5 4.5 0 01-2.48-.043l-5.326-1.629a4.324 4.324 0 01-2.068-1.379M14.343 12l-2.882 1.664" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Sparkle effect - top right with rotation */}
+        <motion.div
+          className="absolute -top-3 -right-3"
+          animate={{ rotate: [0, 15, 0], scale: [1, 1.2, 1] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <svg className="w-6 h-6 text-white drop-shadow-md" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0L14.59 8.41L23 11L14.59 13.59L12 22L9.41 13.59L1 11L9.41 8.41L12 0Z" />
+          </svg>
+        </motion.div>
+
+        {/* Small sparkle - top */}
+        <motion.div
+          className="absolute -top-1 right-4"
+          animate={{ opacity: [0, 1, 0], scale: [0.5, 1, 0.5] }}
+          transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }}
+        >
+          <div className="w-1.5 h-1.5 bg-white rounded-full" />
+        </motion.div>
+      </motion.div>
+
+      {/* Animated timeline bars */}
+      <div className="flex items-center gap-1 mb-8">
+        {/* Left circle */}
+        <motion.div
+          className="w-2 h-2 bg-[#4a4a4f] rounded-full"
+          animate={{ scale: [1, 1.2, 1] }}
+          transition={{ duration: 1, repeat: Infinity, delay: 0 }}
+        />
+        {/* Timeline bars */}
+        {[0, 0.15, 0.3, 0.45].map((delay, i) => (
+          <motion.div
+            key={i}
+            className="h-2 bg-[#4a4a4f] rounded-full"
+            style={{ width: i === 1 ? '48px' : i === 2 ? '32px' : '24px' }}
+            animate={{ opacity: [0.4, 1, 0.4] }}
+            transition={{ duration: 1.2, repeat: Infinity, delay }}
+          />
+        ))}
+        {/* Right circle */}
+        <motion.div
+          className="w-2 h-2 bg-[#4a4a4f] rounded-full"
+          animate={{ scale: [1, 1.2, 1] }}
+          transition={{ duration: 1, repeat: Infinity, delay: 0.5 }}
+        />
+      </div>
+
+      {/* Progress text */}
+      <p className="text-white text-base font-medium">
+        {message}
+        {status === 'transcribing' && totalClips > 1 && ` (${currentClip}/${totalClips})`}
+      </p>
+
+      {/* Done state with checkmark */}
+      {status === 'done' && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-green-400 flex items-center gap-2 mt-3"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          Ready to edit!
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
 // Mobile Video Panel Component
 function MobileVideoPanel({
   activeClip,
@@ -3021,8 +3618,10 @@ function MobileVideoPanel({
   onOpenFilterDrawer,
   onOpenCaptionsDrawer,
   onToggleCaptions,
+  onOpenTranscript,
   isUploading,
   uploadProgress,
+  autoCutProcessing,
 }: {
   activeClip: { url: string } | undefined;
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -3047,16 +3646,33 @@ function MobileVideoPanel({
   onOpenFilterDrawer?: () => void;
   onOpenCaptionsDrawer?: () => void;
   onToggleCaptions?: () => void;
+  onOpenTranscript?: () => void;
   isUploading?: boolean;
   uploadProgress?: number;
+  autoCutProcessing?: {
+    active: boolean;
+    status: 'preparing' | 'transcribing' | 'detecting' | 'applying' | 'done';
+    currentClip: number;
+    totalClips: number;
+    message: string;
+  } | null;
 }) {
   return (
-    <div className="flex flex-col items-center">
-      <div className="overflow-hidden rounded-md border border-[var(--border-subtle)] relative">
-        <div className="aspect-[9/16] bg-black relative max-h-[62vh]">
+    <div className="flex flex-col">
+      <div className="overflow-hidden relative w-full">
+        <div className="aspect-[9/16] bg-black relative max-h-[65vh] mx-auto">
           {/* Upload Progress Overlay */}
           {isUploading && <UploadingOverlay progress={uploadProgress ?? 0} />}
-          {activeClip && !isUploading && (
+          {/* AutoCut Processing Overlay */}
+          {autoCutProcessing?.active && !isUploading && (
+            <AutoCutOverlay
+              status={autoCutProcessing.status}
+              message={autoCutProcessing.message}
+              currentClip={autoCutProcessing.currentClip}
+              totalClips={autoCutProcessing.totalClips}
+            />
+          )}
+          {activeClip && !isUploading && !autoCutProcessing?.active && (
           <>
             <video
               ref={videoRef}
@@ -3105,70 +3721,36 @@ function MobileVideoPanel({
           </div>
         </button>
 
-        {/* TikTok-style floating icons on right side */}
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-4">
-          {/* Text */}
-          <button
-            onClick={onOpenTextDrawer}
-            className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 active:scale-95 transition-all"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M12 6v14M8 6v2M16 6v2" />
-            </svg>
-          </button>
-
-          {/* Stickers */}
-          <button
-            onClick={onOpenStickerDrawer}
-            className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 active:scale-95 transition-all"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" />
-            </svg>
-          </button>
-
-          {/* Filters */}
-          <button
-            onClick={onOpenFilterDrawer}
-            className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 active:scale-95 transition-all"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-            </svg>
-          </button>
-
-          {/* Captions Toggle */}
-          <button
-            onClick={onToggleCaptions}
-            className={`w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center hover:bg-black/40 active:scale-95 transition-all ${
-              overlayState.showCaptionPreview
-                ? 'bg-white/90 text-black'
-                : 'bg-black/20 text-white'
-            }`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <rect x="2" y="4" width="20" height="16" rx="2" />
-              <path strokeLinecap="round" d="M6 12h4M14 12h4M6 16h8" />
-            </svg>
-          </button>
         </div>
-        </div>
-        <div className="py-2 px-3 text-center text-sm text-[#8E8E93] bg-[#111111]">
-          {formatTime(currentTime)} / {formatTime(activeDuration)}
-          {deletedSegments.size > 0 && (
-            <span className="text-[#636366] ml-1">
-              ({formatTime(totalDuration - activeDuration)} removed)
-            </span>
-          )}
+        <div className="py-2 px-3 flex items-center justify-between text-sm bg-[#111111]">
+          <div className="text-[#8E8E93]">
+            {formatTime(currentTime)} / {formatTime(activeDuration)}
+            {deletedSegments.size > 0 && (
+              <span className="text-[#636366] ml-1">
+                ({formatTime(totalDuration - activeDuration)} removed)
+              </span>
+            )}
+          </div>
+          {/* Transcript Button */}
+          <button
+            onClick={onOpenTranscript}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#282828] hover:bg-[#333] text-white text-xs font-medium transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Script
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-// Mobile Transcript Panel Component
-function MobileTranscriptPanel({
+// Transcript Drawer Component (mobile)
+function TranscriptDrawer({
+  isOpen,
+  onClose,
   isTranscribing,
   transcribeProgress,
   isUploading,
@@ -3188,6 +3770,8 @@ function MobileTranscriptPanel({
   deletedPauseIds,
   handleRestoreAll,
 }: {
+  isOpen: boolean;
+  onClose: () => void;
   isTranscribing: boolean;
   transcribeProgress: number;
   isUploading: boolean;
@@ -3207,105 +3791,127 @@ function MobileTranscriptPanel({
   deletedPauseIds: Set<string>;
   handleRestoreAll: () => void;
 }) {
+  if (!isOpen) return null;
+
   return (
-    <div className="h-[60vh] flex flex-col">
-      {/* Header with restore button */}
-      <div className="flex items-center justify-between mb-3">
-        <p className="label">Transcript</p>
-        {(deletedSegments.size > 0 || deletedWordIds.size > 0 || deletedPauseIds.size > 0) && (
-          <button
-            onClick={handleRestoreAll}
-            className="btn-secondary text-xs py-1.5 px-3 whitespace-nowrap"
-          >
-            Restore All ({deletedWordIds.size + deletedPauseIds.size || deletedSegments.size})
-          </button>
-        )}
-      </div>
+    <div className="fixed inset-0 z-50 flex items-end justify-center lg:hidden">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
 
-      <div className="card p-4 flex-1 overflow-hidden">
-        {isTranscribing ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4">
-            <div className="w-12 h-12 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin" />
-            <div className="text-center">
-              <p className="text-white text-sm mb-1">Transcribing...</p>
-              <p className="text-[#636366] text-xs">
-                Clip {Math.ceil((transcribeProgress / 100) * clips.length)} of {clips.length}
-              </p>
-            </div>
+      {/* Drawer */}
+      <div className="relative w-full bg-[#1C1C1E] rounded-t-2xl p-4 max-h-[80vh] overflow-hidden animate-slide-up">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Script</h3>
+          <div className="flex items-center gap-3">
+            {(deletedSegments.size > 0 || deletedWordIds.size > 0 || deletedPauseIds.size > 0) && (
+              <button
+                onClick={handleRestoreAll}
+                className="btn-secondary text-xs py-1.5 px-3 whitespace-nowrap"
+              >
+                Restore All ({deletedWordIds.size + deletedPauseIds.size || deletedSegments.size})
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            >
+              <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-        ) : allWords.length > 0 ? (
-          <ScriptEditor
-            words={allWords}
-            currentTime={currentTime}
-            onWordClick={handleWordClick}
-            onDeletedWordsChange={handleDeletedWordsChange}
-          />
-        ) : allSegments.length > 0 ? (
-          <div className="space-y-1 overflow-y-auto h-full">
-            {allSegments.map((segment, i) => {
-              const isDeleted = deletedSegments.has(i);
-              const isSelected = selectedSegmentIndex === i;
-              const isActive = activeSegmentIndex === i;
+        </div>
 
-              return (
-                <button
-                  key={i}
-                  onClick={() => handleSegmentClick(segment, i)}
-                  className={`block w-full text-left px-3 py-2 rounded-lg transition-all text-sm ${
-                    isSelected ? "ring-2 ring-[#4A8FE7]" : ""
-                  } ${
-                    isDeleted
-                      ? "bg-red-950/30 text-[#636366]"
-                      : isActive
-                      ? "bg-[#4A8FE7]/15 text-white"
-                      : "text-[#8E8E93] hover:bg-[#242430]"
-                  }`}
-                >
-                  <span className={`text-[10px] font-medium mr-2 ${isDeleted ? "text-[#45454F]" : "text-[#4A8FE7]"}`}>
-                    {formatTime(segment.start)}
-                  </span>
-                  <span className={`${isDeleted ? "line-through opacity-60" : ""}`}>
-                    {segment.text}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ) : isUploading ? (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <div className="w-12 h-12 rounded-full bg-[#181818] flex items-center justify-center mb-4 relative">
-              <svg className="w-12 h-12 absolute -rotate-90">
-                <circle cx="24" cy="24" r="20" fill="none" stroke="#242430" strokeWidth="3" />
-                <circle
-                  cx="24"
-                  cy="24"
-                  r="20"
-                  fill="none"
-                  stroke="#4A8FE7"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeDasharray={`${uploadProgress * 1.26} 126`}
-                  className="transition-all duration-300"
-                />
-              </svg>
-              <svg className="w-5 h-5 text-[#4A8FE7]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
+        {/* Content */}
+        <div className="h-[calc(80vh-80px)] overflow-y-auto">
+          {isTranscribing ? (
+            <div className="flex flex-col items-center justify-center h-full gap-4">
+              <div className="w-12 h-12 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin" />
+              <div className="text-center">
+                <RollingLoadingMessageCompact />
+                <p className="text-[#636366] text-xs mt-1">
+                  Clip {Math.ceil((transcribeProgress / 100) * clips.length)} of {clips.length}
+                </p>
+              </div>
             </div>
-            <p className="text-white font-medium text-sm mb-1">Uploading video...</p>
-            <p className="text-[#636366] text-xs">{uploadProgress}% • Transcription starts after upload</p>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <div className="w-12 h-12 rounded-full bg-[#181818] flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-[#636366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+          ) : allWords.length > 0 ? (
+            <ScriptEditor
+              words={allWords}
+              currentTime={currentTime}
+              onWordClick={handleWordClick}
+              onDeletedWordsChange={handleDeletedWordsChange}
+            />
+          ) : allSegments.length > 0 ? (
+            <div className="space-y-1">
+              {allSegments.map((segment, i) => {
+                const isDeleted = deletedSegments.has(i);
+                const isSelected = selectedSegmentIndex === i;
+                const isActive = activeSegmentIndex === i;
+
+                return (
+                  <button
+                    key={i}
+                    onClick={() => handleSegmentClick(segment, i)}
+                    className={`block w-full text-left px-3 py-2 rounded-lg transition-all text-sm ${
+                      isSelected ? "ring-2 ring-[#4A8FE7]" : ""
+                    } ${
+                      isDeleted
+                        ? "bg-red-950/30 text-[#636366]"
+                        : isActive
+                        ? "bg-[#4A8FE7]/15 text-white"
+                        : "text-[#8E8E93] hover:bg-[#242430]"
+                    }`}
+                  >
+                    <span className={`text-[10px] font-medium mr-2 ${isDeleted ? "text-[#45454F]" : "text-[#4A8FE7]"}`}>
+                      {formatTime(segment.start)}
+                    </span>
+                    <span className={`${isDeleted ? "line-through opacity-60" : ""}`}>
+                      {segment.text}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-            <p className="text-white font-medium text-sm mb-1">Preparing transcript...</p>
-            <p className="text-[#636366] text-xs">Transcription will begin automatically</p>
-          </div>
-        )}
+          ) : isUploading ? (
+            <div className="flex flex-col items-center justify-center h-full text-center px-4">
+              <div className="w-12 h-12 rounded-full bg-[#181818] flex items-center justify-center mb-4 relative">
+                <svg className="w-12 h-12 absolute -rotate-90">
+                  <circle cx="24" cy="24" r="20" fill="none" stroke="#242430" strokeWidth="3" />
+                  <circle
+                    cx="24"
+                    cy="24"
+                    r="20"
+                    fill="none"
+                    stroke="#4A8FE7"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeDasharray={`${uploadProgress * 1.26} 126`}
+                    className="transition-all duration-300"
+                  />
+                </svg>
+                <svg className="w-5 h-5 text-[#4A8FE7]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+              </div>
+              <p className="text-white font-medium text-sm mb-1">Uploading video...</p>
+              <p className="text-[#636366] text-xs">{uploadProgress}% - Transcription starts after upload</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center px-4">
+              <div className="w-12 h-12 rounded-full bg-[#181818] flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-[#636366]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <p className="text-white font-medium text-sm mb-1">Preparing transcript...</p>
+              <p className="text-[#636366] text-xs">Transcription will begin automatically</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

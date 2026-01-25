@@ -12,6 +12,11 @@ interface ProjectFeedProps {
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
   viewMode?: 'list' | 'gallery';
+  isSelectMode?: boolean;
+  selectedProjectIds?: Set<string>;
+  onToggleSelectProject?: (projectId: string) => void;
+  onCancelSelection?: () => void;
+  onBulkDelete?: () => void;
 }
 
 type ProjectFilter = 'all' | 'yours' | 'shared';
@@ -123,7 +128,18 @@ function SearchInput({
   );
 }
 
-export function ProjectFeed({ onSelectProject, onCreateProject, searchQuery: externalSearchQuery, onSearchChange, viewMode: externalViewMode }: ProjectFeedProps) {
+export function ProjectFeed({
+  onSelectProject,
+  onCreateProject,
+  searchQuery: externalSearchQuery,
+  onSearchChange,
+  viewMode: externalViewMode,
+  isSelectMode = false,
+  selectedProjectIds = new Set(),
+  onToggleSelectProject,
+  onCancelSelection,
+  onBulkDelete
+}: ProjectFeedProps) {
   const { projects, isLoading, deleteProject } = useProjects();
   const [deleteConfirm, setDeleteConfirm] = useState<{ projectId: string; projectName: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -138,6 +154,25 @@ export function ProjectFeed({ onSelectProject, onCreateProject, searchQuery: ext
   const [projectFilter, setProjectFilter] = useState<ProjectFilter>('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [actionProject, setActionProject] = useState<Project | null>(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+  // Bulk delete handler
+  const handleBulkDelete = async () => {
+    if (selectedProjectIds.size === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      // Delete all selected projects
+      await Promise.all(
+        Array.from(selectedProjectIds).map(id => deleteProject(id))
+      );
+      // Clear selection and exit select mode
+      onCancelSelection?.();
+    } finally {
+      setIsBulkDeleting(false);
+      setShowBulkDeleteConfirm(false);
+    }
+  };
 
   // Filter projects by search query and ownership filter
   const filteredProjects = useMemo(() => {
@@ -326,9 +361,12 @@ export function ProjectFeed({ onSelectProject, onCreateProject, searchQuery: ext
                   <div key={project.id}>
                     <ProjectCard
                       project={project}
-                      onClick={() => onSelectProject(project.id)}
+                      onClick={() => isSelectMode && onToggleSelectProject ? onToggleSelectProject(project.id) : onSelectProject(project.id)}
                       onDelete={() => handleDeleteClick(project.id, project.name)}
                       onShowActions={setActionProject}
+                      isSelectMode={isSelectMode}
+                      isSelected={selectedProjectIds.has(project.id)}
+                      onToggleSelect={() => onToggleSelectProject?.(project.id)}
                     />
                     {/* Divider line - not on last item */}
                     {index < group.projects.length - 1 && (
@@ -353,10 +391,13 @@ export function ProjectFeed({ onSelectProject, onCreateProject, searchQuery: ext
                   <ProjectCard
                     key={project.id}
                     project={project}
-                    onClick={() => onSelectProject(project.id)}
+                    onClick={() => isSelectMode && onToggleSelectProject ? onToggleSelectProject(project.id) : onSelectProject(project.id)}
                     onDelete={() => handleDeleteClick(project.id, project.name)}
                     onShowActions={setActionProject}
                     variant="grid"
+                    isSelectMode={isSelectMode}
+                    isSelected={selectedProjectIds.has(project.id)}
+                    onToggleSelect={() => onToggleSelectProject?.(project.id)}
                   />
                 ))}
               </div>
@@ -470,7 +511,7 @@ export function ProjectFeed({ onSelectProject, onCreateProject, searchQuery: ext
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-[#4A8FE7] to-[#6366F1] flex items-center justify-center">
+                  <div className="w-full h-full bg-gradient-to-br from-[#3b82f6] to-[#1e3a8a] flex items-center justify-center">
                     <svg className="w-6 h-6 text-white/80" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
                     </svg>
@@ -572,6 +613,93 @@ export function ProjectFeed({ onSelectProject, onCreateProject, searchQuery: ext
                 className="w-full py-3.5 bg-[#2C2C2E] text-white font-medium rounded-xl hover:bg-[#3C3C3E] active:bg-[#4C4C4E] transition-colors"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Action Bar - shown when items are selected */}
+      {selectedProjectIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-[#1C1C1E]/95 backdrop-blur-xl border-t border-white/10 z-40 safe-area-bottom animate-slide-up">
+          <div className="flex items-center justify-between px-4 py-3 max-w-2xl mx-auto">
+            <button
+              onClick={onCancelSelection}
+              className="text-[#4A8FE7] font-medium text-[15px]"
+            >
+              Cancel
+            </button>
+
+            <span className="text-white font-medium text-[15px]">
+              {selectedProjectIds.size} selected
+            </span>
+
+            <button
+              onClick={() => setShowBulkDeleteConfirm(true)}
+              className="text-red-400 font-medium text-[15px]"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowBulkDeleteConfirm(false)}
+          />
+
+          {/* Modal */}
+          <div className="relative bg-[#1C1C1E] border border-[var(--border)] rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
+            {/* Icon */}
+            <div className="flex justify-center pt-6">
+              <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center">
+                <svg className="w-7 h-7 text-red-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 pt-4 pb-6 text-center">
+              <h3 className="text-lg font-semibold text-white mb-2">
+                Delete {selectedProjectIds.size} Project{selectedProjectIds.size > 1 ? 's' : ''}?
+              </h3>
+              <p className="text-[#8E8E93] text-sm">
+                Are you sure you want to delete {selectedProjectIds.size > 1 ? 'these projects' : 'this project'}? This action cannot be undone.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex border-t border-[var(--border)]">
+              <button
+                onClick={() => setShowBulkDeleteConfirm(false)}
+                disabled={isBulkDeleting}
+                className="flex-1 py-3.5 text-[#4A8FE7] font-medium hover:bg-white/5 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <div className="w-px bg-[var(--border)]" />
+              <button
+                onClick={handleBulkDelete}
+                disabled={isBulkDeleting}
+                className="flex-1 py-3.5 text-red-500 font-medium hover:bg-red-500/10 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isBulkDeleting ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
               </button>
             </div>
           </div>

@@ -10,6 +10,7 @@ import { ClipTransition } from "@/types/overlays";
 
 /**
  * Calculate transition effect for the current frame
+ * Supports both clip boundaries (between clips) and internal cuts (silence removal)
  */
 function calculateTransitionEffect(
   frame: number,
@@ -24,7 +25,7 @@ function calculateTransitionEffect(
     return defaultResult;
   }
 
-  // Calculate clip boundary frames
+  // Calculate clip boundary frames for clip-to-clip transitions
   const clipBoundaries: { clipIndex: number; boundaryFrame: number }[] = [];
 
   clips.forEach((clip, index) => {
@@ -39,16 +40,26 @@ function calculateTransitionEffect(
   for (const transition of clipTransitions) {
     if (transition.type === 'none') continue;
 
-    const boundary = clipBoundaries.find(b => b.clipIndex === transition.clipIndex);
-    if (!boundary) continue;
+    let boundaryFrame: number;
+
+    // Check if this is an internal cut (has cutTimeMs) or a clip boundary
+    if (transition.cutTimeMs !== undefined) {
+      // Internal cut: use the cutTimeMs directly
+      boundaryFrame = Math.floor((transition.cutTimeMs / 1000) * fps);
+    } else {
+      // Clip boundary: find the boundary frame
+      const boundary = clipBoundaries.find(b => b.clipIndex === transition.clipIndex);
+      if (!boundary) continue;
+      boundaryFrame = boundary.boundaryFrame;
+    }
 
     const template = getTransitionTemplate(transition.type);
     const transitionDuration = transition.durationFrames || template.durationFrames;
     const halfDuration = Math.floor(transitionDuration / 2);
 
     // Transition is centered on the boundary
-    const transitionStart = boundary.boundaryFrame - halfDuration;
-    const transitionEnd = boundary.boundaryFrame + halfDuration;
+    const transitionStart = boundaryFrame - halfDuration;
+    const transitionEnd = boundaryFrame + halfDuration;
 
     if (frame >= transitionStart && frame < transitionEnd) {
       // We're in this transition

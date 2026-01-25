@@ -80,6 +80,9 @@ export interface ClipTransition {
   clipIndex: number;      // Applied after this clip ends
   durationFrames: number;
   intensity: number;      // 0.5-2.0 multiplier
+  // Internal cut support: when set, this is a cut within a clip (silence removal)
+  // The cutTimeMs is the timestamp in the OUTPUT video where the cut occurs
+  cutTimeMs?: number;
 }
 
 // Audio Settings for voice cleanup

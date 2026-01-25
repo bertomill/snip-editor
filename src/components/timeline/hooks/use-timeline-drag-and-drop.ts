@@ -56,7 +56,7 @@ export const useTimelineDragAndDrop = ({
   );
 
   const validateDropPosition = useCallback(
-    (targetStart: number, targetDuration: number, targetTrackIndex: number, excludeIds: string[] = []) => {
+    (targetStart: number, targetDuration: number, targetTrackIndex: number, excludeIds: string[] = [], itemType?: TrackItemType) => {
       const targetEnd = targetStart + targetDuration;
 
       if (targetStart < 0) {
@@ -69,7 +69,12 @@ export const useTimelineDragAndDrop = ({
 
       const targetTrack = tracks[targetTrackIndex];
 
-      // Check for overlaps
+      // Video clips can be reordered - allow "overlap" since they'll be repositioned
+      if (itemType === TrackItemType.VIDEO && targetTrack.id === 'video-track') {
+        return { isValid: true };
+      }
+
+      // Check for overlaps (for non-video items)
       const overlappingItems = targetTrack.items.filter(
         (item) =>
           !excludeIds.includes(item.id) &&
@@ -186,7 +191,9 @@ export const useTimelineDragAndDrop = ({
       // Ensure boundaries
       newStart = Math.max(0, newStart);
 
-      const validation = validateDropPosition(newStart, newDuration, newTrackIndex, [dragInfo.id]);
+      // Get item type from snapshot for validation
+      const itemType = dragInfo.selectedItemsSnapshot?.[0]?.type as TrackItemType | undefined;
+      const validation = validateDropPosition(newStart, newDuration, newTrackIndex, [dragInfo.id], itemType);
 
       const ghostElement = calculateGhostPosition(newStart, newDuration, newTrackIndex);
 
