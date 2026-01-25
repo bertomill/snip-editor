@@ -18,7 +18,7 @@ export function ResizableBottomPanel({
   children,
   minHeight = 120,
   maxHeight = 500,
-  defaultHeight = 180,
+  defaultHeight = 280,
   className = '',
 }: ResizableBottomPanelProps) {
   const [height, setHeight] = useState(defaultHeight);
