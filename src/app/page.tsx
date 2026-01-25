@@ -556,6 +556,7 @@ function HomeContent() {
             data: base64,
             filename: clip.file!.name,
             duration: clip.duration,
+            volume: clip.volume ?? 1,
           };
         })
       );
@@ -2103,7 +2104,7 @@ function UploadStep({
       {(selectedFiles.length > 0 || isProcessing) && (
         <div className="mt-8 animate-fade-in">
           {/* Thumbnail row */}
-          <div className="flex items-center gap-3 justify-center mb-6 overflow-x-auto pb-2">
+          <div className="flex items-center gap-3 justify-center mb-6 overflow-x-auto pb-2 pt-3 px-3">
             {selectedFiles.map((file, index) => (
               <div key={index} className="relative flex-shrink-0 group">
                 <div className="w-20 h-28 rounded-lg overflow-hidden bg-[#2C2C2E] border border-[#3C3C3E]">
@@ -2317,6 +2318,14 @@ function EditStep({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying, getActiveVideoRef]);
+
+  // Apply clip volume to video element
+  useEffect(() => {
+    const video = getActiveVideoRef();
+    if (video && activeClip) {
+      video.volume = activeClip.volume ?? 1;
+    }
+  }, [activeClip, activeClip?.volume, getActiveVideoRef]);
 
   // Auto-cut effect: apply creative effects after transcription completes
   useEffect(() => {
@@ -3247,7 +3256,23 @@ function EditStep({
     if (word) {
       handleWordClick(word);
     }
+    // Update selection state for video clips
+    setSelectedTimelineItems([itemId]);
   }, [allWords, handleWordClick]);
+
+  // Handle clip volume change
+  const handleClipVolumeChange = useCallback((clipIndex: number, volume: number) => {
+    setClips(prev => prev.map((clip, i) =>
+      i === clipIndex ? { ...clip, volume } : clip
+    ));
+  }, []);
+
+  // Get currently selected video clip index (if any)
+  const selectedClipIndex = useMemo(() => {
+    const selectedId = selectedTimelineItems[0];
+    if (!selectedId?.startsWith('clip-')) return null;
+    return parseInt(selectedId.replace('clip-', ''), 10);
+  }, [selectedTimelineItems]);
 
   // Handle deleted words change from ScriptEditor
   const handleDeletedWordsChange = useCallback((newDeletedWordIds: Set<string>) => {
@@ -3660,6 +3685,54 @@ function EditStep({
             </div>
           </div>
         ) : (
+          <>
+          {/* Clip Volume Control - shows when a video clip is selected */}
+          {selectedClipIndex !== null && clips[selectedClipIndex] && (
+            <div className="flex items-center gap-4 px-4 py-2 bg-[#1A1A1A] border-b border-[#282828]">
+              <span className="text-xs text-gray-400 min-w-[60px]">
+                {(clips[selectedClipIndex].file?.name || `Clip ${selectedClipIndex + 1}`).slice(0, 20)}
+              </span>
+              <div className="flex items-center gap-2 flex-1 max-w-[200px]">
+                <button
+                  onClick={() => handleClipVolumeChange(selectedClipIndex, clips[selectedClipIndex].volume === 0 ? 1 : 0)}
+                  className="p-1 hover:bg-white/10 rounded transition-colors"
+                  title={clips[selectedClipIndex].volume === 0 ? "Unmute" : "Mute"}
+                >
+                  {(clips[selectedClipIndex].volume ?? 1) === 0 ? (
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    </svg>
+                  )}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={clips[selectedClipIndex].volume ?? 1}
+                  onChange={(e) => handleClipVolumeChange(selectedClipIndex, parseFloat(e.target.value))}
+                  className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[#4A8FE7]"
+                />
+                <span className="text-xs text-gray-400 min-w-[32px] text-right">
+                  {Math.round((clips[selectedClipIndex].volume ?? 1) * 100)}%
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedTimelineItems([])}
+                className="p-1 hover:bg-white/10 rounded transition-colors"
+                title="Deselect"
+              >
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
           <Timeline
             tracks={timelineTracks}
             totalDuration={collapsedDuration}
@@ -3697,6 +3770,7 @@ function EditStep({
             }}
             onOpenTranscript={() => setShowTranscriptDrawer(true)}
           />
+          </>
         )}
       </div>
     </ResizableBottomPanel>
