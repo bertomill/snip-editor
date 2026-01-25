@@ -197,63 +197,6 @@ export function Sidebar({
             <span className="text-[10px] font-medium text-[#4A8FE7]">Create</span>
           </button>
 
-          {/* Editor Tools - only show when in editor view */}
-          {view === 'editor' && (
-            <>
-              {/* Divider */}
-              <div className="w-8 h-px bg-[var(--border-subtle)] my-2" />
-
-              {/* Overlay Tools */}
-              <NavButton
-                icon={<TextIcon />}
-                label="Text"
-                onClick={() => togglePanel('text')}
-                active={activePanel === 'text'}
-              />
-
-              <NavButton
-                icon={<StickerIcon />}
-                label="Stickers"
-                onClick={() => togglePanel('stickers')}
-                active={activePanel === 'stickers'}
-              />
-
-              <NavButton
-                icon={<FilterIcon />}
-                label="Filters"
-                onClick={() => togglePanel('filters')}
-                active={activePanel === 'filters'}
-              />
-
-              <NavButton
-                icon={<AudioEnhanceIcon />}
-                label="Audio"
-                onClick={() => togglePanel('audio')}
-                active={activePanel === 'audio'}
-              />
-
-              <NavButton
-                icon={<CutsIcon />}
-                label="Cuts"
-                onClick={() => togglePanel('cuts')}
-                active={activePanel === 'cuts'}
-              />
-
-              <NavButton
-                icon={<CaptionIcon />}
-                label="Captions"
-                onClick={() => togglePanel('captions')}
-                active={activePanel === 'captions' || overlayState.showCaptionPreview}
-              />
-
-              <NavButton
-                icon={<AIHooksIcon />}
-                label="AI Hooks"
-                onClick={() => togglePanel('suggestions')}
-                active={activePanel === 'suggestions'}
-              />
-            </>
-          )}
         </nav>
 
         {/* User name at bottom */}
