@@ -8,7 +8,7 @@ import { promisify } from "util";
 import { join } from "path";
 import { tmpdir } from "os";
 import { stat } from "fs/promises";
-import { ffmpeg } from "@/lib/ffmpeg-path";
+import { getFFmpegPath } from "@/lib/ffmpeg-path";
 
 const execAsync = promisify(exec);
 
@@ -92,7 +92,7 @@ export async function cleanupVoice(
     // Run FFmpeg with filter chain
     // -ar 16000 -ac 1 maintains 16kHz mono (optimal for speech recognition)
     // -q:a 2 is high quality MP3
-    const command = `"${ffmpeg}" -i "${inputPath}" -af "${filterString}" -ar 16000 -ac 1 -q:a 2 -y "${outputPath}"`;
+    const command = `"${getFFmpegPath()}" -i "${inputPath}" -af "${filterString}" -ar 16000 -ac 1 -q:a 2 -y "${outputPath}"`;
 
     const startTime = Date.now();
     await execAsync(command);

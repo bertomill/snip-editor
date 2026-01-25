@@ -4,7 +4,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { ffmpeg } from "@/lib/ffmpeg-path";
+import { getFFmpegPath } from "@/lib/ffmpeg-path";
 
 const execAsync = promisify(exec);
 
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     // Convert to browser-compatible MP4 (H.264 + AAC)
     // Using fast preset and lower quality for quick preview
     await execAsync(
-      `"${ffmpeg}" -i "${inputPath}" -c:v libx264 -preset ultrafast -crf 28 -c:a aac -b:a 96k -movflags +faststart -y "${outputPath}"`
+      `"${getFFmpegPath()}" -i "${inputPath}" -c:v libx264 -preset ultrafast -crf 28 -c:a aac -b:a 96k -movflags +faststart -y "${outputPath}"`
     );
 
     // Read converted file and return as base64 data URL

@@ -147,8 +147,8 @@ export function ProjectFeed({
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
   const searchQuery = externalSearchQuery ?? internalSearchQuery;
   const setSearchQuery = onSearchChange ?? setInternalSearchQuery;
-  // Use external view mode for mobile, internal for desktop
-  const [internalViewMode, setInternalViewMode] = useState<'list' | 'grid'>('list');
+  // Use external view mode for mobile, internal for desktop (default to grid on desktop)
+  const [internalViewMode, setInternalViewMode] = useState<'list' | 'grid'>('grid');
   // Map 'gallery' to 'grid' for internal use
   const viewMode = externalViewMode === 'gallery' ? 'grid' : (externalViewMode ?? internalViewMode);
   const [projectFilter, setProjectFilter] = useState<ProjectFilter>('all');

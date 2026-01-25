@@ -11,7 +11,7 @@ import {
   SilenceDetectionOptions,
   AGGRESSIVENESS_PRESETS,
 } from "@/types/silence";
-import { ffmpeg } from "@/lib/ffmpeg-path";
+import { getFFmpegPath } from "@/lib/ffmpeg-path";
 
 const execAsync = promisify(exec);
 
@@ -50,7 +50,7 @@ export async function detectSilenceFFmpeg(
   // -af silencedetect=n=<noise_level>:d=<duration>
   // n = noise level (dB below which is silence)
   // d = minimum duration to detect
-  const command = `"${ffmpeg}" -i "${audioPath}" -af silencedetect=n=${decibelLevel}dB:d=${threshold} -f null - 2>&1`;
+  const command = `"${getFFmpegPath()}" -i "${audioPath}" -af silencedetect=n=${decibelLevel}dB:d=${threshold} -f null - 2>&1`;
 
   try {
     const startTime = Date.now();
