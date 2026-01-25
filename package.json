@@ -20,6 +20,7 @@
     "@remotion/renderer": "4.0.380",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.91.1",
+    "clsx": "^2.1.1",
     "ffmpeg-static": "^5.3.0",
     "groq-sdk": "^0.37.0",
     "motion": "^12.29.0",
@@ -27,6 +28,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "remotion": "4.0.380",
+    "tailwind-merge": "^3.4.0",
     "uuid": "^10.0.0",
     "zustand": "^5.0.10"
   },

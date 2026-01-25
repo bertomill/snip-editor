@@ -30,6 +30,7 @@ import { ProjectsProvider, useProjects } from "@/contexts/ProjectsContext";
 import { ProjectFeed } from "@/components/projects";
 import { ProjectData } from "@/types/project";
 import { ResizableBottomPanel } from "@/components/ResizableBottomPanel";
+import VideoProcessingLoader, { VideoProcessingLoaderCompact } from "@/components/VideoProcessingLoader";
 import { extractAudioFromVideo, isFFmpegSupported } from "@/lib/audio/extract-audio";
 import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
 
@@ -93,6 +94,7 @@ interface VideoClip {
   silenceSegments?: SilenceSegment[];
   totalSilenceDuration?: number;
   audioDuration?: number;
+  volume?: number;             // Audio volume (0-1, default 1)
 }
 
 export default function Home() {
@@ -2072,9 +2074,20 @@ function UploadStep({
       <p className="text-[#8E8E93] mb-2 text-base">
         Upload your video clips to begin editing
       </p>
-      <p className="text-[#636366] mb-10 text-sm">
+      <p className="text-[#636366] mb-6 text-sm">
         Max file size: 100MB per clip
       </p>
+
+      {/* Upload button - always visible as fallback */}
+      <button
+        onClick={() => fileInputRef.current?.click()}
+        className="mb-8 px-6 py-3 bg-[#4A8FE7] hover:bg-[#5A9FF7] text-white font-medium rounded-full transition-all flex items-center gap-2 mx-auto"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        </svg>
+        Choose Files
+      </button>
 
       {/* Hidden file input for auto-trigger */}
       <input
@@ -2243,6 +2256,8 @@ function EditStep({
   const desktopVideoRef = useRef<HTMLVideoElement>(null);
   const mobileVideoRef = useRef<HTMLVideoElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const desktopPreviewContainerRef = useRef<HTMLDivElement>(null);
+  const mobilePreviewContainerRef = useRef<HTMLDivElement>(null);
 
   // Helper to get the currently visible video element
   const getActiveVideoRef = useCallback(() => {
@@ -2544,6 +2559,7 @@ function EditStep({
               url: clip.url,
               videoSrc: clip.url,
               cacheKey: clip.file?.name || `clip-${i}`,
+              volume: clip.volume ?? 1,
             },
           };
         }),
@@ -3259,6 +3275,7 @@ function EditStep({
         <MobileVideoPanel
           activeClip={clips[activeClipIndex]}
           videoRef={mobileVideoRef}
+          previewContainerRef={mobilePreviewContainerRef}
           filterStyle={overlayState.filterId ? getFilterById(overlayState.filterId)?.filter : undefined}
           handleTimeUpdate={handleTimeUpdate}
           handleVideoEnded={handleVideoEnded}
@@ -3280,6 +3297,7 @@ function EditStep({
           isUploading={isUploading}
           uploadProgress={uploadProgress}
           autoCutProcessing={autoCutProcessing}
+          updateTextOverlay={updateTextOverlay}
         />
       </div>
 
@@ -3315,7 +3333,7 @@ function EditStep({
         <div className="w-full lg:w-[340px] flex-shrink-0">
           <p className="label mb-4">Preview</p>
           <div className="card-glow overflow-hidden">
-            <div className="aspect-[9/16] bg-black relative">
+            <div ref={desktopPreviewContainerRef} className="aspect-[9/16] bg-black relative">
               {/* Upload Progress Overlay */}
               {isUploading && <UploadingOverlay progress={uploadProgress} />}
               {/* AutoCut Processing Overlay */}
@@ -3348,10 +3366,12 @@ function EditStep({
                     positionY={overlayState.captionPositionY}
                     onPositionChange={setCaptionPosition}
                   />
-                  {/* Text overlay preview */}
+                  {/* Text overlay preview - draggable */}
                   <TextOverlayPreview
                     textOverlays={overlayState.textOverlays}
                     currentTimeMs={currentTime * 1000}
+                    onUpdatePosition={(id, position) => updateTextOverlay(id, { position })}
+                    containerRef={desktopPreviewContainerRef}
                   />
                 </>
               )}
@@ -3684,78 +3704,14 @@ function EditStep({
   );
 }
 
-// Rolling Loading Message Component - cycles through processing steps
+// Rolling Loading Message Component - now uses VideoProcessingLoader
 function RollingLoadingMessage() {
-  const messages = [
-    "Cutting filler words",
-    "Cutting blank space",
-    "Adding effects",
-    "Adding music",
-    "Analyzing speech",
-    "Processing audio"
-  ];
-
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % messages.length);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [messages.length]);
-
-  return (
-    <div className="h-6 overflow-hidden">
-      <AnimatePresence mode="wait">
-        <motion.p
-          key={currentIndex}
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -20, opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          className="text-white text-base"
-        >
-          {messages[currentIndex]}...
-        </motion.p>
-      </AnimatePresence>
-    </div>
-  );
+  return <VideoProcessingLoader stage="transcribing" className="text-xl" />;
 }
 
 // Compact rolling message for mobile
 function RollingLoadingMessageCompact() {
-  const messages = [
-    "Cutting filler words",
-    "Cutting blank space",
-    "Adding effects",
-    "Adding music",
-  ];
-
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % messages.length);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [messages.length]);
-
-  return (
-    <div className="h-5 overflow-hidden">
-      <AnimatePresence mode="wait">
-        <motion.p
-          key={currentIndex}
-          initial={{ y: 16, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -16, opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          className="text-white text-sm"
-        >
-          {messages[currentIndex]}...
-        </motion.p>
-      </AnimatePresence>
-    </div>
-  );
+  return <VideoProcessingLoaderCompact stage="transcribing" className="text-sm text-white" />;
 }
 
 // Uploading Overlay Component - CapCut-style loading animation
@@ -3848,10 +3804,12 @@ function UploadingOverlay({ progress }: { progress: number }) {
         />
       </div>
 
-      {/* Progress text */}
-      <p className="text-white text-base font-medium">
-        Uploading your media... {progress}%
-      </p>
+      {/* Animated progress text */}
+      <VideoProcessingLoader
+        stage="uploading"
+        progress={progress}
+        className="text-lg"
+      />
     </div>
   );
 }
@@ -3951,28 +3909,13 @@ function AutoCutOverlay({ status, message, currentClip, totalClips }: {
         />
       </div>
 
-      {/* Progress text */}
-      <p className="text-white text-base font-medium">
-        {message}
-        {status === 'transcribing' && totalClips > 1 && ` (${currentClip}/${totalClips})`}
-      </p>
-
-      {/* Encouraging sub-message */}
-      {status === 'converting' && (
-        <p className="text-[#8E8E93] text-sm mt-2">Converting MOV to MP4 for browser preview</p>
-      )}
-      {status === 'preparing' && (
-        <p className="text-[#8E8E93] text-sm mt-2">Setting up your editing workspace</p>
-      )}
-      {status === 'transcribing' && (
-        <p className="text-[#8E8E93] text-sm mt-2">AI is analyzing your speech</p>
-      )}
-      {status === 'detecting' && (
-        <p className="text-[#8E8E93] text-sm mt-2">Finding the perfect cuts</p>
-      )}
-      {status === 'applying' && (
-        <p className="text-[#8E8E93] text-sm mt-2">Adding the finishing touches</p>
-      )}
+      {/* Animated progress text */}
+      <VideoProcessingLoader
+        stage={status === 'detecting' || status === 'applying' ? 'analyzing' : status === 'done' ? 'processing' : status}
+        clipCount={status === 'transcribing' && totalClips > 1 ? totalClips : undefined}
+        currentClip={status === 'transcribing' && totalClips > 1 ? currentClip : undefined}
+        className="text-lg"
+      />
 
       {/* Done state with checkmark */}
       {status === 'done' && (
@@ -3995,6 +3938,7 @@ function AutoCutOverlay({ status, message, currentClip, totalClips }: {
 function MobileVideoPanel({
   activeClip,
   videoRef,
+  previewContainerRef,
   filterStyle,
   handleTimeUpdate,
   handleVideoEnded,
@@ -4007,6 +3951,7 @@ function MobileVideoPanel({
   currentTime,
   overlayState,
   setCaptionPosition,
+  updateTextOverlay,
   formatTime,
   activeDuration,
   deletedSegments,
@@ -4023,6 +3968,7 @@ function MobileVideoPanel({
 }: {
   activeClip: { url: string } | undefined;
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  previewContainerRef: React.RefObject<HTMLDivElement | null>;
   filterStyle: string | undefined;
   handleTimeUpdate: () => void;
   handleVideoEnded: () => void;
@@ -4035,6 +3981,7 @@ function MobileVideoPanel({
   currentTime: number;
   overlayState: { showCaptionPreview: boolean; captionPositionY: number; textOverlays: TextOverlay[] };
   setCaptionPosition: (y: number) => void;
+  updateTextOverlay: (id: string, updates: Partial<TextOverlay>) => void;
   formatTime: (seconds: number) => string;
   activeDuration: number;
   deletedSegments: Set<number>;
@@ -4058,7 +4005,7 @@ function MobileVideoPanel({
   return (
     <div className="flex flex-col">
       <div className="overflow-hidden relative w-full">
-        <div className="aspect-[9/16] bg-black relative max-h-[65vh] mx-auto">
+        <div ref={previewContainerRef} className="aspect-[9/16] bg-black relative max-h-[65vh] mx-auto">
           {/* Upload Progress Overlay */}
           {isUploading && <UploadingOverlay progress={uploadProgress ?? 0} />}
           {/* AutoCut Processing Overlay */}
@@ -4090,10 +4037,12 @@ function MobileVideoPanel({
               positionY={overlayState.captionPositionY}
               onPositionChange={setCaptionPosition}
             />
-            {/* Text overlay preview */}
+            {/* Text overlay preview - draggable */}
             <TextOverlayPreview
               textOverlays={overlayState.textOverlays}
               currentTimeMs={currentTime * 1000}
+              onUpdatePosition={(id, position) => updateTextOverlay(id, { position })}
+              containerRef={previewContainerRef}
             />
           </>
         )}
