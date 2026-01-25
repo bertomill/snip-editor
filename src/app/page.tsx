@@ -18,6 +18,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { useUser, useSignOut } from "@/lib/supabase/hooks";
 import { Timeline, TimelineTrack, TrackItemType } from "@/components/timeline";
 import { generateScriptTrack } from "@/components/timeline/utils/generate-script-track";
+import { generateCollapsedTracks } from "@/components/timeline/utils/generate-collapsed-tracks";
 import { ScriptEditor } from "@/components/script-editor";
 import { TranscriptWord } from "@/lib/types/composition";
 import { MediaLibraryPanel } from "@/components/media-library";
@@ -2502,35 +2503,55 @@ function EditStep({
     return totalDuration - deletedTime;
   }, [totalDuration, allSegments, deletedSegments]);
 
-  // Convert overlays to timeline tracks
-  const timelineTracks: TimelineTrack[] = useMemo(() => {
-    // Video track
-    const videoTrack: TimelineTrack = {
-      id: 'video-track',
-      name: 'Video',
-      items: clips.map((clip, i) => {
-        const clipStartTime = clips.slice(0, i).reduce((acc, c) => acc + c.duration, 0);
-        return {
-          id: `clip-${i}`,
-          trackId: 'video-track',
-          start: clipStartTime,
-          end: clipStartTime + clip.duration,
-          type: TrackItemType.VIDEO,
-          label: (clip.file?.name || `Clip ${i + 1}`).slice(0, 15),
-          data: { clipIndex: i, url: clip.url },
-        };
-      }),
-    };
+  // Convert overlays to timeline tracks with collapsed view (deleted content removed)
+  const { timelineTracks, collapsedDuration } = useMemo(() => {
+    // Use collapsed tracks - when words are deleted, the timeline shortens
+    const hasWords = allWords.length > 0;
+    const hasDeleted = deletedWordIds.size > 0 || deletedPauseIds.size > 0;
 
-    // Script track (words from transcript)
-    const scriptTrack = allWords.length > 0
-      ? generateScriptTrack({
-          words: allWords,
-          deletedWordIds,
-          deletedPauseIds,
-          clips: clips.map(c => ({ duration: c.duration })),
-        })
-      : { id: 'script-track', name: 'Script', items: [] };
+    let videoTrack: TimelineTrack;
+    let scriptTrack: TimelineTrack;
+    let effectiveDuration = totalDuration;
+
+    if (hasWords && hasDeleted) {
+      // Generate collapsed tracks where deleted content is removed
+      const collapsed = generateCollapsedTracks({
+        words: allWords,
+        deletedWordIds,
+        deletedPauseIds,
+        clips: clips.map(c => ({ duration: c.duration, file: c.file, url: c.url })),
+      });
+      videoTrack = collapsed.videoTrack;
+      scriptTrack = collapsed.scriptTrack;
+      effectiveDuration = collapsed.totalDuration;
+    } else {
+      // No deletions - show original tracks
+      videoTrack = {
+        id: 'video-track',
+        name: 'Video',
+        items: clips.map((clip, i) => {
+          const clipStartTime = clips.slice(0, i).reduce((acc, c) => acc + c.duration, 0);
+          return {
+            id: `clip-${i}`,
+            trackId: 'video-track',
+            start: clipStartTime,
+            end: clipStartTime + clip.duration,
+            type: TrackItemType.VIDEO,
+            label: (clip.file?.name || `Clip ${i + 1}`).slice(0, 15),
+            data: { clipIndex: i, url: clip.url },
+          };
+        }),
+      };
+
+      scriptTrack = hasWords
+        ? generateScriptTrack({
+            words: allWords,
+            deletedWordIds,
+            deletedPauseIds,
+            clips: clips.map(c => ({ duration: c.duration })),
+          })
+        : { id: 'script-track', name: 'Script', items: [] };
+    }
 
     // Text track
     const textTrack: TimelineTrack = {
@@ -2562,8 +2583,11 @@ function EditStep({
       })),
     };
 
-    return [videoTrack, scriptTrack, textTrack, stickerTrack];
-  }, [clips, allWords, deletedWordIds, deletedPauseIds, overlayState.textOverlays, overlayState.stickers]);
+    return {
+      timelineTracks: [videoTrack, scriptTrack, textTrack, stickerTrack],
+      collapsedDuration: effectiveDuration,
+    };
+  }, [clips, allWords, deletedWordIds, deletedPauseIds, overlayState.textOverlays, overlayState.stickers, totalDuration]);
 
   // Handle timeline item move
   const handleTimelineItemMove = useCallback((itemId: string, newStart: number, newEnd: number, trackId: string) => {
@@ -3583,7 +3607,7 @@ function EditStep({
         ) : (
           <Timeline
             tracks={timelineTracks}
-            totalDuration={totalDuration}
+            totalDuration={collapsedDuration}
             currentFrame={Math.round(currentTime * 30)}
             fps={30}
             onFrameChange={handleTimelineFrameChange}
