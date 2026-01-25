@@ -353,6 +353,15 @@ textarea:focus-visible {
   animation: scaleIn 0.2s ease-out;
 }
 
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
 /* Progress bar glow effect */
 .progress-glow {
   box-shadow: 0 0 10px var(--accent-glow), 0 0 20px var(--accent-muted);

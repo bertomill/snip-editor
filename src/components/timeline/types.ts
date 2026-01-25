@@ -52,6 +52,8 @@ export interface TimelineProps {
   showPlaybackControls?: boolean;
   // Add content button
   onAddContent?: () => void;
+  // Transcript button
+  onOpenTranscript?: () => void;
 }
 
 // Timeline content area props

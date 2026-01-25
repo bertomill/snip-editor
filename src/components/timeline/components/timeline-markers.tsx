@@ -115,10 +115,15 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
 
     const container = e.currentTarget;
     const rect = container.getBoundingClientRect();
+    const scrollContainer = scrollContainerRef?.current;
+    const scrollLeft = scrollContainer?.scrollLeft || 0;
 
-    // Immediately seek to clicked position
-    const clickX = e.clientX - rect.left;
-    const percentage = Math.max(0, Math.min(1, clickX / rect.width));
+    // Use scrollWidth for the full zoomed content width
+    const totalWidth = container.scrollWidth || rect.width;
+
+    // Immediately seek to clicked position (accounting for scroll)
+    const clickX = e.clientX - rect.left + scrollLeft;
+    const percentage = Math.max(0, Math.min(1, clickX / totalWidth));
     const newTime = percentage * viewportDuration;
     const newFrame = Math.round(newTime * fps);
     onFrameChange(newFrame);
@@ -142,27 +147,32 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
 
       // Get fresh rect to avoid stale closure issues
       const freshRect = container.getBoundingClientRect();
+      const freshTotalWidth = container.scrollWidth || freshRect.width;
       const clientX = moveEvent.clientX;
 
       // Throttle frame changes to animation frame rate
       scrubRafRef.current = requestAnimationFrame(() => {
-        // Update position during drag with fresh measurements
-        const x = clientX - freshRect.left;
-        const dragPercentage = Math.max(0, Math.min(1, x / freshRect.width));
+        // Update position during drag with fresh measurements (accounting for scroll)
+        const currentScrollLeft = scrollContainer?.scrollLeft || 0;
+        const x = clientX - freshRect.left + currentScrollLeft;
+        const dragPercentage = Math.max(0, Math.min(1, x / freshTotalWidth));
         const dragTime = dragPercentage * viewportDuration;
         const dragFrame = Math.round(dragTime * fps);
         onFrameChange(dragFrame);
       });
 
-      // Auto-scroll near edges
-      const x = moveEvent.clientX - freshRect.left;
-      const edgeThreshold = 50;
-      if (x < edgeThreshold) {
-        startAutoScroll('left');
-      } else if (x > freshRect.width - edgeThreshold) {
-        startAutoScroll('right');
-      } else {
-        stopAutoScroll();
+      // Auto-scroll near edges (use visible rect for edge detection)
+      const scrollRect = scrollContainer?.getBoundingClientRect();
+      if (scrollRect) {
+        const relativeX = moveEvent.clientX - scrollRect.left;
+        const edgeThreshold = 50;
+        if (relativeX < edgeThreshold) {
+          startAutoScroll('left');
+        } else if (relativeX > scrollRect.width - edgeThreshold) {
+          startAutoScroll('right');
+        } else {
+          stopAutoScroll();
+        }
       }
     };
 
@@ -193,10 +203,13 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
 
     const container = e.currentTarget;
     const rect = container.getBoundingClientRect();
+    const scrollContainer = scrollContainerRef?.current;
+    const scrollLeft = scrollContainer?.scrollLeft || 0;
+    const totalWidth = container.scrollWidth || rect.width;
 
-    // Immediately seek to touched position
-    const touchX = touch.clientX - rect.left;
-    const percentage = Math.max(0, Math.min(1, touchX / rect.width));
+    // Immediately seek to touched position (accounting for scroll)
+    const touchX = touch.clientX - rect.left + scrollLeft;
+    const percentage = Math.max(0, Math.min(1, touchX / totalWidth));
     const newTime = percentage * viewportDuration;
     const newFrame = Math.round(newTime * fps);
     onFrameChange(newFrame);
@@ -220,26 +233,31 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
 
       // Get fresh rect to avoid stale closure issues
       const freshRect = container.getBoundingClientRect();
+      const freshTotalWidth = container.scrollWidth || freshRect.width;
       const touchClientX = moveTouch.clientX;
 
       // Throttle frame changes to animation frame rate
       scrubRafRef.current = requestAnimationFrame(() => {
-        const x = touchClientX - freshRect.left;
-        const dragPercentage = Math.max(0, Math.min(1, x / freshRect.width));
+        const currentScrollLeft = scrollContainer?.scrollLeft || 0;
+        const x = touchClientX - freshRect.left + currentScrollLeft;
+        const dragPercentage = Math.max(0, Math.min(1, x / freshTotalWidth));
         const dragTime = dragPercentage * viewportDuration;
         const dragFrame = Math.round(dragTime * fps);
         onFrameChange(dragFrame);
       });
 
-      // Auto-scroll near edges
-      const x = moveTouch.clientX - freshRect.left;
-      const edgeThreshold = 50;
-      if (x < edgeThreshold) {
-        startAutoScroll('left');
-      } else if (x > freshRect.width - edgeThreshold) {
-        startAutoScroll('right');
-      } else {
-        stopAutoScroll();
+      // Auto-scroll near edges (use scroll container for edge detection)
+      const scrollRect = scrollContainer?.getBoundingClientRect();
+      if (scrollRect) {
+        const relativeX = moveTouch.clientX - scrollRect.left;
+        const edgeThreshold = 50;
+        if (relativeX < edgeThreshold) {
+          startAutoScroll('left');
+        } else if (relativeX > scrollRect.width - edgeThreshold) {
+          startAutoScroll('right');
+        } else {
+          stopAutoScroll();
+        }
       }
     };
 
@@ -260,6 +278,7 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
 
   return (
     <div
+      ref={containerRef}
       className={`timeline-markers-container relative bg-[var(--background)] border-b border-[var(--border)] cursor-pointer select-none ${isDragging ? 'cursor-grabbing' : ''}`}
       style={{ height: `${TIMELINE_CONSTANTS.MARKERS_HEIGHT}px` }}
       onMouseDown={handleMouseDown}

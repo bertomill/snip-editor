@@ -186,18 +186,23 @@ export function generateCollapsedTracks({
       }
     }
 
+    const clip = clips[clipIndex];
+    const videoSrc = clip?.url || '';
+
     videoItems.push({
       id: `video-seg-${segIndex}`,
       trackId: 'video-track',
       start: collapsedTime,
       end: collapsedTime + segDuration,
       type: TrackItemType.VIDEO,
-      label: (clips[clipIndex]?.file?.name || `Clip ${clipIndex + 1}`).slice(0, 15),
+      label: (clip?.file?.name || `Clip ${clipIndex + 1}`).slice(0, 15),
       data: {
         clipIndex,
         originalStart: seg.start,
         originalEnd: seg.end,
-        url: clips[clipIndex]?.url,
+        url: clip?.url,
+        videoSrc,
+        cacheKey: clip?.file?.name || `clip-${clipIndex}`,
       },
     });
 

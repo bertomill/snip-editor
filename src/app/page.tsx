@@ -25,6 +25,7 @@ import { MediaLibraryPanel } from "@/components/media-library";
 import { MediaLibraryProvider } from "@/contexts/MediaLibraryContext";
 import { MediaFile } from "@/types/media";
 import { CaptionPreview } from "@/components/CaptionPreview";
+import { TextOverlayPreview } from "@/components/TextOverlayPreview";
 import { ProjectsProvider, useProjects } from "@/contexts/ProjectsContext";
 import { ProjectFeed } from "@/components/projects";
 import { ProjectData } from "@/types/project";
@@ -2538,7 +2539,12 @@ function EditStep({
             end: clipStartTime + clip.duration,
             type: TrackItemType.VIDEO,
             label: (clip.file?.name || `Clip ${i + 1}`).slice(0, 15),
-            data: { clipIndex: i, url: clip.url },
+            data: {
+              clipIndex: i,
+              url: clip.url,
+              videoSrc: clip.url,
+              cacheKey: clip.file?.name || `clip-${i}`,
+            },
           };
         }),
       };
@@ -2847,19 +2853,37 @@ function EditStep({
 
       // Skip deleted words during playback (word-level granularity)
       if (isPlaying && deletedWordIds.size > 0 && allWords.length > 0) {
+        // Find current word or the next upcoming word
         const currentWord = allWords.find(
           (w) => globalTime >= w.start && globalTime < w.end
         );
 
-        if (currentWord && deletedWordIds.has(currentWord.id)) {
+        // Also check: are we in a gap approaching a deleted word?
+        const upcomingWord = allWords.find(
+          (w) => globalTime < w.start && w.start - globalTime < 0.1 // within 100ms
+        );
+
+        const wordToCheck = currentWord || (upcomingWord && deletedWordIds.has(upcomingWord.id) ? upcomingWord : null);
+
+        if (wordToCheck && deletedWordIds.has(wordToCheck.id)) {
           // Find next non-deleted word
-          const currentWordIndex = allWords.indexOf(currentWord);
+          const wordIndex = allWords.indexOf(wordToCheck);
           let nextWord: TranscriptWord | undefined;
 
-          for (let i = currentWordIndex + 1; i < allWords.length; i++) {
+          for (let i = wordIndex + 1; i < allWords.length; i++) {
             if (!deletedWordIds.has(allWords[i].id)) {
               nextWord = allWords[i];
               break;
+            }
+          }
+
+          // If we're at the first deleted word, also search from beginning
+          if (!nextWord && wordIndex > 0) {
+            for (let i = wordIndex - 1; i >= 0; i--) {
+              if (!deletedWordIds.has(allWords[i].id) && allWords[i].end <= globalTime) {
+                // We're past this word, continue forward from wordIndex
+                break;
+              }
             }
           }
 
@@ -2872,6 +2896,9 @@ function EditStep({
               .slice(0, nextWord.clipIndex)
               .reduce((acc, clip) => acc + clip.duration, 0);
             video.currentTime = nextWord.start - clipStartTime;
+            // Ensure video keeps playing after seek
+            video.play().catch(() => {});
+            return; // Exit to avoid duplicate processing
           } else {
             // No more words, end playback
             video.pause();
@@ -2902,6 +2929,9 @@ function EditStep({
               .slice(0, nextSegment.clipIndex)
               .reduce((acc, clip) => acc + clip.duration, 0);
             video.currentTime = nextSegment.start - clipStartTime;
+            // Ensure video keeps playing after seek
+            video.play().catch(() => {});
+            return; // Exit to avoid duplicate processing
           } else {
             // No more segments, end playback
             video.pause();
@@ -3318,6 +3348,11 @@ function EditStep({
                     positionY={overlayState.captionPositionY}
                     onPositionChange={setCaptionPosition}
                   />
+                  {/* Text overlay preview */}
+                  <TextOverlayPreview
+                    textOverlays={overlayState.textOverlays}
+                    currentTimeMs={currentTime * 1000}
+                  />
                 </>
               )}
               {videoError && (
@@ -3640,6 +3675,7 @@ function EditStep({
               // TODO: Open add content menu (clips, text, stickers, etc.)
               console.log('Add content clicked');
             }}
+            onOpenTranscript={() => setShowTranscriptDrawer(true)}
           />
         )}
       </div>
@@ -3997,7 +4033,7 @@ function MobileVideoPanel({
   allWords: TranscriptWord[];
   deletedWordIds: Set<string>;
   currentTime: number;
-  overlayState: { showCaptionPreview: boolean; captionPositionY: number };
+  overlayState: { showCaptionPreview: boolean; captionPositionY: number; textOverlays: TextOverlay[] };
   setCaptionPosition: (y: number) => void;
   formatTime: (seconds: number) => string;
   activeDuration: number;
@@ -4054,6 +4090,11 @@ function MobileVideoPanel({
               positionY={overlayState.captionPositionY}
               onPositionChange={setCaptionPosition}
             />
+            {/* Text overlay preview */}
+            <TextOverlayPreview
+              textOverlays={overlayState.textOverlays}
+              currentTimeMs={currentTime * 1000}
+            />
           </>
         )}
         {videoError && (
@@ -4093,7 +4134,7 @@ function MobileVideoPanel({
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            Script
+            Transcript
           </button>
         </div>
       </div>
@@ -4149,17 +4190,23 @@ function TranscriptDrawer({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center lg:hidden">
-      {/* Backdrop */}
+      {/* Tap to dismiss area (above drawer) */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bottom-[50vh]"
         onClick={onClose}
       />
 
-      {/* Drawer */}
-      <div className="relative w-full bg-[#1C1C1E] rounded-t-2xl p-4 max-h-[80vh] overflow-hidden animate-slide-up">
+      {/* Semi-transparent drawer that slides up over video */}
+      <div
+        className="relative w-full bg-black/70 backdrop-blur-md rounded-t-2xl p-4 max-h-[50vh] overflow-hidden animate-slide-up"
+        style={{ boxShadow: '0 -4px 30px rgba(0,0,0,0.3)' }}
+      >
+        {/* Drag handle indicator */}
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 bg-white/30 rounded-full" />
+
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">Script</h3>
+        <div className="flex items-center justify-between mb-3 mt-2">
+          <h3 className="text-base font-semibold text-white/90">Transcript</h3>
           <div className="flex items-center gap-3">
             {(deletedSegments.size > 0 || deletedWordIds.size > 0 || deletedPauseIds.size > 0) && (
               <button
@@ -4171,9 +4218,9 @@ function TranscriptDrawer({
             )}
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
             >
-              <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -4181,7 +4228,7 @@ function TranscriptDrawer({
         </div>
 
         {/* Content */}
-        <div className="h-[calc(80vh-80px)] overflow-y-auto">
+        <div className="h-[calc(50vh-70px)] overflow-y-auto">
           {isTranscribing ? (
             <div className="flex flex-col items-center justify-center h-full gap-4">
               <div className="w-12 h-12 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin" />

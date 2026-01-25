@@ -32,6 +32,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   onPause,
   showPlaybackControls = false,
   onAddContent,
+  onOpenTranscript,
 }) => {
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -162,6 +163,7 @@ export const Timeline: React.FC<TimelineProps> = ({
         onPlay={onPlay}
         onPause={onPause}
         showPlaybackControls={showPlaybackControls}
+        onOpenTranscript={onOpenTranscript}
       />
 
       {/* Tracks container - flex layout */}

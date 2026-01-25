@@ -203,11 +203,14 @@ export const useTimelineZoom = (
         const currentDistance = getTouchDistance(touches);
         const center = getTouchCenter(touches);
 
-        // Calculate zoom based on pinch distance change
+        // Calculate zoom based on pinch distance change with sensitivity multiplier
         const distanceRatio = currentDistance / touchState.initialDistance;
+        // Apply sensitivity: amplify the pinch effect (2x sensitivity)
+        const sensitivityMultiplier = 2.0;
+        const amplifiedRatio = 1 + (distanceRatio - 1) * sensitivityMultiplier;
         const newScale = Math.min(
           ZOOM_CONSTRAINTS.max,
-          Math.max(ZOOM_CONSTRAINTS.min, touchState.initialScale * distanceRatio)
+          Math.max(ZOOM_CONSTRAINTS.min, touchState.initialScale * amplifiedRatio)
         );
 
         // Calculate pan based on center point movement
@@ -262,9 +265,12 @@ export const useTimelineZoom = (
       const scrollContainer = timelineRef?.current?.parentElement;
       if (!scrollContainer) return;
 
+      // Apply sensitivity multiplier (2x) to trackpad pinch
+      const sensitivityMultiplier = 2.0;
+      const amplifiedScale = 1 + (gestureEvent.scale - 1) * sensitivityMultiplier;
       const newScale = Math.min(
         ZOOM_CONSTRAINTS.max,
-        Math.max(ZOOM_CONSTRAINTS.min, touchStateRef.current.initialScale * gestureEvent.scale)
+        Math.max(ZOOM_CONSTRAINTS.min, touchStateRef.current.initialScale * amplifiedScale)
       );
 
       if (Math.abs(newScale - zoomState.scale) > 0.01) {

@@ -10,6 +10,7 @@ interface TimelineTrackProps {
   totalDuration: number;
   selectedItemIds: string[];
   onItemSelect: (itemId: string) => void;
+  onSeek?: (time: number) => void;
   onDragStart: (item: TimelineItemType, clientX: number, clientY: number, action: "move" | "resize-start" | "resize-end") => void;
   onDrag: (clientX: number, clientY: number) => void;
   onDragEnd: () => void;
@@ -22,12 +23,19 @@ export const TimelineTrack: React.FC<TimelineTrackProps> = ({
   totalDuration,
   selectedItemIds,
   onItemSelect,
+  onSeek,
   onDragStart,
   onDrag,
   onDragEnd,
   isDragging,
   onAddContent,
 }) => {
+  // Check if this is the script track (thinner styling)
+  const isScriptTrack = track.id === 'script-track';
+  const trackHeight = isScriptTrack
+    ? TIMELINE_CONSTANTS.SCRIPT_TRACK_HEIGHT
+    : TIMELINE_CONSTANTS.TRACK_HEIGHT;
+
   // Calculate position for add button (after last item)
   const lastItemEnd = track.items.length > 0
     ? Math.max(...track.items.map(item => item.end))
@@ -37,7 +45,7 @@ export const TimelineTrack: React.FC<TimelineTrackProps> = ({
   return (
     <div
       className="relative border-b border-[#282828] bg-[#181818]"
-      style={{ height: `${TIMELINE_CONSTANTS.TRACK_HEIGHT}px` }}
+      style={{ height: `${trackHeight}px` }}
     >
       {track.items.map((item) => (
         <TimelineItem
@@ -46,6 +54,7 @@ export const TimelineTrack: React.FC<TimelineTrackProps> = ({
           totalDuration={totalDuration}
           isSelected={selectedItemIds.includes(item.id)}
           onSelect={() => onItemSelect(item.id)}
+          onSeek={onSeek}
           onDragStart={onDragStart}
           onDrag={onDrag}
           onDragEnd={onDragEnd}

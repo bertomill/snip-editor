@@ -6,8 +6,11 @@ export const TIMELINE_CONSTANTS = {
 
   // Track height - taller for easier interaction
   TRACK_HEIGHT: 52,
-
   TRACK_ITEM_HEIGHT: 44,
+
+  // Script track - thinner for secondary content
+  SCRIPT_TRACK_HEIGHT: 36,
+  SCRIPT_TRACK_ITEM_HEIGHT: 28,
 
   // Row handles width
   HANDLE_WIDTH: 80,
@@ -18,11 +21,11 @@ export const TIMELINE_CONSTANTS = {
 
 export const ZOOM_CONSTRAINTS = {
   min: 0.5,
-  max: 10,
-  step: 0.15,
-  default: 3,  // Start zoomed in so words are visible in script track
-  zoomStep: 0.15,
-  wheelStep: 0.1,
+  max: 50,        // Increased for Descript-level zoom (frame-by-frame editing)
+  step: 0.3,      // Increased for more responsive button clicks
+  default: 5,     // Start zoomed in so words are visible in script track
+  zoomStep: 0.3,  // Increased for more responsive zoom
+  wheelStep: 0.2, // Increased for more responsive Ctrl+scroll
   transitionDuration: 100,
   easing: "cubic-bezier(0.4, 0.0, 0.2, 1)",
 };

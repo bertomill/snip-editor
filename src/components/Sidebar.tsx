@@ -14,6 +14,7 @@ import { TextOverlay, StickerOverlay, ClipTransition, defaultAudioSettings } fro
 import { TransitionRefinementPanel } from '@/components/overlays/TransitionRefinementPanel'
 import { generateAutoTransitions } from '@/lib/transitions/auto-transitions'
 import { MobileTextDrawer } from '@/components/overlays/MobileTextDrawer'
+import { MobileCaptionsDrawer } from '@/components/overlays/MobileCaptionsDrawer'
 import { HookSuggestionsPanel } from '@/components/HookSuggestionsPanel'
 
 type PanelType = 'text' | 'stickers' | 'filters' | 'audio' | 'cuts' | 'captions' | 'suggestions' | null;
@@ -327,6 +328,12 @@ export function Sidebar({
         totalDurationMs={totalDurationMs}
         currentTimeMs={currentTimeMs}
       />
+
+      {/* Mobile Captions Drawer - CapCut style slide-up */}
+      <MobileCaptionsDrawer
+        isOpen={activePanel === 'captions'}
+        onClose={() => setActivePanel(null)}
+      />
     </>
   )
 }
@@ -437,11 +444,6 @@ function MobileBottomToolbar({
           label="Captions"
           onClick={onOpenCaptionsDrawer}
           active={captionsEnabled}
-        />
-        <ToolbarButton
-          icon={<TranscriptIcon />}
-          label="Script"
-          onClick={onOpenTranscript}
         />
         <ToolbarButton
           icon={<MobileFilterIcon />}

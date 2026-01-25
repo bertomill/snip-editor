@@ -14,6 +14,7 @@ interface TimelineHeaderProps {
   onPlay?: () => void;
   onPause?: () => void;
   showPlaybackControls?: boolean;
+  onOpenTranscript?: () => void;
 }
 
 export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
@@ -26,6 +27,7 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
   onPlay,
   onPause,
   showPlaybackControls = false,
+  onOpenTranscript,
 }) => {
   const handlePlayPause = () => {
     if (isPlaying) {
@@ -72,6 +74,19 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
         <div className="text-sm font-mono text-white">
           {formatTime(currentTime)} / {formatTime(totalDuration)}
         </div>
+
+        {/* Transcript button */}
+        {onOpenTranscript && (
+          <button
+            onClick={onOpenTranscript}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#282828] hover:bg-[#333] text-white text-xs font-medium transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Transcript
+          </button>
+        )}
       </div>
 
       {/* Right: Zoom controls */}
@@ -84,10 +99,6 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
           >
             −
           </button>
-
-          <span className="text-xs text-[#888] min-w-[40px] text-center">
-            {Math.round(zoomScale * 100)}%
-          </span>
 
           <button
             onClick={handleZoomIn}

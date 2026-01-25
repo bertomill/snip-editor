@@ -59,6 +59,13 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
     onSelectedItemsChange?.([itemId]);
   };
 
+  // Handle seeking to a specific time (from clicking on items)
+  const handleSeek = useCallback((time: number) => {
+    if (!onFrameChange) return;
+    const frame = Math.round(time * fps);
+    onFrameChange(frame);
+  }, [fps, onFrameChange]);
+
   const contentStyles = getTimelineContentStyles(zoomScale);
 
   // Auto-scroll when scrubbing near edges
@@ -178,18 +185,7 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      {/* Markers */}
-      <TimelineMarkers
-        totalDuration={totalDuration}
-        viewportDuration={viewportDuration}
-        currentFrame={currentFrame}
-        fps={fps}
-        zoomScale={zoomScale}
-        onFrameChange={onFrameChange}
-        scrollContainerRef={scrollContainerRef}
-      />
-
-      {/* Tracks container with scroll */}
+      {/* Single scroll container for both markers and tracks */}
       <div
         ref={(el) => {
           // Assign to both refs
@@ -203,23 +199,37 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
         <div
           className="relative cursor-pointer"
           style={contentStyles}
-          onMouseDown={handleTracksMouseDown}
         >
-          {/* Tracks */}
-          {tracks.map((track) => (
-            <TimelineTrack
-              key={track.id}
-              track={track}
-              totalDuration={viewportDuration}
-              selectedItemIds={selectedItemIds}
-              onItemSelect={handleItemSelect}
-              onDragStart={onDragStart}
-              onDrag={onDrag}
-              onDragEnd={onDragEnd}
-              isDragging={isDragging}
-              onAddContent={track.id === 'video-track' ? onAddContent : undefined}
-            />
-          ))}
+          {/* Markers - now inside the scrollable zoomed content */}
+          <TimelineMarkers
+            totalDuration={totalDuration}
+            viewportDuration={viewportDuration}
+            currentFrame={currentFrame}
+            fps={fps}
+            zoomScale={zoomScale}
+            onFrameChange={onFrameChange}
+            scrollContainerRef={scrollContainerRef}
+          />
+
+          {/* Tracks area */}
+          <div onMouseDown={handleTracksMouseDown}>
+            {/* Tracks */}
+            {tracks.map((track) => (
+              <TimelineTrack
+                key={track.id}
+                track={track}
+                totalDuration={viewportDuration}
+                selectedItemIds={selectedItemIds}
+                onItemSelect={handleItemSelect}
+                onSeek={handleSeek}
+                onDragStart={onDragStart}
+                onDrag={onDrag}
+                onDragEnd={onDragEnd}
+                isDragging={isDragging}
+                onAddContent={track.id === 'video-track' ? onAddContent : undefined}
+              />
+            ))}
+          </div>
 
           {/* Playhead line that extends through tracks */}
           <TimelinePlayhead position={playheadPosition} />
