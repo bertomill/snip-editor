@@ -1,11 +1,12 @@
 'use client';
 
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { fetchFile } from '@ffmpeg/util';
 
 let ffmpeg: FFmpeg | null = null;
 let ffmpegLoaded = false;
 let ffmpegLoading = false;
+let loadPromise: Promise<FFmpeg> | null = null;
 
 /**
  * Load FFmpeg.wasm (only once)
@@ -15,45 +16,48 @@ async function loadFFmpeg(onProgress?: (progress: number) => void): Promise<FFmp
     return ffmpeg;
   }
 
-  if (ffmpegLoading) {
-    // Wait for existing load to complete
-    while (ffmpegLoading) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    if (ffmpeg) return ffmpeg;
+  // If already loading, wait for the existing promise
+  if (ffmpegLoading && loadPromise) {
+    return loadPromise;
   }
 
   ffmpegLoading = true;
 
-  try {
-    ffmpeg = new FFmpeg();
+  loadPromise = (async () => {
+    try {
+      ffmpeg = new FFmpeg();
 
-    // Log progress
-    ffmpeg.on('log', ({ message }) => {
-      console.log('[FFmpeg]', message);
-    });
+      // Log progress
+      ffmpeg.on('log', ({ message }) => {
+        console.log('[FFmpeg]', message);
+      });
 
-    ffmpeg.on('progress', ({ progress }) => {
-      onProgress?.(progress * 100);
-    });
+      ffmpeg.on('progress', ({ progress }) => {
+        onProgress?.(progress * 100);
+      });
 
-    // Load FFmpeg core from local files (avoids CORS issues with cross-origin isolation)
-    const baseURL = window.location.origin;
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg/ffmpeg-core.wasm`, 'application/wasm'),
-    });
+      // Load FFmpeg core from CDN using direct URLs
+      // Using direct URLs instead of toBlobURL to avoid module loading issues in production
+      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+      await ffmpeg.load({
+        coreURL: `${baseURL}/ffmpeg-core.js`,
+        wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+      });
 
-    ffmpegLoaded = true;
-    console.log('[FFmpeg] Loaded successfully');
-    return ffmpeg;
-  } catch (error) {
-    console.error('[FFmpeg] Failed to load:', error);
-    ffmpeg = null;
-    throw error;
-  } finally {
-    ffmpegLoading = false;
-  }
+      ffmpegLoaded = true;
+      console.log('[FFmpeg] Loaded successfully');
+      return ffmpeg;
+    } catch (error) {
+      console.error('[FFmpeg] Failed to load:', error);
+      ffmpeg = null;
+      ffmpegLoaded = false;
+      throw error;
+    } finally {
+      ffmpegLoading = false;
+    }
+  })();
+
+  return loadPromise;
 }
 
 /**
@@ -120,7 +124,8 @@ function getExtension(filename: string): string {
 
 /**
  * Check if FFmpeg.wasm is supported in this browser
+ * Works in all modern browsers (single-threaded mode without SharedArrayBuffer)
  */
 export function isFFmpegSupported(): boolean {
-  return typeof SharedArrayBuffer !== 'undefined';
+  return typeof WebAssembly !== 'undefined';
 }
