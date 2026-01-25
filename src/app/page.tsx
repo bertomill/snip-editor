@@ -3835,8 +3835,36 @@ function EditStep({
       try {
         let response: Response;
 
-        // Use storage path if available (bypasses Vercel size limits)
-        if (clip.storagePath && clip.uploadStatus === 'complete') {
+        // ALWAYS prefer client-side audio extraction when available (avoids server FFmpeg dependency)
+        if (useClientExtraction && clip.file) {
+          console.log(`[Transcribe] Extracting audio from clip ${i + 1} client-side...`);
+          let audioFile: File;
+
+          try {
+            audioFile = await extractAudioFromVideo(clip.file, (progress) => {
+              setTranscribeProgress(baseProgress + (progress / clips.length) * 0.5);
+            });
+            console.log(`[Transcribe] Audio extracted: ${(audioFile.size / 1024 / 1024).toFixed(2)}MB`);
+          } catch (extractError) {
+            console.error(`[Transcribe] Client-side extraction failed:`, extractError);
+            alert(`Failed to extract audio from clip ${i + 1}. Please try again.`);
+            continue;
+          }
+
+          // Send audio directly to API (no server-side FFmpeg needed)
+          const formData = new FormData();
+          formData.append('audio', audioFile);
+          formData.append('detectSilence', 'true');
+          formData.append('silenceAggressiveness', silenceAggressiveness);
+
+          setTranscribeProgress(baseProgress + (100 / clips.length) * 0.6);
+
+          response = await fetch("/api/transcribe", {
+            method: "POST",
+            body: formData,
+          });
+        } else if (clip.storagePath && clip.uploadStatus === 'complete') {
+          // Fallback: Use storage path (requires Lambda with FFmpeg)
           console.log(`[Transcribe] Using storage path for clip ${i + 1}: ${clip.storagePath}`);
           setTranscribeProgress(baseProgress + (100 / clips.length) * 0.5);
 
@@ -3854,21 +3882,12 @@ function EditStep({
             }),
           });
         } else {
-          // Fallback: Extract audio client-side and send directly
+          // Last resort: Send video directly (won't work on Vercel without FFmpeg)
+          console.log(`[Transcribe] Sending video directly for clip ${i + 1}...`);
           let fileToUpload: File;
 
-          if (useClientExtraction) {
-            console.log(`[Transcribe] Extracting audio from clip ${i + 1} client-side...`);
-            try {
-              fileToUpload = await extractAudioFromVideo(clip.file, (progress) => {
-                setTranscribeProgress(baseProgress + (progress / clips.length) * 0.5);
-              });
-              console.log(`[Transcribe] Audio extracted: ${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB`);
-            } catch (extractError) {
-              console.warn(`[Transcribe] Client-side extraction failed:`, extractError);
-              fileToUpload = clip.file;
-            }
-          } else {
+          // This path is for legacy fallback only
+          {
             fileToUpload = clip.file;
             if (!clip.file.type || clip.file.type === 'application/octet-stream') {
               const ext = clip.file.name.split('.').pop()?.toLowerCase();
@@ -3885,18 +3904,9 @@ function EditStep({
           }
 
           const formData = new FormData();
-          const fileKey = fileToUpload.type.startsWith('audio/') ? 'audio' : 'video';
-          formData.append(fileKey, fileToUpload);
-
-          if (fileKey === 'video' && audioSettings.enhanceAudio) {
-            formData.append("enhanceAudio", "true");
-            formData.append("noiseReduction", String(audioSettings.noiseReduction));
-            formData.append("noiseReductionStrength", audioSettings.noiseReductionStrength);
-            formData.append("loudnessNormalization", String(audioSettings.loudnessNormalization));
-          }
-
-          formData.append("detectSilence", "true");
-          formData.append("silenceAggressiveness", silenceAggressiveness);
+          formData.append('video', fileToUpload);
+          formData.append('detectSilence', 'true');
+          formData.append('silenceAggressiveness', silenceAggressiveness);
 
           setTranscribeProgress(baseProgress + (100 / clips.length) * 0.6);
 
@@ -3907,8 +3917,7 @@ function EditStep({
 
           // Handle 413 (file too large for direct upload)
           if (response.status === 413) {
-            const fileSizeMB = fileToUpload.size / (1024 * 1024);
-            alert(`Clip ${i + 1} (${fileSizeMB.toFixed(1)}MB) exceeds the upload limit. Please wait for storage upload to complete.`);
+            alert(`Clip ${i + 1} is too large. Client-side audio extraction is required but not supported in this browser.`);
             continue;
           }
         }
