@@ -1,7 +1,6 @@
 {
   "functions": {
     "src/app/api/**/*.ts": {
-      "maxBodySize": "100mb",
       "maxDuration": 300
     }
   }
