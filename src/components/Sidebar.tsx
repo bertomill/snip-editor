@@ -312,7 +312,6 @@ export function Sidebar({
           onCreateProject={onCreateProject}
           onOpenTextDrawer={() => togglePanel('text')}
           onOpenStickerDrawer={() => togglePanel('stickers')}
-          onOpenFilterDrawer={() => togglePanel('filters')}
           onOpenAudioDrawer={() => togglePanel('audio')}
           onOpenCaptionsDrawer={() => togglePanel('captions')}
           onOpenTranscript={onOpenTranscript}
@@ -392,7 +391,6 @@ function MobileBottomToolbar({
   onCreateProject,
   onOpenTextDrawer,
   onOpenStickerDrawer,
-  onOpenFilterDrawer,
   onOpenAudioDrawer,
   onOpenCaptionsDrawer,
   onOpenTranscript,
@@ -403,7 +401,6 @@ function MobileBottomToolbar({
   onCreateProject?: () => void
   onOpenTextDrawer?: () => void
   onOpenStickerDrawer?: () => void
-  onOpenFilterDrawer?: () => void
   onOpenAudioDrawer?: () => void
   onOpenCaptionsDrawer?: () => void
   onOpenTranscript?: () => void
@@ -444,11 +441,6 @@ function MobileBottomToolbar({
           label="Captions"
           onClick={onOpenCaptionsDrawer}
           active={captionsEnabled}
-        />
-        <ToolbarButton
-          icon={<MobileFilterIcon />}
-          label="Filters"
-          onClick={onOpenFilterDrawer}
         />
       </div>
     </nav>

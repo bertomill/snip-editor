@@ -149,6 +149,7 @@ export const SnipMain: React.FC<SnipCompositionProps> = ({
               <AbsoluteFill>
                 <Video
                   src={clip.filePath}
+                  volume={clip.volume ?? 1}
                   style={{
                     width: "100%",
                     height: "100%",

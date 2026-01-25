@@ -66,7 +66,8 @@ export const useTimelineZoom = (
 
   const handleZoom = useCallback(
     (delta: number, clientX?: number) => {
-      const scrollContainer = timelineRef?.current?.parentElement;
+      // timelineRef.current IS the scroll container (assigned in timeline-content.tsx)
+      const scrollContainer = timelineRef?.current;
       if (!scrollContainer) return;
 
       const newZoom = calculateNewZoom(zoomState.scale, delta);
@@ -78,31 +79,35 @@ export const useTimelineZoom = (
         return;
       }
 
+      // Get the zoomed content element (first child of scroll container)
+      const zoomedContent = scrollContainer.firstElementChild as HTMLElement;
+      const contentWidth = zoomedContent?.scrollWidth || scrollContainer.scrollWidth;
+
       let zoomCenterX: number;
 
       if (clientX !== undefined) {
+        // Mouse/touch position provided - zoom to that point
         zoomCenterX = clientX;
       } else if (currentFrame !== undefined && fps && totalDuration) {
+        // No position provided - zoom to playhead position
         const currentTimeInSeconds = currentFrame / fps;
-        const timelineElement = timelineRef?.current;
+        const viewportDuration = calculateViewportDuration(totalDuration, zoomState.scale);
+        const playheadPercentage = currentTimeInSeconds / viewportDuration;
+        const playheadPositionInContent = playheadPercentage * contentWidth;
+        const playheadInViewport = playheadPositionInContent - scrollContainer.scrollLeft;
 
-        if (timelineElement) {
-          const viewportDuration = calculateViewportDuration(totalDuration, zoomState.scale);
-          const playheadPercentage = (currentTimeInSeconds / viewportDuration) * 100;
-          const timelineWidth = timelineElement.offsetWidth;
-          const playheadPositionInTimeline = (playheadPercentage / 100) * timelineWidth;
-          const playheadInViewport = playheadPositionInTimeline - scrollContainer.scrollLeft;
-          zoomCenterX = rect.left + playheadInViewport;
-        } else {
-          zoomCenterX = rect.left + rect.width / 2;
-        }
+        // Clamp to viewport bounds
+        zoomCenterX = rect.left + Math.max(0, Math.min(rect.width, playheadInViewport));
       } else {
+        // Fallback to center of viewport
         zoomCenterX = rect.left + rect.width / 2;
       }
 
+      // Calculate position relative to content (accounting for scroll)
       const relativeX = zoomCenterX - rect.left + scrollContainer.scrollLeft;
       const zoomFactor = newZoom / zoomState.scale;
-      const newScroll = relativeX * zoomFactor - (zoomCenterX - rect.left);
+      // New scroll position keeps the zoom center point in the same viewport position
+      const newScroll = Math.max(0, relativeX * zoomFactor - (zoomCenterX - rect.left));
 
       scrollContainer.scrollLeft = newScroll;
       setZoomState({ scale: newZoom, scroll: newScroll });
@@ -155,7 +160,7 @@ export const useTimelineZoom = (
   // Handle touch start for pinch/pan
   const handleTouchStart = useCallback(
     (event: TouchEvent) => {
-      const scrollContainer = timelineRef?.current?.parentElement;
+      const scrollContainer = timelineRef?.current;
       if (!scrollContainer) return;
 
       const touches = event.touches;
@@ -191,7 +196,7 @@ export const useTimelineZoom = (
   // Handle touch move for pinch zoom and pan
   const handleTouchMove = useCallback(
     (event: TouchEvent) => {
-      const scrollContainer = timelineRef?.current?.parentElement;
+      const scrollContainer = timelineRef?.current;
       if (!scrollContainer) return;
 
       const touches = event.touches;
@@ -262,7 +267,7 @@ export const useTimelineZoom = (
     (event: Event) => {
       event.preventDefault();
       const gestureEvent = event as GestureEvent;
-      const scrollContainer = timelineRef?.current?.parentElement;
+      const scrollContainer = timelineRef?.current;
       if (!scrollContainer) return;
 
       // Apply sensitivity multiplier (2x) to trackpad pinch
@@ -275,17 +280,32 @@ export const useTimelineZoom = (
 
       if (Math.abs(newScale - zoomState.scale) > 0.01) {
         const rect = scrollContainer.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const relativeX = centerX - rect.left + scrollContainer.scrollLeft;
+
+        // Zoom to playhead position if available, otherwise center
+        let zoomCenterX: number;
+        if (currentFrame !== undefined && fps && totalDuration) {
+          const currentTimeInSeconds = currentFrame / fps;
+          const viewportDuration = calculateViewportDuration(totalDuration, zoomState.scale);
+          const zoomedContent = scrollContainer.firstElementChild as HTMLElement;
+          const contentWidth = zoomedContent?.scrollWidth || scrollContainer.scrollWidth;
+          const playheadPercentage = currentTimeInSeconds / viewportDuration;
+          const playheadPositionInContent = playheadPercentage * contentWidth;
+          const playheadInViewport = playheadPositionInContent - scrollContainer.scrollLeft;
+          zoomCenterX = rect.left + Math.max(0, Math.min(rect.width, playheadInViewport));
+        } else {
+          zoomCenterX = rect.left + rect.width / 2;
+        }
+
+        const relativeX = zoomCenterX - rect.left + scrollContainer.scrollLeft;
         const zoomFactor = newScale / zoomState.scale;
-        const newScroll = relativeX * zoomFactor - (centerX - rect.left);
+        const newScroll = Math.max(0, relativeX * zoomFactor - (zoomCenterX - rect.left));
 
         scrollContainer.scrollLeft = newScroll;
         setZoomState({ scale: newScale, scroll: newScroll });
         currentScaleRef.current = newScale;
       }
     },
-    [timelineRef, zoomState.scale]
+    [timelineRef, zoomState.scale, currentFrame, fps, totalDuration]
   );
 
   const handleGestureEnd = useCallback(() => {

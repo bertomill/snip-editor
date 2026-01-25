@@ -44,6 +44,7 @@ export interface VideoClipInput {
   startMs: number;   // Start time in the composition
   endMs: number;     // End time in the composition
   originalDuration: number;  // Original clip duration in seconds
+  volume?: number;   // Audio volume (0-1, default 1)
 }
 
 import { TextOverlay, StickerOverlay, ClipTransition } from '@/types/overlays';

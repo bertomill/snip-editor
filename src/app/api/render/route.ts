@@ -19,6 +19,7 @@ interface RenderRequestBody {
     data: string; // Base64 encoded video data
     filename: string;
     duration: number; // seconds
+    volume?: number; // Audio volume (0-1, default 1)
   }[];
   segments: TranscriptSegment[];
   deletedSegmentIndices: number[];
@@ -254,6 +255,7 @@ export async function POST(request: NextRequest) {
         startMs: currentTimeMs,
         endMs: currentTimeMs + durationMs,
         originalDuration: clipDuration,
+        volume: clip.volume ?? 1,
       });
       currentTimeMs += durationMs;
     }

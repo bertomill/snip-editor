@@ -53,6 +53,33 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
 
   const currentTimeInSeconds = currentFrame / fps;
   const playheadPosition = (currentTimeInSeconds / viewportDuration) * 100;
+  const isPlayheadDragging = useRef(false);
+
+  // Playhead drag handlers
+  const handlePlayheadDragStart = useCallback(() => {
+    isPlayheadDragging.current = true;
+  }, []);
+
+  const handlePlayheadDrag = useCallback((deltaX: number) => {
+    if (!onFrameChange || !scrollContainerRef.current) return;
+
+    const container = scrollContainerRef.current;
+    const totalWidth = container.scrollWidth;
+
+    // Convert pixel delta to time delta
+    const timeDelta = (deltaX / totalWidth) * viewportDuration;
+    const frameDelta = timeDelta * fps;
+
+    // Calculate new frame, clamping to valid range
+    const maxFrame = Math.floor(totalDuration * fps);
+    const newFrame = Math.max(0, Math.min(maxFrame, Math.round(currentFrame + frameDelta)));
+
+    onFrameChange(newFrame);
+  }, [currentFrame, fps, totalDuration, viewportDuration, onFrameChange]);
+
+  const handlePlayheadDragEnd = useCallback(() => {
+    isPlayheadDragging.current = false;
+  }, []);
 
   const handleItemSelect = (itemId: string) => {
     onItemSelect?.(itemId);
@@ -232,7 +259,12 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
           </div>
 
           {/* Playhead line that extends through tracks */}
-          <TimelinePlayhead position={playheadPosition} />
+          <TimelinePlayhead
+            position={playheadPosition}
+            onDragStart={handlePlayheadDragStart}
+            onDrag={handlePlayheadDrag}
+            onDragEnd={handlePlayheadDragEnd}
+          />
 
           {/* Ghost element for drag preview */}
           {ghostElement && isDragging && (
