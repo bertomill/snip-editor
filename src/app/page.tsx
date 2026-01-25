@@ -30,8 +30,6 @@ import { ProjectData } from "@/types/project";
 import { ResizableBottomPanel } from "@/components/ResizableBottomPanel";
 import { extractAudioFromVideo, isFFmpegSupported } from "@/lib/audio/extract-audio";
 import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
-import { createClient } from "@/lib/supabase/client";
-import { v4 as uuidv4 } from "uuid";
 
 type AppView = "feed" | "editor";
 type EditorStep = "upload" | "edit" | "export";
@@ -742,7 +740,7 @@ function HomeContent() {
     };
   }, [clips]);
 
-  // Upload a video directly to Supabase Storage (bypasses Vercel's 4.5MB API limit)
+  // Upload a video using presigned URL (bypasses Vercel's 4.5MB API limit completely)
   const uploadVideoToStorage = useCallback(async (clipIndex: number, file: File) => {
     try {
       // Update status to uploading
@@ -750,35 +748,38 @@ function HomeContent() {
         idx === clipIndex ? { ...clip, uploadStatus: 'uploading' as const } : clip
       ));
 
-      const supabase = createClient();
+      console.log(`[Upload] Getting presigned URL for: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
 
-      // Get current user (may be null for anonymous)
-      const { data: { user } } = await supabase.auth.getUser();
+      // Step 1: Get presigned upload URL from server (tiny request)
+      const presignedResponse = await fetch('/api/storage/presigned-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type || 'video/mp4',
+          folder: 'transcribe',
+        }),
+      });
 
-      // Generate storage path
-      const timestamp = Date.now();
-      const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-
-      let storagePath: string;
-      if (user) {
-        storagePath = `${user.id}/transcribe/${timestamp}-${sanitizedFilename}`;
-      } else {
-        const sessionId = uuidv4();
-        storagePath = `anonymous/${timestamp}-${sessionId}/${sanitizedFilename}`;
+      if (!presignedResponse.ok) {
+        const error = await presignedResponse.json();
+        throw new Error(`Failed to get upload URL: ${error.error || presignedResponse.statusText}`);
       }
 
-      console.log(`[Upload] Uploading directly to Supabase: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+      const { uploadUrl, storagePath } = await presignedResponse.json();
+      console.log(`[Upload] Got presigned URL, uploading to: ${storagePath}`);
 
-      // Upload directly to Supabase Storage (no 4.5MB limit)
-      const { error: uploadError } = await supabase.storage
-        .from('videos')
-        .upload(storagePath, file, {
-          contentType: file.type || 'video/mp4',
-          upsert: false,
-        });
+      // Step 2: Upload directly to Supabase using presigned URL (bypasses Vercel)
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type || 'video/mp4',
+        },
+        body: file,
+      });
 
-      if (uploadError) {
-        throw new Error(`Storage upload failed: ${uploadError.message}`);
+      if (!uploadResponse.ok) {
+        throw new Error(`Storage upload failed: ${uploadResponse.statusText}`);
       }
 
       // Update clip with storage path

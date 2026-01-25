@@ -3,8 +3,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { MediaFile, MediaType } from '@/types/media';
 import { useUser } from '@/lib/supabase/hooks';
-import { createClient } from '@/lib/supabase/client';
-import { v4 as uuidv4 } from 'uuid';
 
 interface MediaLibraryContextValue {
   mediaFiles: MediaFile[];
@@ -51,7 +49,7 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id]);
 
-  // Upload a new media file directly to Supabase (bypasses Vercel's 4.5MB API limit)
+  // Upload a new media file using presigned URL (bypasses Vercel's 4.5MB API limit)
   const uploadMedia = useCallback(async (file: File): Promise<MediaFile | null> => {
     if (!user?.id) {
       setError('You must be logged in to upload files');
@@ -66,8 +64,6 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const supabase = createClient();
-
       // Determine media type
       const getMediaType = (mimeType: string): MediaType => {
         if (mimeType.startsWith('video/')) return 'video';
@@ -77,39 +73,58 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
       };
 
       const mediaType = getMediaType(file.type);
-      const fileId = uuidv4();
-      const fileExtension = file.name.split('.').pop() || '';
-      const storagePath = `${user.id}/${fileId}.${fileExtension}`;
 
-      // Upload directly to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('videos')
-        .upload(storagePath, file, {
+      // Step 1: Get presigned upload URL from server
+      const presignedResponse = await fetch('/api/storage/presigned-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
           contentType: file.type,
-          upsert: false,
-        });
+          folder: 'media',
+        }),
+      });
 
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        setError('Failed to upload file: ' + uploadError.message);
-        return null;
+      if (!presignedResponse.ok) {
+        const error = await presignedResponse.json();
+        throw new Error(error.error || 'Failed to get upload URL');
       }
 
-      // Get signed URL
-      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-        .from('videos')
-        .createSignedUrl(storagePath, 60 * 60 * 24 * 7); // 7 days
+      const { uploadUrl, storagePath } = await presignedResponse.json();
 
-      if (signedUrlError) {
-        console.error('Signed URL error:', signedUrlError);
+      // Step 2: Upload directly to Supabase using presigned URL
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed: ${uploadResponse.statusText}`);
       }
+
+      // Step 3: Get a signed URL for viewing
+      const signedUrlResponse = await fetch('/api/media/signed-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath }),
+      });
+
+      let viewUrl = '';
+      if (signedUrlResponse.ok) {
+        const { signedUrl } = await signedUrlResponse.json();
+        viewUrl = signedUrl;
+      }
+
+      // Extract fileId from storage path
+      const fileId = storagePath.split('/').pop()?.split('.')[0] || storagePath;
 
       // Create media file record
       const mediaFile: MediaFile = {
         id: fileId,
         name: file.name,
         type: mediaType,
-        url: signedUrlData?.signedUrl || '',
+        url: viewUrl,
         size: file.size,
         userId: user.id,
         createdAt: new Date().toISOString(),
