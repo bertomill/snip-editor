@@ -153,7 +153,7 @@ export function ScriptEditor({
       {/* Transcript content */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-y-auto p-4 bg-[#111111] rounded-xl"
+        className="flex-1 overflow-y-auto px-1"
         onClick={handleContainerClick}
       >
         <div className="leading-relaxed text-base space-y-0.5">
@@ -179,11 +179,6 @@ export function ScriptEditor({
           ))}
         </div>
       </div>
-
-      {/* Help text */}
-      <p className="text-[#45454F] text-xs mt-3 text-center">
-        Click to seek &bull; Shift-click to select range &bull; Delete to remove &bull; Cmd+Z to undo
-      </p>
     </div>
   );
 }

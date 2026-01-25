@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { startRendering, saveVideoToTemp, convertVideoToMp4 } from "@/lib/renderer/remotion-renderer";
+import { startLambdaRendering, isLambdaConfigured } from "@/lib/renderer/lambda-renderer";
 import { transcriptToCaption, wordsToCaption, SnipCompositionProps, TranscriptSegment, TranscriptWord } from "@/lib/types/composition";
 import { getCaptionTemplate, getDefaultCaptionTemplate } from "@/lib/caption-templates";
 import { TextOverlay, StickerOverlay, ClipTransition } from "@/types/overlays";
@@ -323,7 +324,14 @@ export async function POST(request: NextRequest) {
     };
 
     // Start the render (pass renderId so it matches the temp folder)
-    await startRendering(inputProps, body.userId, renderId);
+    // Use Lambda rendering if configured, otherwise fall back to local
+    if (isLambdaConfigured()) {
+      console.log(`🚀 Using Lambda rendering`);
+      await startLambdaRendering(inputProps, body.userId, renderId);
+    } else {
+      console.log(`💻 Using local rendering (Lambda not configured)`);
+      await startRendering(inputProps, body.userId, renderId);
+    }
 
     return NextResponse.json({
       renderId,

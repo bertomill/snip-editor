@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useUser, useSignOut } from '@/lib/supabase'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -59,6 +59,30 @@ export function Sidebar({
   const signOut = useSignOut()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [activePanel, setActivePanel] = useState<PanelType>(null)
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false)
+  const [isDarkMode, setIsDarkMode] = useState(true)
+
+  // Load theme from localStorage on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('snip-theme')
+    if (savedTheme === 'light') {
+      setIsDarkMode(false)
+      document.documentElement.classList.add('light-mode')
+    }
+  }, [])
+
+  // Toggle theme
+  const toggleTheme = () => {
+    const newMode = !isDarkMode
+    setIsDarkMode(newMode)
+    if (newMode) {
+      document.documentElement.classList.remove('light-mode')
+      localStorage.setItem('snip-theme', 'dark')
+    } else {
+      document.documentElement.classList.add('light-mode')
+      localStorage.setItem('snip-theme', 'light')
+    }
+  }
 
   // Get overlay context for captions, overlays, and transitions
   const { state: overlayState, toggleCaptionPreview, addTextOverlay, addSticker, setFilter, setAudioSettings, updateTransition, removeTransition, setTransitions, setCaptionTemplate } = useOverlay()
@@ -199,28 +223,49 @@ export function Sidebar({
 
         </nav>
 
-        {/* User name at bottom */}
-        {!loading && user && (
+        {/* Feedback and Light Mode at bottom */}
+        <div className="mt-auto flex flex-col items-center gap-2 w-full px-2">
+          {/* Feedback */}
           <button
-            onClick={() => setShowProfileMenu(!showProfileMenu)}
-            className="mt-auto pt-4 flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors group"
+            onClick={() => setShowFeedbackModal(true)}
+            className="w-full flex items-center gap-2 px-2 py-2 text-gray-400 hover:text-white hover:bg-[#1C1C1E] rounded-lg transition-colors"
           >
-            <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-[#3b82f6] to-[#1e3a8a] flex items-center justify-center text-white font-medium text-xs group-hover:scale-105 transition-transform">
-              {user.user_metadata?.avatar_url ? (
-                <img
-                  src={user.user_metadata.avatar_url}
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                user.email?.[0].toUpperCase()
-              )}
-            </div>
-            <span className="text-[9px] font-medium truncate max-w-[60px] text-center">
-              {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'Account'}
-            </span>
+            <FeedbackIcon />
+            <span className="text-[10px] font-medium">Feedback</span>
           </button>
-        )}
+
+          {/* Light Mode Toggle */}
+          <button
+            onClick={toggleTheme}
+            className="w-full flex items-center gap-2 px-2 py-2 text-gray-400 hover:text-white hover:bg-[#1C1C1E] rounded-lg transition-colors"
+          >
+            {isDarkMode ? <MoonIcon /> : <SunIcon />}
+            <span className="text-[10px] font-medium">{isDarkMode ? 'Dark mode' : 'Light mode'}</span>
+          </button>
+
+          {/* User name */}
+          {!loading && user && (
+            <button
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="pt-2 flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors group"
+            >
+              <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-[#3b82f6] to-[#1e3a8a] flex items-center justify-center text-white font-medium text-xs group-hover:scale-105 transition-transform">
+                {user.user_metadata?.avatar_url ? (
+                  <img
+                    src={user.user_metadata.avatar_url}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  user.email?.[0].toUpperCase()
+                )}
+              </div>
+              <span className="text-[9px] font-medium truncate max-w-[60px] text-center">
+                {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'Account'}
+              </span>
+            </button>
+          )}
+        </div>
 
       </aside>
       )}
@@ -277,6 +322,13 @@ export function Sidebar({
         isOpen={activePanel === 'captions'}
         onClose={() => setActivePanel(null)}
       />
+
+      {/* Feedback Modal */}
+      <FeedbackModal
+        isOpen={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+        userEmail={user?.email}
+      />
     </>
   )
 }
@@ -325,6 +377,145 @@ function MobileProjectsBottomBar({
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
         </button>
+      </div>
+    </div>
+  )
+}
+
+// Feedback Modal Component
+function FeedbackModal({
+  isOpen,
+  onClose,
+  userEmail,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  userEmail?: string
+}) {
+  const [feedback, setFeedback] = useState('')
+  const [feedbackType, setFeedbackType] = useState<'bug' | 'feature' | 'general'>('general')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+
+  const handleSubmit = async () => {
+    if (!feedback.trim()) return
+
+    setIsSubmitting(true)
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedback: feedback.trim(),
+          type: feedbackType,
+          email: userEmail,
+        }),
+      })
+
+      if (response.ok) {
+        setSubmitted(true)
+        setTimeout(() => {
+          onClose()
+          setFeedback('')
+          setSubmitted(false)
+        }, 2000)
+      }
+    } catch (error) {
+      console.error('Failed to submit feedback:', error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div className="relative bg-[#1C1C1E] rounded-2xl w-full max-w-md mx-4 overflow-hidden shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2C2C2E]">
+          <h2 className="text-lg font-semibold text-white">Send Feedback</h2>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+          >
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {submitted ? (
+          <div className="p-8 flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center">
+              <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="text-white font-medium">Thank you for your feedback!</p>
+          </div>
+        ) : (
+          <>
+            {/* Content */}
+            <div className="p-5 space-y-4">
+              {/* Feedback Type */}
+              <div>
+                <label className="block text-xs text-[#8E8E93] mb-2">Feedback Type</label>
+                <div className="flex gap-2">
+                  {(['general', 'feature', 'bug'] as const).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => setFeedbackType(type)}
+                      className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium capitalize transition-all ${
+                        feedbackType === type
+                          ? 'bg-[#4A8FE7] text-white'
+                          : 'bg-[#2C2C2E] text-[#8E8E93] hover:bg-[#3C3C3E]'
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Feedback Text */}
+              <div>
+                <label className="block text-xs text-[#8E8E93] mb-2">Your Feedback</label>
+                <textarea
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  placeholder="Tell us what you think..."
+                  rows={4}
+                  className="w-full bg-[#2C2C2E] border border-[#3C3C3E] rounded-lg px-4 py-3 text-sm text-white placeholder:text-[#636366] focus:outline-none focus:border-[#4A8FE7] transition-colors resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-4 border-t border-[#2C2C2E] flex justify-end gap-3">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-[#8E8E93] hover:bg-[#2C2C2E] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={!feedback.trim() || isSubmitting}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-[#4A8FE7] text-white hover:bg-[#3A7FD7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isSubmitting ? 'Sending...' : 'Send Feedback'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -1395,6 +1586,31 @@ function TranscriptIcon() {
   return (
     <svg className="w-full h-full" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  )
+}
+
+// Theme and Feedback Icons
+function FeedbackIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+  )
+}
+
+function MoonIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+    </svg>
+  )
+}
+
+function SunIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
     </svg>
   )
 }

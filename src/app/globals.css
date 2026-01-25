@@ -449,3 +449,72 @@ textarea:focus-visible {
   position: relative;
   z-index: 2;
 }
+
+/* Light Mode Theme */
+.light-mode {
+  --background: #f5f7fa;
+  --background-sidebar: #ffffff;
+  --background-content: #f0f2f5;
+  --background-elevated: #ffffff;
+  --background-card: #ffffff;
+  --background-card-hover: #f5f7fa;
+  --background-input: #f0f2f5;
+
+  --accent: #4A8FE7;
+  --accent-hover: #3A7FD7;
+  --accent-muted: rgba(74, 143, 231, 0.12);
+  --accent-glow: rgba(74, 143, 231, 0.3);
+
+  --text-primary: #1a1a1a;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --text-hint: #d1d5db;
+
+  --border: #e5e7eb;
+  --border-subtle: #f0f2f5;
+
+  --success: #22c55e;
+  --error: #ef4444;
+  --warning: #f59e0b;
+}
+
+.light-mode body {
+  background: var(--background);
+  color: var(--text-primary);
+}
+
+.light-mode .glass {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.light-mode ::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+}
+
+.light-mode .bg-\[\#1C1C1E\] {
+  background-color: #ffffff !important;
+}
+
+.light-mode .bg-\[\#2C2C2E\] {
+  background-color: #f5f7fa !important;
+}
+
+.light-mode .bg-\[\#3C3C3E\] {
+  background-color: #e5e7eb !important;
+}
+
+.light-mode .text-white {
+  color: var(--text-primary) !important;
+}
+
+.light-mode .text-gray-400 {
+  color: var(--text-secondary) !important;
+}
+
+.light-mode .text-\[\#8E8E93\] {
+  color: var(--text-secondary) !important;
+}
+
+.light-mode .border-\[\#2C2C2E\] {
+  border-color: var(--border) !important;
+}

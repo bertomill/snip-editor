@@ -113,11 +113,8 @@ export const TimelineHeader: React.FC<TimelineHeaderProps> = ({
         {onOpenTranscript && (
           <button
             onClick={onOpenTranscript}
-            className="lg:hidden flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border border-[var(--border)] hover:border-[var(--accent)] text-white text-sm font-medium transition-all shadow-[0_2px_0_0_rgba(0,0,0,0.4)] hover:shadow-[0_1px_0_0_rgba(0,0,0,0.4)] hover:translate-y-[1px] active:shadow-none active:translate-y-[2px]"
+            className="lg:hidden px-4 py-2 rounded-full bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border border-[var(--border)] hover:border-[var(--accent)] text-white text-sm font-medium transition-all shadow-[0_2px_0_0_rgba(0,0,0,0.4)] hover:shadow-[0_1px_0_0_rgba(0,0,0,0.4)] hover:translate-y-[1px] active:shadow-none active:translate-y-[2px]"
           >
-            <svg className="w-4 h-4 text-[var(--accent)]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
             Transcript
           </button>
         )}

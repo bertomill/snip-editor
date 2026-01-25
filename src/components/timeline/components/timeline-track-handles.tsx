@@ -106,10 +106,6 @@ export const TimelineTrackHandles: React.FC<TimelineTrackHandlesProps> = ({
               </div>
             </div>
 
-            {/* Track name */}
-            <span className="truncate flex-1">
-              {track.name || `Track ${index + 1}`}
-            </span>
           </div>
         );
       })}

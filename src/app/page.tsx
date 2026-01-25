@@ -30,7 +30,8 @@ import { ProjectData } from "@/types/project";
 import { ResizableBottomPanel } from "@/components/ResizableBottomPanel";
 import VideoProcessingLoader, { VideoProcessingLoaderCompact } from "@/components/VideoProcessingLoader";
 import { Sidebar } from "@/components/Sidebar";
-import { ChatPanel } from "@/components/ChatPanel";
+import { AIChatInput } from "@/components/AIChatInput";
+import { VapiVoiceButton } from "@/components/VapiVoiceButton";
 import { extractAudioFromVideo, isFFmpegSupported } from "@/lib/audio/extract-audio";
 import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
 
@@ -115,6 +116,8 @@ function HomeContent() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showProjectsDrawer, setShowProjectsDrawer] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
 
   // Social connections state
   const [xConnection, setXConnection] = useState<{ connected: boolean; username?: string } | null>(null);
@@ -196,6 +199,28 @@ function HomeContent() {
         .catch(() => setXConnection({ connected: false }));
     }
   }, [user]);
+
+  // Load theme from localStorage on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('snip-theme');
+    if (savedTheme === 'light') {
+      setIsDarkMode(false);
+      document.documentElement.classList.add('light-mode');
+    }
+  }, []);
+
+  // Toggle theme function
+  const toggleTheme = () => {
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    if (newMode) {
+      document.documentElement.classList.remove('light-mode');
+      localStorage.setItem('snip-theme', 'dark');
+    } else {
+      document.documentElement.classList.add('light-mode');
+      localStorage.setItem('snip-theme', 'light');
+    }
+  };
 
   // Handle X connection
   const handleConnectX = async () => {
@@ -1104,31 +1129,39 @@ function HomeContent() {
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="fixed left-0 top-0 bottom-0 z-[95] w-80 max-w-[85vw] bg-[var(--background-card)] border-r border-[var(--border)] overflow-hidden flex flex-col"
             >
-              {/* Drawer Header */}
+              {/* Drawer Header with Snip Logo and Close Button */}
               <div className="flex items-center justify-between px-5 py-4">
+                {/* Snip Logo with Swoosh Effect */}
+                <motion.div
+                  className="cursor-pointer font-bold text-3xl tracking-widest text-white italic"
+                  style={{
+                    textShadow: `
+                      2px 2px 0px #07bccc,
+                      4px 4px 0px #e601c0,
+                      6px 6px 0px #e9019a,
+                      8px 8px 0px #f40468,
+                      12px 12px 6px rgba(244, 4, 104, 0.3)
+                    `,
+                  }}
+                  whileHover={{
+                    textShadow: "none",
+                  }}
+                  transition={{
+                    duration: 0.2,
+                    ease: "easeOut",
+                  }}
+                >
+                  snip
+                </motion.div>
+
+                {/* Close Button */}
                 <button
                   onClick={() => { setShowProjectsDrawer(false); setShowAccountMenu(false); }}
-                  className="p-1.5 -ml-1.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors"
+                  className="p-1.5 -mr-1.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors"
                 >
                   <svg className="w-5 h-5 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </button>
-              </div>
-
-              {/* New Project Button */}
-              <div className="px-4 pb-4">
-                <button
-                  onClick={() => {
-                    handleCreateProject();
-                    setShowProjectsDrawer(false);
-                  }}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#4A8FE7] hover:bg-[#5A9FF7] text-white font-medium rounded-xl transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  New Project
                 </button>
               </div>
 
@@ -1222,6 +1255,43 @@ function HomeContent() {
                     ) : (
                       <span className="ml-auto text-xs text-[#636366] group-hover:text-white">Connect</span>
                     )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Settings Section - Feedback & Theme */}
+              <div className="px-4 py-3 border-t border-[var(--border)]">
+                <div className="space-y-1">
+                  {/* Feedback */}
+                  <button
+                    onClick={() => setShowFeedbackModal(true)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-[#4A8FE7]/10 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-[#4A8FE7]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                    </div>
+                    <span className="text-white text-sm font-medium">Feedback</span>
+                  </button>
+
+                  {/* Light/Dark Mode Toggle */}
+                  <button
+                    onClick={toggleTheme}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-[#8E8E93]/10 flex items-center justify-center">
+                      {isDarkMode ? (
+                        <svg className="w-4 h-4 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                      )}
+                    </div>
+                    <span className="text-white text-sm font-medium">{isDarkMode ? 'Dark mode' : 'Light mode'}</span>
                   </button>
                 </div>
               </div>
@@ -1376,13 +1446,13 @@ function HomeContent() {
           </div>
         )}
 
-        <div className="min-h-screen flex flex-col bg-canva-gradient pb-24 md:pb-0">
-        <header className="sticky top-0 z-50 flex items-center justify-between px-3 sm:px-8 pt-6 pb-2 sm:py-4 bg-transparent">
+        <div className="min-h-screen flex flex-col bg-canva-gradient pb-24 md:pb-0 relative">
+        <header className="z-[100] flex items-center justify-between px-3 sm:px-8 pt-4 pb-2 sm:py-4 bg-transparent fixed top-0 left-0 right-0">
           <div className="flex items-center gap-3">
             {/* Hamburger menu for projects */}
             <button
               onClick={() => setShowProjectsDrawer(true)}
-              className="p-2 -ml-2 rounded-lg text-white hover:bg-[var(--background-elevated)] transition-colors"
+              className="p-2 -ml-2 rounded-lg text-white hover:bg-white/10 transition-colors"
               title="Projects"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -1395,19 +1465,21 @@ function HomeContent() {
               <button
                 onClick={saveProject}
                 disabled={isSaving || !hasUnsavedChanges}
-                className={`text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 font-medium disabled:opacity-50 flex items-center gap-1.5 sm:gap-2 transition-all duration-300 hover:bg-white/10 ${
-                  showSaveSuccess ? 'text-green-400 border-green-400/30' : 'text-white'
+                className={`text-xs sm:text-sm px-3 sm:px-5 py-2 sm:py-2.5 rounded-full backdrop-blur-xl font-medium disabled:opacity-50 flex items-center gap-1.5 sm:gap-2 transition-all duration-300 ${
+                  showSaveSuccess
+                    ? 'bg-[#00D4FF]/20 text-[#00D4FF] border border-[#00D4FF]/30'
+                    : 'bg-white/10 text-white border border-white/20 hover:bg-white/15 hover:border-[#00D4FF]/30'
                 }`}
               >
                 {isSaving ? (
                   <>
-                    <span className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    <span className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-[#00D4FF] border-t-transparent rounded-full animate-spin" />
                     <span className="hidden sm:inline">Saving...</span>
                   </>
                 ) : showSaveSuccess ? (
                   <>
                     <svg
-                      className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-400 animate-scale-in"
+                      className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#00D4FF] animate-scale-in"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -1430,7 +1502,7 @@ function HomeContent() {
               <button
                 onClick={() => setShowExportDrawer(true)}
                 disabled={exportState.status !== 'idle' && exportState.status !== 'done' && exportState.status !== 'error'}
-                className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-full bg-[#4A8FE7]/90 backdrop-blur-xl text-white font-medium border border-[#4A8FE7]/50 shadow-lg shadow-[#4A8FE7]/25 hover:bg-[#4A8FE7] hover:shadow-[#4A8FE7]/40 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="relative text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-full bg-[#FF0080] text-white font-semibold shadow-[0_0_20px_rgba(255,0,128,0.4),2px_2px_0px_#00D4FF] hover:shadow-[0_0_25px_rgba(255,0,128,0.5),3px_3px_0px_#00D4FF] hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {exportState.status !== 'idle' && exportState.status !== 'done' && exportState.status !== 'error'
                   ? 'Exporting...'
@@ -1497,6 +1569,13 @@ function HomeContent() {
             startBackgroundExport();
           }}
           isExporting={exportState.status !== 'idle' && exportState.status !== 'done' && exportState.status !== 'error'}
+        />
+
+        {/* Feedback Modal */}
+        <FeedbackModal
+          isOpen={showFeedbackModal}
+          onClose={() => setShowFeedbackModal(false)}
+          userEmail={user?.email}
         />
       </div>
     </MediaLibraryProvider>
@@ -1878,6 +1957,19 @@ function UploadStep({
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasTriggered = useRef(false);
+  const clipsScrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll clips to the right when files change
+  useEffect(() => {
+    if (clipsScrollRef.current && selectedFiles.length > 0) {
+      setTimeout(() => {
+        clipsScrollRef.current?.scrollTo({
+          left: clipsScrollRef.current.scrollWidth,
+          behavior: 'smooth'
+        });
+      }, 100);
+    }
+  }, [selectedFiles.length]);
 
   // Auto-trigger file picker on mount when autoTrigger is true
   useEffect(() => {
@@ -2051,18 +2143,44 @@ function UploadStep({
         Your next viral moment starts here
       </p>
 
-      {/* Upload button - primary action */}
+      {/* Upload button - primary action with swoosh effect */}
       <div className="mb-6">
-        <button
+        <motion.button
           onClick={() => fileInputRef.current?.click()}
-          className="w-full max-w-xs px-8 py-4 bg-[#4A8FE7] hover:bg-[#5A9FF7] text-white font-semibold rounded-2xl transition-all flex items-center justify-center gap-3 mx-auto shadow-lg shadow-[#4A8FE7]/25 hover:shadow-[#4A8FE7]/40 hover:scale-[1.02] active:scale-[0.98]"
+          className="relative w-full max-w-xs px-8 py-4 bg-gradient-to-br from-[#FF6B9F] via-[#C44FE2] to-[#6B5BFF] text-white font-bold text-lg rounded-2xl flex items-center justify-center gap-3 mx-auto cursor-pointer tracking-wide"
+          initial={{
+            boxShadow: `
+              4px 4px 0px #07bccc,
+              8px 8px 0px #e601c0,
+              12px 12px 0px #e9019a,
+              16px 16px 0px #f40468,
+              20px 20px 15px rgba(244, 4, 104, 0.3)
+            `,
+          }}
+          whileHover={{
+            boxShadow: `
+              0px 0px 0px #07bccc,
+              0px 0px 0px #e601c0,
+              0px 0px 0px #e9019a,
+              0px 0px 0px #f40468,
+              0px 0px 0px rgba(244, 4, 104, 0)
+            `,
+            scale: 1.02,
+          }}
+          whileTap={{
+            scale: 0.98,
+          }}
+          transition={{
+            duration: 0.2,
+            ease: "easeOut",
+          }}
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
           Upload Videos
-        </button>
-        <p className="text-[#636366] text-sm mt-4">
+        </motion.button>
+        <p className="text-[#8E8E93] text-sm mt-6">
           or drag and drop
         </p>
       </div>
@@ -2081,7 +2199,7 @@ function UploadStep({
       {(selectedFiles.length > 0 || isProcessing) && (
         <div className="mt-8 animate-fade-in">
           {/* Thumbnail row */}
-          <div className="flex items-center gap-3 justify-center mb-6 overflow-x-auto pb-2 pt-3 px-3">
+          <div ref={clipsScrollRef} className="flex items-center gap-3 justify-start mb-6 overflow-x-auto pb-2 pt-3 px-3 scroll-smooth">
             {selectedFiles.map((file, index) => (
               <div key={index} className="relative flex-shrink-0 group">
                 <div className="w-20 h-28 rounded-lg overflow-hidden bg-[#2C2C2E] border border-[#3C3C3E]">
@@ -2121,6 +2239,18 @@ function UploadStep({
               <div className="w-20 h-28 rounded-lg bg-[#2C2C2E] border border-[#3C3C3E] flex items-center justify-center">
                 <div className="w-5 h-5 border-2 border-[#4A8FE7] border-t-transparent rounded-full animate-spin" />
               </div>
+            )}
+            {/* Add more button */}
+            {!isProcessing && (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex-shrink-0 w-20 h-28 rounded-lg bg-white/5 border border-dashed border-white/20 hover:bg-white/10 hover:border-white/30 transition-all flex flex-col items-center justify-center gap-1 group"
+              >
+                <svg className="w-5 h-5 text-white/40 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <span className="text-[10px] text-white/40 group-hover:text-white/60 transition-colors">Add more</span>
+              </button>
             )}
           </div>
 
@@ -2334,9 +2464,7 @@ function EditStep({
 
   const { state: overlayState, updateTextOverlay, updateSticker, removeTextOverlay, removeSticker, setCaptionPosition, setTransitions, setFilter, toggleCaptionPreview, addTextOverlay, addSticker, setCaptionTemplate, setAudioSettings } = useOverlay();
 
-  // AI Chat state
-  const [isChatOpen, setIsChatOpen] = useState(false);
-
+  
   const activeClip = clips[activeClipIndex];
 
   const totalDuration = useMemo(
@@ -3502,7 +3630,7 @@ function EditStep({
     <div className="w-full flex flex-col gap-0 lg:gap-6 animate-fade-in-up lg:px-6">
 
       {/* Mobile Video Panel */}
-      <div className="lg:hidden">
+      <div className="lg:hidden pt-0">
         <MobileVideoPanel
           activeClip={clips[activeClipIndex]}
           videoRef={mobileVideoRef}
@@ -3651,8 +3779,8 @@ function EditStep({
           <ActiveOverlayList />
         </div>
 
-        {/* Transcript Panel - Takes remaining space */}
-        <div className="flex-1 min-w-0 lg:min-w-[400px]">
+        {/* Transcript Panel - Hidden on desktop, shown via mobile drawer */}
+        <div className="hidden">
           <div className="flex items-center justify-between mb-4 gap-4">
             <p className="label">Transcript</p>
             <div className="flex gap-3">
@@ -3667,7 +3795,7 @@ function EditStep({
             </div>
           </div>
 
-          <div className="bg-black/40 backdrop-blur-xl border border-[var(--border)] rounded-2xl p-5 h-[520px]">
+          <div className="h-[520px]">
             {autoCutProcessing?.active ? (
               /* AutoCut skeleton - shows animated placeholder lines */
               <div className="space-y-3 h-full overflow-hidden">
@@ -3985,32 +4113,26 @@ function EditStep({
       </div>
     </ResizableBottomPanel>
 
-    {/* AI Chat Button - Floating */}
-    <button
-      onClick={() => setIsChatOpen(true)}
-      className="fixed bottom-24 right-4 lg:bottom-8 lg:right-8 z-40 w-14 h-14 bg-gradient-to-br from-[#4A8FE7] to-[#1e3a8a] hover:from-[#5A9FF7] hover:to-[#2e4a9a] rounded-full shadow-lg shadow-[#4A8FE7]/30 flex items-center justify-center transition-all hover:scale-105 active:scale-95"
-      title="Ask Eddie"
-    >
-      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-      </svg>
-    </button>
-
-    {/* AI Chat Panel */}
-    <ChatPanel
-      isOpen={isChatOpen}
-      onClose={() => setIsChatOpen(false)}
-      context={{
-        duration: totalDuration,
-        currentTime,
-        captionsEnabled: overlayState.showCaptionPreview,
-        currentFilter: overlayState.filterId,
-        textOverlayCount: overlayState.textOverlays.length,
-        stickerCount: overlayState.stickers.length,
-        hasTranscript: allWords.length > 0,
-      }}
-      onCommand={handleChatCommand}
-    />
+    {/* AI Chat Input + Voice - Floating */}
+    <div className="fixed bottom-6 left-4 right-4 lg:left-[296px] lg:right-8 z-40 flex justify-center">
+      <div className="flex items-center gap-3 w-full max-w-2xl">
+        <div className="flex-1">
+          <AIChatInput
+            context={{
+              duration: totalDuration,
+              currentTime,
+              captionsEnabled: overlayState.showCaptionPreview,
+              currentFilter: overlayState.filterId,
+              textOverlayCount: overlayState.textOverlays.length,
+              stickerCount: overlayState.stickers.length,
+              hasTranscript: allWords.length > 0,
+            }}
+            onCommand={handleChatCommand}
+          />
+        </div>
+        <VapiVoiceButton />
+      </div>
+    </div>
     </>
   );
 }
@@ -4397,9 +4519,9 @@ function MobileVideoPanel({
   } | null;
 }) {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col relative z-10 -mt-12">
       <div className="overflow-hidden relative w-full">
-        <div ref={previewContainerRef} className="aspect-[9/16] bg-black relative max-h-[65vh] mx-auto">
+        <div ref={previewContainerRef} className="aspect-[9/16] bg-black relative max-h-[80vh] mx-auto">
           {/* Upload Progress Overlay */}
           {isUploading && <UploadingOverlay progress={uploadProgress ?? 0} />}
           {/* AutoCut Processing Overlay */}
@@ -4698,6 +4820,145 @@ function TranscriptDrawer({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Feedback Modal Component
+function FeedbackModal({
+  isOpen,
+  onClose,
+  userEmail,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  userEmail?: string;
+}) {
+  const [feedback, setFeedback] = useState('');
+  const [feedbackType, setFeedbackType] = useState<'bug' | 'feature' | 'general'>('general');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!feedback.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedback: feedback.trim(),
+          type: feedbackType,
+          email: userEmail,
+        }),
+      });
+
+      if (response.ok) {
+        setSubmitted(true);
+        setTimeout(() => {
+          onClose();
+          setFeedback('');
+          setSubmitted(false);
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div className="relative bg-[#1C1C1E] rounded-2xl w-full max-w-md mx-4 overflow-hidden shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2C2C2E]">
+          <h2 className="text-lg font-semibold text-white">Send Feedback</h2>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+          >
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {submitted ? (
+          <div className="p-8 flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center">
+              <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="text-white font-medium">Thank you for your feedback!</p>
+          </div>
+        ) : (
+          <>
+            {/* Content */}
+            <div className="p-5 space-y-4">
+              {/* Feedback Type */}
+              <div>
+                <label className="block text-xs text-[#8E8E93] mb-2">Feedback Type</label>
+                <div className="flex gap-2">
+                  {(['general', 'feature', 'bug'] as const).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => setFeedbackType(type)}
+                      className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium capitalize transition-all ${
+                        feedbackType === type
+                          ? 'bg-[#4A8FE7] text-white'
+                          : 'bg-[#2C2C2E] text-[#8E8E93] hover:bg-[#3C3C3E]'
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Feedback Text */}
+              <div>
+                <label className="block text-xs text-[#8E8E93] mb-2">Your Feedback</label>
+                <textarea
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  placeholder="Tell us what you think..."
+                  rows={4}
+                  className="w-full bg-[#2C2C2E] border border-[#3C3C3E] rounded-lg px-4 py-3 text-sm text-white placeholder:text-[#636366] focus:outline-none focus:border-[#4A8FE7] transition-colors resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-4 border-t border-[#2C2C2E] flex justify-end gap-3">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-[#8E8E93] hover:bg-[#2C2C2E] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={!feedback.trim() || isSubmitting}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-[#4A8FE7] text-white hover:bg-[#3A7FD7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isSubmitting ? 'Sending...' : 'Send Feedback'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

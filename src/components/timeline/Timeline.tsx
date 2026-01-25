@@ -2,7 +2,7 @@
 
 import React, { useRef, useEffect, useCallback, RefObject } from 'react';
 import { TimelineProps, TimelineTrack } from './types';
-import { TimelineHeader, TimelineContent, TimelineTrackHandles } from './components';
+import { TimelineHeader, TimelineContent } from './components';
 import {
   useTimelineZoom,
   useTimelineInteractions,
@@ -68,7 +68,6 @@ export const Timeline: React.FC<TimelineProps> = ({
     handleItemMove: internalItemMove,
     handleItemResize: internalItemResize,
     handleItemsDelete: internalItemsDelete,
-    handleTrackReorder,
   } = useTimelineTracks({
     initialTracks,
     onTracksChange,
@@ -176,11 +175,6 @@ export const Timeline: React.FC<TimelineProps> = ({
 
       {/* Tracks container - flex layout */}
       <div className="timeline-tracks-wrapper flex flex-1 overflow-hidden relative">
-        {/* Track handles/labels */}
-        <div className="hidden md:block overflow-hidden">
-          <TimelineTrackHandles tracks={tracks} onTrackReorder={handleTrackReorder} />
-        </div>
-
         {/* Main timeline content */}
         <div className="timeline-content flex-1 relative bg-[#181818] overflow-hidden">
           <TimelineContent
