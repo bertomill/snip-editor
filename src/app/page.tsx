@@ -289,9 +289,17 @@ function HomeContent() {
 
   // Handle YouTube connection
   const handleConnectYouTube = async () => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
     try {
       const res = await fetch('/api/auth/youtube');
       const data = await res.json();
+      if (data.error === 'Unauthorized') {
+        router.push('/login');
+        return;
+      }
       if (data.url) {
         window.location.href = data.url;
       }
@@ -2483,7 +2491,6 @@ function EditStep({
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState<number | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isVideoLoading, setIsVideoLoading] = useState(false);
-  const [xPosts, setXPosts] = useState<Array<{ id: string; text: string; likes: number }>>([]);
 
   // Undo/Redo state for deleted words
   const [undoStack, setUndoStack] = useState<Set<string>[]>([]);
@@ -4271,7 +4278,7 @@ function EditStep({
         </div>
         <VapiVoiceButton
           transcript={fullTranscript}
-          currentFilter={overlayState.filterId}
+          currentFilter={overlayState.filterId ?? undefined}
           textOverlayCount={overlayState.textOverlays.length}
           stickerCount={overlayState.stickers.length}
           xPosts={xPosts}
