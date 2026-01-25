@@ -123,6 +123,76 @@ function getExtension(filename: string): string {
 }
 
 /**
+ * Convert a video file to browser-compatible MP4 using FFmpeg.wasm
+ * Used for MOV/HEVC files that can't play directly in browsers
+ */
+export async function convertVideoToMP4(
+  videoFile: File,
+  onProgress?: (progress: number) => void
+): Promise<{ file: File; url: string }> {
+  console.log(`[convertVideo] Starting conversion of ${videoFile.name} (${(videoFile.size / 1024 / 1024).toFixed(1)}MB)`);
+
+  const ff = await loadFFmpeg(onProgress);
+
+  const inputName = 'input' + getExtension(videoFile.name);
+  const outputName = 'output.mp4';
+
+  try {
+    // Write video file to FFmpeg virtual filesystem
+    const videoData = await fetchFile(videoFile);
+    await ff.writeFile(inputName, videoData);
+
+    // Convert to browser-compatible MP4 (H.264 + AAC)
+    // Using fast settings for quick preview conversion
+    await ff.exec([
+      '-i', inputName,
+      '-c:v', 'libx264',        // H.264 codec (widely supported)
+      '-preset', 'ultrafast',   // Fast encoding for preview
+      '-crf', '28',             // Lower quality for smaller file (preview only)
+      '-c:a', 'aac',            // AAC audio codec
+      '-b:a', '96k',            // Audio bitrate
+      '-movflags', '+faststart', // Enable fast start for web playback
+      '-y',                     // Overwrite output
+      outputName
+    ]);
+
+    // Read the output file
+    const mp4Data = await ff.readFile(outputName);
+
+    if (typeof mp4Data === 'string') {
+      throw new Error('Unexpected string data from FFmpeg');
+    }
+
+    // Create a copy with a standard ArrayBuffer
+    const mp4Bytes = new Uint8Array(mp4Data);
+    const mp4Blob = new Blob([mp4Bytes], { type: 'video/mp4' });
+    const mp4File = new File([mp4Blob], videoFile.name.replace(/\.[^.]+$/, '.mp4'), { type: 'video/mp4' });
+    const mp4Url = URL.createObjectURL(mp4Blob);
+
+    console.log(`[convertVideo] Converted: ${(mp4File.size / 1024 / 1024).toFixed(2)}MB (was ${(videoFile.size / 1024 / 1024).toFixed(1)}MB)`);
+
+    // Cleanup
+    await ff.deleteFile(inputName);
+    await ff.deleteFile(outputName);
+
+    return { file: mp4File, url: mp4Url };
+  } catch (error) {
+    console.error('[convertVideo] Failed:', error);
+    throw new Error('Failed to convert video to MP4');
+  }
+}
+
+/**
+ * Check if a file needs conversion for browser preview
+ */
+export function needsVideoConversion(file: File): boolean {
+  const filename = file.name.toLowerCase();
+  return filename.endsWith('.mov') ||
+         filename.endsWith('.hevc') ||
+         file.type === 'video/quicktime';
+}
+
+/**
  * Check if FFmpeg.wasm is supported in this browser
  * Works in all modern browsers (single-threaded mode without SharedArrayBuffer)
  */

@@ -34,7 +34,7 @@ import VideoProcessingLoader, { VideoProcessingLoaderCompact } from "@/component
 import { Sidebar } from "@/components/Sidebar";
 import { AIChatInput } from "@/components/AIChatInput";
 import { VapiVoiceButton } from "@/components/VapiVoiceButton";
-import { extractAudioFromVideo, isFFmpegSupported } from "@/lib/audio/extract-audio";
+import { extractAudioFromVideo, isFFmpegSupported, convertVideoToMP4, needsVideoConversion } from "@/lib/audio/extract-audio";
 import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
 import { FlipWords } from "@/components/ui/flip-words";
 import SwooshText from "@/components/ui/swoosh-text";
@@ -1055,11 +1055,10 @@ function HomeContent() {
     setStep("edit");
     setAutoCutEnabled(autoCut);
 
-    // Check which files need conversion upfront
-    const filesNeedingConversion = files.filter(file => {
-      const filename = file.name.toLowerCase();
-      return filename.endsWith('.mov') || filename.endsWith('.hevc') || file.type === 'video/quicktime';
-    });
+    // Check which files need conversion upfront (only if FFmpeg is supported)
+    const filesNeedingConversion = isFFmpegSupported()
+      ? files.filter(file => needsVideoConversion(file))
+      : [];
     const hasConversions = filesNeedingConversion.length > 0;
 
     // Initialize AutoCut processing overlay if enabled
@@ -1098,11 +1097,10 @@ function HomeContent() {
       }
 
       // Check if file needs conversion for browser preview (MOV/HEVC)
-      const filename = processedFile.name.toLowerCase();
-      const needsConversion = filename.endsWith('.mov') || filename.endsWith('.hevc') || processedFile.type === 'video/quicktime';
+      const needsConversion = needsVideoConversion(processedFile);
 
       let url: string;
-      if (needsConversion) {
+      if (needsConversion && isFFmpegSupported()) {
         conversionCount++;
         // Update progress for conversion
         if (autoCut) {
@@ -1115,23 +1113,17 @@ function HomeContent() {
           } : null);
         }
 
-        // Convert for browser preview
+        // Convert for browser preview using client-side FFmpeg.wasm
         try {
-          const formData = new FormData();
-          formData.append('video', processedFile);
-          const response = await fetch('/api/convert-preview', {
-            method: 'POST',
-            body: formData,
+          console.log(`[Upload] Converting ${processedFile.name} for browser preview...`);
+          const { url: mp4Url } = await convertVideoToMP4(processedFile, (progress) => {
+            console.log(`[Upload] Conversion progress: ${progress.toFixed(0)}%`);
           });
-          if (response.ok) {
-            const data = await response.json();
-            url = data.url;
-          } else {
-            // Fallback to blob URL (will show error but transcription still works)
-            url = URL.createObjectURL(processedFile);
-          }
-        } catch {
-          // Fallback to blob URL
+          url = mp4Url;
+          console.log(`[Upload] Conversion complete for ${processedFile.name}`);
+        } catch (error) {
+          console.error('[Upload] Client-side conversion failed:', error);
+          // Fallback to blob URL (will show error but transcription still works)
           url = URL.createObjectURL(processedFile);
         }
       } else {
