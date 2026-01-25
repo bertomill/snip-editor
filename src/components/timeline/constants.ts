@@ -20,7 +20,7 @@ export const ZOOM_CONSTRAINTS = {
   min: 0.5,
   max: 10,
   step: 0.15,
-  default: 1,
+  default: 3,  // Start zoomed in so words are visible in script track
   zoomStep: 0.15,
   wheelStep: 0.1,
   transitionDuration: 100,

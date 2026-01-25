@@ -71,24 +71,33 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
     };
   }, []);
 
-  // Calculate marker intervals based on zoom and screen width
+  // Calculate marker intervals to ensure minimum pixel spacing
   const getMarkerInterval = () => {
-    // Check if we're on mobile (< 768px)
+    // Target minimum spacing between markers in pixels
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const minPixelSpacing = isMobile ? 80 : 60;
 
-    if (isMobile) {
-      // Larger intervals for mobile to prevent cramping
-      if (zoomScale < 1) return 15;
-      if (zoomScale < 2) return 10;
-      if (zoomScale < 5) return 5;
-      return 2;
+    // Estimate container width (use a reasonable default if not available)
+    const containerWidth = containerRef.current?.offsetWidth ||
+      (typeof window !== 'undefined' ? window.innerWidth - 100 : 800);
+
+    // Calculate how many seconds fit per pixel at current zoom
+    const secondsPerPixel = viewportDuration / containerWidth;
+
+    // Calculate minimum time interval needed to achieve minimum pixel spacing
+    const minTimeInterval = secondsPerPixel * minPixelSpacing;
+
+    // Round to nice intervals (1, 2, 5, 10, 15, 30, 60 seconds, etc.)
+    const niceIntervals = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
+    let interval = niceIntervals.find(i => i >= minTimeInterval) || 600;
+
+    // Ensure we don't have too few markers (at least 3-4 visible)
+    const maxInterval = viewportDuration / 3;
+    if (interval > maxInterval && maxInterval > 0.5) {
+      interval = niceIntervals.filter(i => i <= maxInterval).pop() || 1;
     }
 
-    // Desktop intervals
-    if (zoomScale < 1) return 5;
-    if (zoomScale < 2) return 2;
-    if (zoomScale < 5) return 1;
-    return 0.5;
+    return interval;
   };
 
   const markerInterval = getMarkerInterval();
@@ -263,24 +272,28 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
           <div
             key={time}
             className="absolute top-0 flex flex-col items-center pointer-events-none"
-            style={{ left: `${position}%` }}
+            style={{ left: `${position}%`, transform: 'translateX(-50%)' }}
           >
             <div className="w-px h-3 bg-[#444]" />
-            <span className="text-[10px] text-[#888] mt-0.5">
+            <span className="text-[10px] text-[#888] mt-0.5 whitespace-nowrap">
               {formatTime(time)}
             </span>
           </div>
         );
       })}
 
-      {/* Playhead - draggable handle */}
+      {/* Playhead - draggable handle (Descript-style blue) */}
       <div
-        className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10"
-        style={{ left: `${playheadPosition}%`, pointerEvents: 'none' }}
+        className="absolute top-0 bottom-0 z-10"
+        style={{ left: `${playheadPosition}%`, pointerEvents: 'none', transform: 'translateX(-50%)' }}
       >
+        {/* Playhead handle - pentagon shape pointing down */}
         <div
-          className={`absolute -top-0 -translate-x-1/2 w-4 h-5 bg-red-500 rounded-sm hover:bg-red-400 transition-colors ${isDragging ? 'cursor-grabbing scale-110' : 'cursor-grab'}`}
-          style={{ pointerEvents: 'auto' }}
+          className={`absolute -top-0.5 left-1/2 -translate-x-1/2 w-4 h-5 bg-[#4A8FE7] hover:bg-[#5A9FF7] transition-colors ${isDragging ? 'cursor-grabbing scale-110' : 'cursor-grab'}`}
+          style={{
+            pointerEvents: 'auto',
+            clipPath: 'polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%)',
+          }}
           onMouseDown={(e) => {
             e.stopPropagation();
             handleMouseDown(e as unknown as React.MouseEvent<HTMLDivElement>);
@@ -290,6 +303,8 @@ export const TimelineMarkers: React.FC<TimelineMarkersProps> = ({
             handleTouchStart(e as unknown as React.TouchEvent<HTMLDivElement>);
           }}
         />
+        {/* Playhead line */}
+        <div className="absolute top-4 bottom-0 left-1/2 -translate-x-1/2 w-0.5 bg-[#4A8FE7]" />
       </div>
     </div>
   );

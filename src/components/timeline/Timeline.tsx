@@ -40,6 +40,12 @@ export const Timeline: React.FC<TimelineProps> = ({
     zoomScale,
     setZoomScale,
     handleWheelZoom,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+    handleGestureStart,
+    handleGestureChange,
+    handleGestureEnd,
   } = useTimelineZoom(timelineRef, currentFrame, fps, totalDuration);
 
   // Initialize interactions hook
@@ -94,14 +100,34 @@ export const Timeline: React.FC<TimelineProps> = ({
     selectedItemIds,
   });
 
-  // Add wheel zoom event listener
+  // Add zoom and gesture event listeners
   useEffect(() => {
     const element = timelineRef?.current;
     if (!element) return;
 
+    // Wheel zoom (Ctrl/Cmd + scroll)
     element.addEventListener("wheel", handleWheelZoom, { passive: false });
-    return () => element.removeEventListener("wheel", handleWheelZoom);
-  }, [handleWheelZoom]);
+
+    // Touch events for pinch zoom and pan on touch devices
+    element.addEventListener("touchstart", handleTouchStart, { passive: false });
+    element.addEventListener("touchmove", handleTouchMove, { passive: false });
+    element.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    // Safari gesture events for smoother trackpad pinch
+    element.addEventListener("gesturestart", handleGestureStart as EventListener, { passive: false });
+    element.addEventListener("gesturechange", handleGestureChange as EventListener, { passive: false });
+    element.addEventListener("gestureend", handleGestureEnd as EventListener, { passive: true });
+
+    return () => {
+      element.removeEventListener("wheel", handleWheelZoom);
+      element.removeEventListener("touchstart", handleTouchStart);
+      element.removeEventListener("touchmove", handleTouchMove);
+      element.removeEventListener("touchend", handleTouchEnd);
+      element.removeEventListener("gesturestart", handleGestureStart as EventListener);
+      element.removeEventListener("gesturechange", handleGestureChange as EventListener);
+      element.removeEventListener("gestureend", handleGestureEnd as EventListener);
+    };
+  }, [handleWheelZoom, handleTouchStart, handleTouchMove, handleTouchEnd, handleGestureStart, handleGestureChange, handleGestureEnd]);
 
   // Handle keyboard shortcuts for delete
   useEffect(() => {
