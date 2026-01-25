@@ -1,30 +1,17 @@
 /**
- * FFmpeg binary path - tries multiple sources for Vercel/serverless compatibility
- * Uses dynamic requires to avoid Turbopack bundling issues with native binaries
+ * FFmpeg binary path
+ * - Uses ffmpeg-static on Vercel production (webpack build)
+ * - Falls back to system ffmpeg for local dev with Turbopack
  */
 import { existsSync } from "fs";
 
 let cachedPath: string | null = null;
 
-// Get the ffmpeg path, with multiple fallbacks
+// Get the ffmpeg path
 export function getFFmpegPath(): string {
   if (cachedPath) return cachedPath;
 
-  // Try @ffmpeg-installer/ffmpeg first (best for Vercel)
-  try {
-    // Dynamic require to avoid Turbopack bundling issues
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
-    if (ffmpegInstaller?.path && existsSync(ffmpegInstaller.path)) {
-      console.log(`[ffmpeg] Using ffmpeg-installer: ${ffmpegInstaller.path}`);
-      cachedPath = ffmpegInstaller.path;
-      return cachedPath;
-    }
-  } catch {
-    // ffmpeg-installer not available
-  }
-
-  // Try ffmpeg-static as fallback
+  // Try ffmpeg-static (works on Vercel production with webpack)
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ffmpegStatic = require("ffmpeg-static");
@@ -34,11 +21,11 @@ export function getFFmpegPath(): string {
       return cachedPath;
     }
   } catch {
-    // ffmpeg-static not available
+    // ffmpeg-static not available or path doesn't exist
   }
 
-  // Fall back to system ffmpeg (for local dev)
-  console.log(`[ffmpeg] No bundled ffmpeg found, using system ffmpeg`);
+  // Fall back to system ffmpeg (for local dev with Turbopack)
+  console.log(`[ffmpeg] Using system ffmpeg`);
   cachedPath = "ffmpeg";
   return cachedPath;
 }
