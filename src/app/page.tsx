@@ -1940,7 +1940,30 @@ function UploadStep({
         canvas.height = 160;
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          // Calculate center-crop to maintain aspect ratio
+          const videoAspect = video.videoWidth / video.videoHeight;
+          const canvasAspect = canvas.width / canvas.height;
+
+          let sourceX = 0;
+          let sourceY = 0;
+          let sourceWidth = video.videoWidth;
+          let sourceHeight = video.videoHeight;
+
+          if (videoAspect > canvasAspect) {
+            // Video is wider - crop horizontally
+            sourceWidth = video.videoHeight * canvasAspect;
+            sourceX = (video.videoWidth - sourceWidth) / 2;
+          } else {
+            // Video is taller - crop vertically
+            sourceHeight = video.videoWidth / canvasAspect;
+            sourceY = (video.videoHeight - sourceHeight) / 2;
+          }
+
+          ctx.drawImage(
+            video,
+            sourceX, sourceY, sourceWidth, sourceHeight,
+            0, 0, canvas.width, canvas.height
+          );
         }
         const thumbnail = canvas.toDataURL('image/jpeg', 0.7);
         URL.revokeObjectURL(url);
