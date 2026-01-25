@@ -54,19 +54,6 @@ function selectRandomTransition(seed: number): TransitionType {
 }
 
 /**
- * Best dramatic transitions for clip boundaries
- */
-const CLIP_BOUNDARY_TRANSITIONS: TransitionType[] = [
-  'zoom-blur',
-  'color-flash',
-  'rgb-split',
-  'spin-zoom',
-  'zoom-punch',
-  'bounce-pop',
-  'strobe',
-];
-
-/**
  * Generate auto-transitions for a list of clips
  *
  * Rules:
@@ -216,20 +203,6 @@ export interface CutPoint {
   cutTimeMs: number;  // Timestamp in the OUTPUT video where the cut occurs
   silenceDuration: number; // How long the removed silence was (for selecting transition type)
 }
-
-/**
- * Dramatic transition pool for internal cuts
- * These are the most visually striking transitions
- */
-const DRAMATIC_TRANSITIONS: TransitionType[] = [
-  'zoom-blur',      // Heavy dramatic zoom
-  'rgb-split',      // Glitchy color split
-  'color-flash',    // Pink/cyan flash
-  'zoom-punch',     // Classic punch
-  'spin-zoom',      // Rotation combo
-  'bounce-pop',     // Bouncy effect
-  'strobe',         // Rapid flash
-];
 
 /**
  * Generate transitions for internal cuts (silence removal points)

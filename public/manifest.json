@@ -1,0 +1,35 @@
+{
+  "name": "Snip - Video Editor",
+  "short_name": "Snip",
+  "description": "Create viral short-form videos with AI-powered editing",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#6366f1",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["video", "entertainment", "productivity"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Create New Video",
+      "short_name": "Create",
+      "description": "Start creating a new video",
+      "url": "/?autoTrigger=true",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

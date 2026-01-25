@@ -14,8 +14,12 @@ interface VapiVoiceButtonProps {
   textOverlayCount?: number;
   /** Number of stickers */
   stickerCount?: number;
-  /** User's recent X posts for content inspiration */
+  /** User's recent X/Twitter posts for content inspiration */
   xPosts?: Array<{ id: string; text: string; likes: number }>;
+  /** User's YouTube videos for content inspiration */
+  youtubeVideos?: Array<{ id: string; title: string; views: number }>;
+  /** User's Instagram posts for content inspiration */
+  instagramPosts?: Array<{ id: string; caption: string; likes: number }>;
   /** Whether a video has been uploaded */
   hasVideo?: boolean;
   /** Whether transcription is currently in progress */
@@ -29,6 +33,8 @@ export function VapiVoiceButton({
   textOverlayCount = 0,
   stickerCount = 0,
   xPosts = [],
+  youtubeVideos = [],
+  instagramPosts = [],
   hasVideo = false,
   isTranscribing = false,
 }: VapiVoiceButtonProps) {
@@ -129,12 +135,31 @@ export function VapiVoiceButton({
 - Text overlays: ${textOverlayCount}
 - Stickers: ${stickerCount}`;
 
-          // Add X posts context if available
-          const xPostsContext = xPosts.length > 0
-            ? `\n\nThe user's recent X posts (for content inspiration and understanding their voice/topics):
-${xPosts.slice(0, 5).map(p => `- "${p.text.substring(0, 100)}${p.text.length > 100 ? '...' : ''}" (${p.likes} likes)`).join('\n')}
+          // Build social media context based on connected accounts
+          const connectedAccounts: string[] = [];
+          let socialContext = "";
 
-Use these posts to suggest video ideas that match their content style and interests.`
+          if (xPosts.length > 0) {
+            connectedAccounts.push("X/Twitter");
+            socialContext += `\n\nTheir top X/Twitter posts:
+${xPosts.slice(0, 3).map(p => `- "${p.text.substring(0, 80)}${p.text.length > 80 ? '...' : ''}" (${p.likes} likes)`).join('\n')}`;
+          }
+
+          if (youtubeVideos.length > 0) {
+            connectedAccounts.push("YouTube");
+            socialContext += `\n\nTheir top YouTube videos:
+${youtubeVideos.slice(0, 3).map(v => `- "${v.title}" (${v.views.toLocaleString()} views)`).join('\n')}`;
+          }
+
+          if (instagramPosts.length > 0) {
+            connectedAccounts.push("Instagram");
+            socialContext += `\n\nTheir top Instagram posts:
+${instagramPosts.slice(0, 3).map(p => `- "${p.caption.substring(0, 80)}${p.caption.length > 80 ? '...' : ''}" (${p.likes.toLocaleString()} likes)`).join('\n')}`;
+          }
+
+          const hasSocialAccounts = connectedAccounts.length > 0;
+          const socialAccountsContext = hasSocialAccounts
+            ? `\n\nYou have access to their ${connectedAccounts.join(", ")} content. Use this to understand what performs well for them and suggest ideas that match their winning content style.${socialContext}`
             : "";
 
           await vapi.start({
@@ -167,9 +192,9 @@ BAD (cold): "Your hook is weak. Add a sticker at 3 seconds."
 GOOD (supportive): "This is a great start! I think we could make the opening even stronger. Maybe a little emoji pop right when you say that key line?"
 
 You know about their video:
-${scriptContext}${editingContext}${xPostsContext}
+${scriptContext}${editingContext}${socialAccountsContext}
 
-You can help with: hooks, filters, stickers, captions, pacing, and general creative direction. Always be encouraging and make them feel good about their content while offering genuinely useful suggestions.`,
+You can help with: hooks, filters, stickers, captions, pacing, and general creative direction. If you have access to their social accounts, reference what's worked well for them before and suggest ideas based on their top-performing content. Always be encouraging and make them feel good about their content while offering genuinely useful suggestions.`,
                 },
               ],
             },
@@ -178,9 +203,15 @@ You can help with: hooks, filters, stickers, captions, pacing, and general creat
               voiceId: "21m00Tcm4TlvDq8ikWAM", // Rachel voice
             },
             firstMessage: transcript
-              ? "Hi there! I just looked through your script and I really like what you're working on. How can I help make this one shine?"
+              ? hasSocialAccounts
+                ? `Hi there! I looked through your script and I can also see what's been working well on your ${connectedAccounts.join(" and ")}. I'd love to help you make this one really hit. What are you going for with this video?`
+                : "Hi there! I just looked through your script and I really like what you're working on. How can I help make this one shine?"
               : isTranscribing
-              ? "Hey! I see your video's still processing, which is totally fine. While we wait, tell me - what's the vision for this one?"
+              ? hasSocialAccounts
+                ? `Hey! Your video's still processing, but I can see your ${connectedAccounts.join(" and ")} content. While we wait, I can suggest some ideas based on what's performed well for you before!`
+                : "Hey! I see your video's still processing, which is totally fine. While we wait, tell me - what's the vision for this one?"
+              : hasSocialAccounts
+              ? `Hi! I can see what's been doing well on your ${connectedAccounts.join(" and ")}. I'd love to help you create something great based on what's already working for you!`
               : "Hi! I'd love to help you with this video. I can help with filters, stickers, captions - what are you thinking for this one?",
           });
         }
@@ -189,7 +220,7 @@ You can help with: hooks, filters, stickers, captions, pacing, and general creat
         setIsConnecting(false);
       }
     }
-  }, [vapi, isCallActive, isConnecting, assistantId, transcript, currentFilter, textOverlayCount, stickerCount, xPosts, hasVideo, isTranscribing]);
+  }, [vapi, isCallActive, isConnecting, assistantId, transcript, currentFilter, textOverlayCount, stickerCount, xPosts, youtubeVideos, instagramPosts, hasVideo, isTranscribing]);
 
   const isActive = isCallActive || isConnecting;
 

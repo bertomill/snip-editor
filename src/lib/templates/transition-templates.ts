@@ -124,7 +124,6 @@ const glitch: TransitionTemplate = {
   durationFrames: 5,
   apply: (frame, duration, intensity) => {
     // Create glitchy displacement
-    const progress = frame / duration;
     const glitchIntensity = interpolate(
       frame,
       [0, duration / 2, duration],

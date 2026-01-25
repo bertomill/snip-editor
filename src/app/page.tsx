@@ -818,8 +818,9 @@ function HomeContent() {
           deletedWordIds: Array.from(deletedWordIds),
           deletedPauseIds: Array.from(deletedPauseIds),
           captionTemplateId: overlayState.captionTemplateId || 'classic',
-          width: 1080,
-          height: 1920,
+          // Use resolution from export settings (9:16 aspect ratio)
+          width: exportSettings.resolution === '720p' ? 720 : exportSettings.resolution === '4k' ? 2160 : 1080,
+          height: exportSettings.resolution === '720p' ? 1280 : exportSettings.resolution === '4k' ? 3840 : 1920,
           fps: 30,
           filterId: overlayState.filterId,
           textOverlays: overlayState.textOverlays,
@@ -853,7 +854,7 @@ function HomeContent() {
         error: error instanceof Error ? error.message : "Failed to start render",
       }));
     }
-  }, [clips, deletedSegments, deletedWordIds, deletedPauseIds, overlayState, user?.id]);
+  }, [clips, deletedSegments, deletedWordIds, deletedPauseIds, overlayState, user?.id, exportSettings]);
 
   // Poll for export progress
   useEffect(() => {
@@ -1935,8 +1936,8 @@ function ExportProgressIndicator({
   };
 
   return (
-    <div className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-[60] animate-slide-up">
-      <div className="bg-[#1C1C1E]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 p-4 min-w-[300px] max-w-[360px]">
+    <div className="fixed bottom-20 md:bottom-6 left-4 right-4 md:left-auto md:right-6 z-[60] animate-slide-up">
+      <div className="bg-[#1C1C1E]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 p-4 w-full md:min-w-[300px] md:max-w-[360px] ml-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-3">
           {getStatusIcon()}
@@ -4508,8 +4509,8 @@ function EditStep({
     </ResizableBottomPanel>
 
     {/* AI Chat Input + Voice - Floating */}
-    <div className="fixed bottom-6 left-3 right-3 lg:left-[296px] lg:right-8 z-40 flex justify-center">
-      <div className="flex items-center gap-2 lg:gap-3 w-full max-w-2xl">
+    <div className="fixed bottom-6 inset-x-0 z-40 flex justify-center px-3">
+      <div className="flex items-center gap-2 lg:gap-3 w-full max-w-2xl lg:translate-x-[140px]">
         <div className="flex-1 min-w-0">
           <AIChatInput
             context={{
