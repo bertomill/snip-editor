@@ -983,11 +983,21 @@ function HomeContent() {
     }
   }, [step]);
 
+  // Track URLs for cleanup - use a ref to avoid revoking URLs still in use
+  const clipUrlsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
+    // Add current clip URLs to the set
+    clips.forEach((clip) => clipUrlsRef.current.add(clip.url));
+
+    // Only cleanup on unmount - don't revoke on every clips change
+    // because the same URLs are reused when clips are updated (e.g., segments added)
     return () => {
-      clips.forEach((clip) => URL.revokeObjectURL(clip.url));
+      clipUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      clipUrlsRef.current.clear();
     };
-  }, [clips]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only cleanup on unmount
 
   // Upload a video using presigned URL (bypasses Vercel's 4.5MB API limit completely)
   const uploadVideoToStorage = useCallback(async (clipIndex: number, file: File) => {

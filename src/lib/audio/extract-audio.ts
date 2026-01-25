@@ -204,17 +204,17 @@ export async function convertVideoToMP4(
     const videoData = await fetchFile(videoFile);
     await ff.writeFile(inputName, videoData);
 
-    // Convert to browser-compatible MP4 (H.264 + AAC)
-    // Using fast settings for quick preview conversion
+    // Convert to browser-compatible MP4
+    // Use stream copy (remux) instead of re-encoding since FFmpeg.wasm doesn't have libx264
+    // This works for H.264 MOV files (common on iPhone) - just changes container to MP4
+    console.log('[convertVideo] Remuxing video to MP4 container...');
     await ff.exec([
       '-i', inputName,
-      '-c:v', 'libx264',        // H.264 codec (widely supported)
-      '-preset', 'ultrafast',   // Fast encoding for preview
-      '-crf', '28',             // Lower quality for smaller file (preview only)
-      '-c:a', 'aac',            // AAC audio codec
-      '-b:a', '96k',            // Audio bitrate
-      '-movflags', '+faststart', // Enable fast start for web playback
-      '-y',                     // Overwrite output
+      '-c:v', 'copy',             // Copy video stream (no re-encoding)
+      '-c:a', 'aac',              // Re-encode audio to AAC for compatibility
+      '-b:a', '128k',             // Audio bitrate
+      '-movflags', '+faststart',  // Enable fast start for web playback
+      '-y',                       // Overwrite output
       outputName
     ]);
 
