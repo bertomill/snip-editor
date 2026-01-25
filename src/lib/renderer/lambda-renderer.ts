@@ -49,8 +49,8 @@ export async function startLambdaRendering(
       updateRenderProgress(id, 5);
 
       // Start the render on Lambda with retry logic for rate limits
-      let lambdaRenderId: string;
-      let bucketName: string;
+      let lambdaRenderId = '';
+      let bucketName = '';
       let retryCount = 0;
       const maxRetries = 3;
 

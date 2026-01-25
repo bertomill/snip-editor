@@ -35,6 +35,7 @@ import { AIChatInput } from "@/components/AIChatInput";
 import { VapiVoiceButton } from "@/components/VapiVoiceButton";
 import { extractAudioFromVideo, isFFmpegSupported } from "@/lib/audio/extract-audio";
 import { SilenceSegment, SilenceDetectionOptions } from "@/types/silence";
+import { FlipWords } from "@/components/ui/flip-words";
 
 type AppView = "feed" | "editor";
 type EditorStep = "upload" | "edit" | "export";
@@ -2450,12 +2451,17 @@ function UploadStep({
   return (
     <div className="w-full max-w-md text-center px-4 animate-fade-in-up">
       <h2
-        className="text-4xl font-bold mb-3 tracking-tight text-white"
+        className="text-4xl font-bold mb-3 tracking-tight text-white flex flex-wrap justify-center items-baseline"
         style={{
           textShadow: '1px 1px 0px rgba(255, 0, 128, 0.5), -1px -1px 0px rgba(0, 212, 255, 0.5)',
         }}
       >
-        Create something amazing
+        Create something
+        <FlipWords
+          words={["amazing", "viral", "stunning", "epic"]}
+          duration={2500}
+          className="text-[#00D4FF]"
+        />
       </h2>
       <p className="text-[#8E8E93] mb-10 text-lg">
         Your next viral moment starts here
@@ -2574,8 +2580,26 @@ function UploadStep({
             )}
           </div>
 
+          {/* Prompt input */}
+          <div className="px-4 mb-3">
+            <div className="flex items-center gap-2 px-5 py-3.5 bg-[var(--background-card)] border border-[var(--border)] rounded-full focus-within:border-[var(--accent)]/50">
+              <input
+                type="text"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="Tell Snip what you want to create..."
+                className="flex-1 bg-transparent text-white placeholder-[#8E8E93] text-base font-medium outline-none border-none focus:ring-0 focus:outline-none"
+              />
+              <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
+                <svg className="w-5 h-5 text-[#8E8E93]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
           {/* Quick select chips */}
-          <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center mb-4 px-2 sm:px-4">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center mb-6 px-2 sm:px-4">
             <button
               onClick={() => setAiPrompt('Compose clips into a cohesive video')}
               className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border rounded-full text-xs sm:text-sm font-medium transition-all ${
@@ -2620,24 +2644,6 @@ function UploadStep({
               <span className="text-sm sm:text-base">🎯</span>
               Highlights
             </button>
-          </div>
-
-          {/* Prompt input */}
-          <div className="px-4 mb-6">
-            <div className="flex items-center gap-2 px-4 py-3 bg-[var(--background-card)] border border-[var(--border)] rounded-full focus-within:border-[var(--border)]">
-              <input
-                type="text"
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="What do you want to create?"
-                className="flex-1 bg-transparent text-white placeholder-[#636366] text-sm outline-none border-none focus:ring-0 focus:outline-none"
-              />
-              <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
-                <svg className="w-5 h-5 text-[#636366]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                </svg>
-              </button>
-            </div>
           </div>
 
           {/* AutoCut button - Primary action */}
@@ -4502,6 +4508,7 @@ function EditStep({
             onRedo={handleRedo}
             canUndo={undoStack.length > 0}
             canRedo={redoStack.length > 0}
+            clipTransitions={overlayState.clipTransitions}
           />
           </>
         )}
@@ -4533,6 +4540,12 @@ function EditStep({
           xPosts={xPosts}
           hasVideo={clips.length > 0}
           isTranscribing={isTranscribing}
+          captionsEnabled={overlayState.showCaptionPreview}
+          onToggleCaptions={(enabled) => {
+            if (enabled !== overlayState.showCaptionPreview) {
+              toggleCaptionPreview();
+            }
+          }}
         />
       </div>
     </div>
