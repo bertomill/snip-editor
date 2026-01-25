@@ -1377,7 +1377,7 @@ function HomeContent() {
         )}
 
         <div className="min-h-screen flex flex-col bg-canva-gradient pb-24 md:pb-0">
-        <header className="sticky top-0 z-50 flex items-center justify-between px-3 sm:px-8 py-2 sm:py-4 bg-transparent">
+        <header className="sticky top-0 z-50 flex items-center justify-between px-3 sm:px-8 pt-6 pb-2 sm:py-4 bg-transparent">
           <div className="flex items-center gap-3">
             {/* Hamburger menu for projects */}
             <button
