@@ -58,6 +58,7 @@ export interface TimelineProps {
   onAddText?: () => void;
   onAddSticker?: () => void;
   onAddMedia?: () => void;
+  onAddMusic?: () => void;
   // Transcript button
   onOpenTranscript?: () => void;
   // Undo/Redo

@@ -133,6 +133,7 @@ function HomeContent() {
   const [platformRequestInput, setPlatformRequestInput] = useState('');
   const [platformRequestSubmitting, setPlatformRequestSubmitting] = useState(false);
   const [showXConnectedModal, setShowXConnectedModal] = useState(false);
+  const [showSocialInfoTooltip, setShowSocialInfoTooltip] = useState(false);
 
   // Editor state
   const [step, setStep] = useState<EditorStep>("upload");
@@ -1364,7 +1365,58 @@ function HomeContent() {
 
               {/* Let Snip get to know you Section */}
               <div className="px-4 py-4 border-t border-[var(--border)]">
-                <p className="text-[#636366] text-xs font-medium uppercase tracking-wider mb-3">Let Snip get to know you</p>
+                <div className="flex items-center gap-2 mb-3">
+                  <p className="text-[#636366] text-xs font-medium uppercase tracking-wider">Let Snip get to know you</p>
+                  {/* Info button */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowSocialInfoTooltip(!showSocialInfoTooltip)}
+                      className="w-4 h-4 rounded-full bg-[#636366]/30 flex items-center justify-center hover:bg-[#636366]/50 transition-colors"
+                    >
+                      <svg className="w-2.5 h-2.5 text-[#8E8E93]" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                    {/* Info tooltip */}
+                    {showSocialInfoTooltip && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setShowSocialInfoTooltip(false)}
+                        />
+                        <div className="absolute left-0 top-full mt-2 w-72 p-4 bg-[#2C2C2E] border border-[var(--border)] rounded-xl shadow-2xl z-50">
+                          <div className="flex items-start gap-3 mb-3">
+                            <div className="w-8 h-8 rounded-full bg-[#4A8FE7]/20 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-4 h-4 text-[#4A8FE7]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <h4 className="text-white font-semibold text-sm">How Snip uses your data</h4>
+                            </div>
+                          </div>
+                          <div className="space-y-2 text-xs text-[#8E8E93]">
+                            <p>
+                              When you connect your social accounts, Snip reads your <span className="text-white">public posts</span> to understand your content style.
+                            </p>
+                            <p>
+                              Our AI analyzes your <span className="text-white">top-performing content</span> to suggest video ideas, hooks, and styles that resonate with your audience.
+                            </p>
+                            <p>
+                              We <span className="text-white">never post</span> on your behalf without your explicit permission.
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setShowSocialInfoTooltip(false)}
+                            className="mt-3 w-full py-2 text-xs font-medium text-[#4A8FE7] hover:text-[#6BA3EC] transition-colors"
+                          >
+                            Got it
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
                 <div className="space-y-1">
                   {/* YouTube */}
                   <button
@@ -1839,6 +1891,8 @@ function HomeContent() {
               setAutoCutProcessing={setAutoCutProcessing}
               showTranscriptDrawer={showTranscriptDrawer}
               setShowTranscriptDrawer={setShowTranscriptDrawer}
+              showMusicDrawer={showMusicDrawer}
+              setShowMusicDrawer={setShowMusicDrawer}
               setHasUnsavedChanges={setHasUnsavedChanges}
               xPosts={xPosts}
             />
@@ -2696,6 +2750,8 @@ function EditStep({
   setAutoCutProcessing,
   showTranscriptDrawer,
   setShowTranscriptDrawer,
+  showMusicDrawer,
+  setShowMusicDrawer,
   setHasUnsavedChanges,
   xPosts,
 }: {
@@ -2727,6 +2783,8 @@ function EditStep({
   } | null>>;
   showTranscriptDrawer: boolean;
   setShowTranscriptDrawer: React.Dispatch<React.SetStateAction<boolean>>;
+  showMusicDrawer: boolean;
+  setShowMusicDrawer: React.Dispatch<React.SetStateAction<boolean>>;
   setHasUnsavedChanges: React.Dispatch<React.SetStateAction<boolean>>;
   xPosts: Array<{ id: string; text: string; likes: number }>;
 }) {
@@ -4075,6 +4133,14 @@ function EditStep({
         />
       )}
 
+      {/* Music Drawer */}
+      <MusicDrawer
+        isOpen={showMusicDrawer}
+        onClose={() => setShowMusicDrawer(false)}
+        totalDurationMs={totalDuration * 1000}
+        currentTimeMs={currentTime * 1000}
+      />
+
       {/* Desktop Layout */}
       <div className="hidden lg:flex flex-col lg:flex-row gap-8 pt-16">
         {/* Preview Panel - Fixed width on desktop */}
@@ -4095,15 +4161,18 @@ function EditStep({
               )}
               {/* Video Loading Overlay */}
               {isVideoLoading && activeClip && !isUploading && !autoCutProcessing?.active && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black">
                   <video
                     src="/loading video.mp4"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover absolute inset-0"
                     autoPlay
                     loop
                     muted
                     playsInline
                   />
+                  <div className="absolute bottom-8 left-0 right-0">
+                    <VideoProcessingLoader stage="loading" className="text-base" interval={2000} />
+                  </div>
                 </div>
               )}
               {activeClip && !isUploading && !autoCutProcessing?.active && (
@@ -4543,6 +4612,7 @@ function EditStep({
                 fileInput.click();
               }
             }}
+            onAddMusic={() => setShowMusicDrawer(true)}
             onOpenTranscript={() => setShowTranscriptDrawer(true)}
             onUndo={handleUndo}
             onRedo={handleRedo}
@@ -4826,15 +4896,18 @@ function MobileVideoPanel({
           )}
           {/* Video Loading Overlay */}
           {isVideoLoading && activeClip && !isUploading && !autoCutProcessing?.active && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black">
               <video
                 src="/loading video.mp4"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover absolute inset-0"
                 autoPlay
                 loop
                 muted
                 playsInline
               />
+              <div className="absolute bottom-8 left-0 right-0">
+                <VideoProcessingLoader stage="loading" className="text-base" interval={2000} />
+              </div>
             </div>
           )}
           {activeClip && !isUploading && !autoCutProcessing?.active && (

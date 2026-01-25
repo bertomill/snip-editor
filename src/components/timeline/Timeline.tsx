@@ -36,6 +36,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   onAddText,
   onAddSticker,
   onAddMedia,
+  onAddMusic,
   onOpenTranscript,
   onUndo,
   onRedo,
@@ -201,6 +202,7 @@ export const Timeline: React.FC<TimelineProps> = ({
             onAddText={onAddText}
             onAddSticker={onAddSticker}
             onAddMedia={onAddMedia}
+            onAddMusic={onAddMusic}
             clipTransitions={clipTransitions}
           />
         </div>

@@ -18,6 +18,7 @@ type ProcessingStage =
   | "analyzing"
   | "rendering"
   | "processing"
+  | "loading"
   | "idle";
 
 interface VideoProcessingLoaderProps {
@@ -82,6 +83,17 @@ const stageMessages: Record<ProcessingStage, string[]> = {
     "Working some magic...",
     "Just a moment...",
     "Almost there...",
+  ],
+  loading: [
+    "Extracting clean transcript...",
+    "Cleaning up voice levels...",
+    "Syncing subtitles...",
+    "Smoothing jump cuts...",
+    "Analyzing audio waveform...",
+    "Detecting scene changes...",
+    "Preparing your preview...",
+    "Optimizing playback...",
+    "Almost ready...",
   ],
   idle: [
     "Ready when you are...",

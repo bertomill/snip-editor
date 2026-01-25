@@ -319,8 +319,34 @@ Current caption state: ${captionsEnabled ? "Captions are ON" : "Captions are OFF
 
   return (
     <>
-      {/* Voice Button */}
-      <motion.button
+      {/* Voice Button with Label */}
+      <div className="relative flex flex-col items-center">
+        {/* Subtle label - only shows when not in call */}
+        {!isActive && (
+          <svg
+            width="90"
+            height="28"
+            viewBox="0 0 90 28"
+            className="absolute -top-6"
+          >
+            <defs>
+              <path
+                id="curve"
+                d="M 5 25 Q 45 0 85 25"
+                fill="transparent"
+              />
+            </defs>
+            <text
+              className="fill-black/70 dark:fill-white/60 text-[11px] font-medium"
+              textAnchor="middle"
+            >
+              <textPath href="#curve" startOffset="50%">
+                Talk to Snip
+              </textPath>
+            </text>
+          </svg>
+        )}
+        <motion.button
         type="button"
         onClick={toggleCall}
         whileHover={{ scale: 1.08 }}
@@ -390,6 +416,7 @@ Current caption state: ${captionsEnabled ? "Captions are ON" : "Captions are OFF
           </div>
         )}
       </motion.button>
+      </div>
 
       {/* Voice Chat Overlay */}
       <AnimatePresence>

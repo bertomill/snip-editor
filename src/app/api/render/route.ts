@@ -3,7 +3,7 @@ import { startRendering, saveVideoToTemp, convertVideoToMp4 } from "@/lib/render
 import { startLambdaRendering, isLambdaConfigured } from "@/lib/renderer/lambda-renderer";
 import { transcriptToCaption, wordsToCaption, SnipCompositionProps, TranscriptSegment, TranscriptWord } from "@/lib/types/composition";
 import { getCaptionTemplate, getDefaultCaptionTemplate } from "@/lib/caption-templates";
-import { TextOverlay, StickerOverlay, ClipTransition } from "@/types/overlays";
+import { TextOverlay, StickerOverlay, MusicTrack, ClipTransition } from "@/types/overlays";
 import { uploadTempVideo } from "@/lib/supabase/storage-server";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
@@ -52,6 +52,8 @@ interface RenderRequestBody {
   captionPositionY?: number;
   // Clip transitions
   clipTransitions?: ClipTransition[];
+  // Music tracks
+  musicTracks?: MusicTrack[];
   // User ID for Supabase storage
   userId?: string;
   // Convert MOV/HEVC files to MP4 before rendering
@@ -218,6 +220,9 @@ export async function POST(request: NextRequest) {
     }
     if (body.stickers?.length) {
       console.log(`🎭 Stickers: ${body.stickers.length}`);
+    }
+    if (body.musicTracks?.length) {
+      console.log(`🎵 Music tracks: ${body.musicTracks.length}`);
     }
 
     // Generate render ID upfront for Supabase temp folder
@@ -387,6 +392,8 @@ export async function POST(request: NextRequest) {
       captionPositionY: body.captionPositionY ?? 75,
       // Clip transitions
       clipTransitions: body.clipTransitions || [],
+      // Music tracks
+      musicTracks: body.musicTracks || [],
     };
 
     // Start the render (pass renderId so it matches the temp folder)

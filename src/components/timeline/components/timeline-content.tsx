@@ -30,6 +30,7 @@ interface TimelineContentProps {
   onAddText?: () => void;
   onAddSticker?: () => void;
   onAddMedia?: () => void;
+  onAddMusic?: () => void;
   clipTransitions?: ClipTransition[];
 }
 
@@ -52,6 +53,7 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
   onAddText,
   onAddSticker,
   onAddMedia,
+  onAddMusic,
   clipTransitions = [],
 }) => {
   const { ghostElement, isValidDrop, isDragging } = useTimelineStore();
@@ -226,7 +228,7 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       {/* Add overlay buttons - above timeline */}
-      {(onAddText || onAddSticker || onAddMedia) && (
+      {(onAddText || onAddSticker || onAddMedia || onAddMusic) && (
         <div className="flex items-center gap-2 px-3 py-2 border-b border-[#282828] bg-[#181818]">
           {onAddText && (
             <button
@@ -259,6 +261,17 @@ export const TimelineContent: React.FC<TimelineContentProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
               Add Media
+            </button>
+          )}
+          {onAddMusic && (
+            <button
+              onClick={onAddMusic}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 text-pink-300 hover:text-pink-200 text-xs font-medium transition-all border border-pink-500/30"
+            >
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+              </svg>
+              Add Music
             </button>
           )}
         </div>
