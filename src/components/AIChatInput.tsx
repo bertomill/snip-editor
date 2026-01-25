@@ -102,10 +102,10 @@ export function AIChatInput({ context, onCommand }: AIChatInputProps) {
         }}
         className="rounded-full p-[2px] transition-all duration-300 shadow-[0_0_30px_rgba(74,143,231,0.3)]"
       >
-        <div className="flex items-center gap-4 bg-[#1a1a1a]/90 backdrop-blur-2xl rounded-full px-6 py-5 border border-white/20 shadow-2xl">
+        <div className="flex items-center gap-3 lg:gap-4 bg-[#1a1a1a]/90 backdrop-blur-2xl rounded-full px-4 lg:px-6 py-4 lg:py-5 border border-white/20 shadow-2xl">
           {/* Sparkle icon */}
           <svg
-            className="w-7 h-7 text-[#4A8FE7] flex-shrink-0"
+            className="w-6 h-6 lg:w-7 lg:h-7 text-[#4A8FE7] flex-shrink-0"
             fill="none"
             stroke="currentColor"
             strokeWidth={1.5}
@@ -120,7 +120,7 @@ export function AIChatInput({ context, onCommand }: AIChatInputProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Tell Snip what to change..."
-            className="flex-1 bg-transparent text-white text-lg placeholder:text-white/50 focus:outline-none min-w-0"
+            className="flex-1 bg-transparent text-white text-base lg:text-lg placeholder:text-white/50 focus:outline-none min-w-0"
             disabled={isLoading}
           />
 

@@ -24,6 +24,7 @@ import { MediaLibraryProvider } from "@/contexts/MediaLibraryContext";
 import { MediaFile } from "@/types/media";
 import { CaptionPreview } from "@/components/CaptionPreview";
 import { TextOverlayPreview } from "@/components/TextOverlayPreview";
+import { StickerOverlayPreview } from "@/components/StickerOverlayPreview";
 import { ProjectsProvider, useProjects } from "@/contexts/ProjectsContext";
 import { ProjectFeed } from "@/components/projects";
 import { ProjectData } from "@/types/project";
@@ -2573,50 +2574,50 @@ function UploadStep({
           </div>
 
           {/* Quick select chips */}
-          <div className="flex flex-wrap gap-2 justify-center mb-4 px-4">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center mb-4 px-2 sm:px-4">
             <button
               onClick={() => setAiPrompt('Compose clips into a cohesive video')}
-              className={`flex items-center gap-2 px-4 py-2 border rounded-full text-sm font-medium transition-all ${
+              className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border rounded-full text-xs sm:text-sm font-medium transition-all ${
                 aiPrompt.includes('Compose')
                   ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
                   : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white'
               }`}
             >
-              <span className="text-base">🎬</span>
-              Compose clips
+              <span className="text-sm sm:text-base">🎬</span>
+              Compose
             </button>
             <button
               onClick={() => setAiPrompt('Create a flashy, attention-grabbing video with dynamic transitions')}
-              className={`flex items-center gap-2 px-4 py-2 border rounded-full text-sm font-medium transition-all ${
+              className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border rounded-full text-xs sm:text-sm font-medium transition-all ${
                 aiPrompt.includes('flashy')
                   ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
                   : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white'
               }`}
             >
-              <span className="text-base">✨</span>
-              Flashy video
+              <span className="text-sm sm:text-base">✨</span>
+              Flashy
             </button>
             <button
               onClick={() => setAiPrompt('Keep it simple and professional, minimal cuts')}
-              className={`flex items-center gap-2 px-4 py-2 border rounded-full text-sm font-medium transition-all ${
+              className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border rounded-full text-xs sm:text-sm font-medium transition-all ${
                 aiPrompt.includes('simple')
                   ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
                   : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white'
               }`}
             >
-              <span className="text-base">📋</span>
-              Conservative
+              <span className="text-sm sm:text-base">📋</span>
+              Minimal
             </button>
             <button
               onClick={() => setAiPrompt('Extract the best highlights and key moments')}
-              className={`flex items-center gap-2 px-4 py-2 border rounded-full text-sm font-medium transition-all ${
+              className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border rounded-full text-xs sm:text-sm font-medium transition-all ${
                 aiPrompt.includes('highlights')
                   ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
                   : 'bg-[var(--background-card)] hover:bg-[var(--background-card-hover)] border-[var(--border)] text-white'
               }`}
             >
-              <span className="text-base">🎯</span>
-              Highlight reel
+              <span className="text-sm sm:text-base">🎯</span>
+              Highlights
             </button>
           </div>
 
@@ -2639,7 +2640,7 @@ function UploadStep({
           </div>
 
           {/* AutoCut button - Primary action */}
-          <div className="flex justify-center">
+          <div className="flex justify-center pb-24 sm:pb-8">
             <button
               onClick={handleAutoCut}
               disabled={isProcessing}
@@ -3747,96 +3748,76 @@ function EditStep({
 
       try {
         let response: Response;
+        let fileToUpload: File;
 
-        // Use storage path if available (for large files that were uploaded to storage)
-        if (clip.storagePath && clip.uploadStatus === 'complete') {
-          console.log(`[Transcribe] Using storage path for clip ${i + 1}: ${clip.storagePath}`);
-          setTranscribeProgress(baseProgress + (100 / clips.length) * 0.6);
-
-          response = await fetch("/api/transcribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              storagePath: clip.storagePath,
-              enhanceAudio: audioSettings.enhanceAudio,
-              noiseReduction: audioSettings.noiseReduction,
-              noiseReductionStrength: audioSettings.noiseReductionStrength,
-              loudnessNormalization: audioSettings.loudnessNormalization,
-              detectSilence: true,
-              silenceAggressiveness,
-            }),
-          });
-        } else {
-          // Fallback: Upload via FormData (for small files or when storage upload failed)
-          let fileToUpload: File;
-
-          // Extract audio client-side if supported (much smaller file size)
-          if (useClientExtraction) {
-            console.log(`[Transcribe] Extracting audio from clip ${i + 1} client-side...`);
-            try {
-              fileToUpload = await extractAudioFromVideo(clip.file, (progress) => {
-                // Progress for extraction (first half of clip progress)
-                setTranscribeProgress(baseProgress + (progress / clips.length) * 0.5);
-              });
-              console.log(`[Transcribe] Audio extracted: ${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB`);
-            } catch (extractError) {
-              console.warn(`[Transcribe] Client-side extraction failed, falling back to server:`, extractError);
-              // Fall back to sending full video
-              fileToUpload = clip.file;
-            }
-          } else {
-            // Re-create File with guaranteed valid MIME type for iOS Safari compatibility
+        // Always extract audio client-side when FFmpeg.wasm is supported
+        // This is required because server-side FFmpeg doesn't work on Vercel serverless
+        if (useClientExtraction) {
+          console.log(`[Transcribe] Extracting audio from clip ${i + 1} client-side...`);
+          try {
+            fileToUpload = await extractAudioFromVideo(clip.file, (progress) => {
+              // Progress for extraction (first half of clip progress)
+              setTranscribeProgress(baseProgress + (progress / clips.length) * 0.5);
+            });
+            console.log(`[Transcribe] Audio extracted: ${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB`);
+          } catch (extractError) {
+            console.warn(`[Transcribe] Client-side extraction failed, falling back to server:`, extractError);
+            // Fall back to sending full video
             fileToUpload = clip.file;
-            if (!clip.file.type || clip.file.type === 'application/octet-stream') {
-              const ext = clip.file.name.split('.').pop()?.toLowerCase();
-              const mimeMap: Record<string, string> = {
-                'mp4': 'video/mp4',
-                'mov': 'video/quicktime',
-                'webm': 'video/webm',
-                'm4v': 'video/x-m4v',
-                'hevc': 'video/mp4',
-              };
-              const mimeType = mimeMap[ext || ''] || 'video/mp4';
-              fileToUpload = new File([clip.file], clip.file.name, { type: mimeType });
-            }
           }
-
-          const formData = new FormData();
-          // Use "audio" key if we extracted audio, "video" if sending full video
-          const fileKey = fileToUpload.type.startsWith('audio/') ? 'audio' : 'video';
-          formData.append(fileKey, fileToUpload);
-
-          // Add audio enhancement settings (only if sending video - audio is already clean)
-          if (fileKey === 'video' && audioSettings.enhanceAudio) {
-            formData.append("enhanceAudio", "true");
-            formData.append("noiseReduction", String(audioSettings.noiseReduction));
-            formData.append("noiseReductionStrength", audioSettings.noiseReductionStrength);
-            formData.append("loudnessNormalization", String(audioSettings.loudnessNormalization));
+        } else {
+          // Re-create File with guaranteed valid MIME type for iOS Safari compatibility
+          fileToUpload = clip.file;
+          if (!clip.file.type || clip.file.type === 'application/octet-stream') {
+            const ext = clip.file.name.split('.').pop()?.toLowerCase();
+            const mimeMap: Record<string, string> = {
+              'mp4': 'video/mp4',
+              'mov': 'video/quicktime',
+              'webm': 'video/webm',
+              'm4v': 'video/x-m4v',
+              'hevc': 'video/mp4',
+            };
+            const mimeType = mimeMap[ext || ''] || 'video/mp4';
+            fileToUpload = new File([clip.file], clip.file.name, { type: mimeType });
           }
+        }
 
-          // Add silence detection settings
-          formData.append("detectSilence", "true");
-          formData.append("silenceAggressiveness", silenceAggressiveness);
+        // Create FormData and send to transcription API
+        const formData = new FormData();
+        // Use "audio" key if we extracted audio, "video" if sending full video
+        const fileKey = fileToUpload.type.startsWith('audio/') ? 'audio' : 'video';
+        formData.append(fileKey, fileToUpload);
 
-          setTranscribeProgress(baseProgress + (100 / clips.length) * 0.6);
+        // Add audio enhancement settings (only if sending video - audio is already clean)
+        if (fileKey === 'video' && audioSettings.enhanceAudio) {
+          formData.append("enhanceAudio", "true");
+          formData.append("noiseReduction", String(audioSettings.noiseReduction));
+          formData.append("noiseReductionStrength", audioSettings.noiseReductionStrength);
+          formData.append("loudnessNormalization", String(audioSettings.loudnessNormalization));
+        }
 
-          response = await fetch("/api/transcribe", {
-            method: "POST",
-            body: formData,
-          });
+        // Add silence detection settings
+        formData.append("detectSilence", "true");
+        formData.append("silenceAggressiveness", silenceAggressiveness);
 
-          // Handle 413 (file too large for direct upload)
-          if (response.status === 413) {
-            const fileSizeMB = fileToUpload.size / (1024 * 1024);
-            if (clip.uploadStatus === 'uploading') {
-              alert(`Clip ${i + 1} is still uploading. Please wait and try again.`);
-            } else if (clip.uploadStatus === 'error') {
-              alert(`Clip ${i + 1} storage upload failed. Please check your connection and try again.`);
-            } else {
-              alert(`Clip ${i + 1} (${fileSizeMB.toFixed(1)}MB) exceeds the upload limit. Try using a shorter clip.`);
-            }
-            continue;
+        setTranscribeProgress(baseProgress + (100 / clips.length) * 0.6);
+
+        response = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
+        });
+
+        // Handle 413 (file too large for direct upload)
+        if (response.status === 413) {
+          const fileSizeMB = fileToUpload.size / (1024 * 1024);
+          if (clip.uploadStatus === 'uploading') {
+            alert(`Clip ${i + 1} is still uploading. Please wait and try again.`);
+          } else if (clip.uploadStatus === 'error') {
+            alert(`Clip ${i + 1} storage upload failed. Please check your connection and try again.`);
+          } else {
+            alert(`Clip ${i + 1} (${fileSizeMB.toFixed(1)}MB) exceeds the upload limit. Try using a shorter clip.`);
           }
+          continue;
         }
 
         const data = await response.json();
@@ -4017,6 +3998,7 @@ function EditStep({
           uploadProgress={uploadProgress}
           autoCutProcessing={autoCutProcessing}
           updateTextOverlay={updateTextOverlay}
+          updateSticker={updateSticker}
         />
       </div>
 
@@ -4108,6 +4090,13 @@ function EditStep({
                     onUpdateContent={(id, content) => updateTextOverlay(id, { content })}
                     containerRef={desktopPreviewContainerRef}
                   />
+                  {/* Sticker overlay preview - draggable */}
+                  <StickerOverlayPreview
+                    stickers={overlayState.stickers}
+                    currentTimeMs={currentTime * 1000}
+                    onUpdatePosition={(id, position) => updateSticker(id, { position })}
+                    containerRef={desktopPreviewContainerRef}
+                  />
                 </>
               )}
               {videoError && (
@@ -4156,7 +4145,7 @@ function EditStep({
         {/* Transcript Panel - Visible on desktop */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-4 gap-4">
-            <p className="label">Transcript</p>
+            <p className="label !text-white">Transcript</p>
             <div className="flex gap-3">
               {(deletedSegments.size > 0 || deletedWordIds.size > 0 || deletedPauseIds.size > 0) && (
                 <button
@@ -4519,9 +4508,9 @@ function EditStep({
     </ResizableBottomPanel>
 
     {/* AI Chat Input + Voice - Floating */}
-    <div className="fixed bottom-6 left-4 right-4 lg:left-[296px] lg:right-8 z-40 flex justify-center">
-      <div className="flex items-center gap-3 w-full max-w-2xl">
-        <div className="flex-1">
+    <div className="fixed bottom-6 left-3 right-3 lg:left-[296px] lg:right-8 z-40 flex justify-center">
+      <div className="flex items-center gap-2 lg:gap-3 w-full max-w-2xl">
+        <div className="flex-1 min-w-0">
           <AIChatInput
             context={{
               duration: totalDuration,
@@ -4712,6 +4701,7 @@ function MobileVideoPanel({
   overlayState,
   setCaptionPosition,
   updateTextOverlay,
+  updateSticker,
   formatTime,
   activeDuration,
   deletedSegments,
@@ -4741,9 +4731,10 @@ function MobileVideoPanel({
   allWords: TranscriptWord[];
   deletedWordIds: Set<string>;
   currentTime: number;
-  overlayState: { showCaptionPreview: boolean; captionPositionY: number; textOverlays: TextOverlay[]; captionTemplateId: string };
+  overlayState: { showCaptionPreview: boolean; captionPositionY: number; textOverlays: TextOverlay[]; stickers: StickerOverlay[]; captionTemplateId: string };
   setCaptionPosition: (y: number) => void;
   updateTextOverlay: (id: string, updates: Partial<TextOverlay>) => void;
+  updateSticker: (id: string, updates: Partial<StickerOverlay>) => void;
   formatTime: (seconds: number) => string;
   activeDuration: number;
   deletedSegments: Set<number>;
@@ -4820,6 +4811,13 @@ function MobileVideoPanel({
               currentTimeMs={currentTime * 1000}
               onUpdatePosition={(id, position) => updateTextOverlay(id, { position })}
               onUpdateContent={(id, content) => updateTextOverlay(id, { content })}
+              containerRef={previewContainerRef}
+            />
+            {/* Sticker overlay preview - draggable */}
+            <StickerOverlayPreview
+              stickers={overlayState.stickers}
+              currentTimeMs={currentTime * 1000}
+              onUpdatePosition={(id, position) => updateSticker(id, { position })}
               containerRef={previewContainerRef}
             />
           </>
