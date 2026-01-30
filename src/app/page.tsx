@@ -27,6 +27,8 @@ import { CaptionPreview } from "@/components/CaptionPreview";
 import { TextOverlayPreview } from "@/components/TextOverlayPreview";
 import { StickerOverlayPreview } from "@/components/StickerOverlayPreview";
 import { ProjectsProvider, useProjects } from "@/contexts/ProjectsContext";
+import { FeedsProvider } from "@/contexts/FeedsContext";
+import { FeedsPanel, FeedsPage } from "@/components/feeds";
 import { ProjectFeed } from "@/components/projects";
 import { ProjectData } from "@/types/project";
 import { ResizableBottomPanel } from "@/components/ResizableBottomPanel";
@@ -41,7 +43,7 @@ import SwooshText from "@/components/ui/swoosh-text";
 import SwooshButton from "@/components/ui/swoosh-button";
 import ExportLoadingState from "@/components/ExportLoadingState";
 
-type AppView = "feed" | "editor";
+type AppView = "feed" | "editor" | "feeds";
 type EditorStep = "upload" | "edit" | "export";
 
 // Generate a smart project name from video filename
@@ -107,9 +109,11 @@ interface VideoClip {
 export default function Home() {
   return (
     <ProjectsProvider>
-      <OverlayProvider>
-        <HomeContent />
-      </OverlayProvider>
+      <FeedsProvider>
+        <OverlayProvider>
+          <HomeContent />
+        </OverlayProvider>
+      </FeedsProvider>
     </ProjectsProvider>
   );
 }
@@ -1270,6 +1274,11 @@ function HomeContent() {
     return pausesToDelete.size;
   }, [allWords]);
 
+  // Feeds view - full page
+  if (view === "feeds") {
+    return <FeedsPage onBack={() => setView("editor")} />;
+  }
+
   // Main editor view (upload is the landing page)
   return (
     <MediaLibraryProvider>
@@ -1571,9 +1580,25 @@ function HomeContent() {
                 </div>
               </div>
 
-              {/* Settings Section - Feedback & Theme */}
+              {/* Settings Section - Feeds, Feedback & Theme */}
               <div className="px-4 py-3 border-t border-[var(--border)]">
                 <div className="space-y-1">
+                  {/* Feeds */}
+                  <button
+                    onClick={() => {
+                      setShowProjectsDrawer(false);
+                      setView("feeds");
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-[#10B981]/10 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-[#10B981]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    </div>
+                    <span className="text-white text-sm font-medium">Feeds</span>
+                  </button>
+
                   {/* Feedback */}
                   <button
                     onClick={() => setShowFeedbackModal(true)}
@@ -1648,6 +1673,18 @@ function HomeContent() {
                   {/* Account Menu Options */}
                   {showAccountMenu && (
                     <div className="px-4 pb-3 space-y-1">
+                      {/* Admin button - only for admin users */}
+                      {user.email && ['bertmill19@gmail.com', 'hello@bertomill.ca'].includes(user.email.toLowerCase()) && (
+                        <a
+                          href="/admin"
+                          className="w-full flex items-center gap-3 px-3 py-2 text-[#4A8FE7] hover:bg-[#4A8FE7]/10 rounded-lg transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+                          </svg>
+                          <span className="text-sm">Admin Dashboard</span>
+                        </a>
+                      )}
                       <button
                         onClick={() => {
                           signOut();

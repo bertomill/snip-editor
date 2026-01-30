@@ -16,8 +16,9 @@ import { generateAutoTransitions } from '@/lib/transitions/auto-transitions'
 import { MobileTextDrawer } from '@/components/overlays/MobileTextDrawer'
 import { MobileCaptionsDrawer } from '@/components/overlays/MobileCaptionsDrawer'
 import { HookSuggestionsPanel } from '@/components/HookSuggestionsPanel'
+import { FeedsPanel } from '@/components/feeds'
 
-type PanelType = 'text' | 'stickers' | 'filters' | 'audio' | 'cuts' | 'captions' | 'suggestions' | 'xposts' | null;
+type PanelType = 'text' | 'stickers' | 'filters' | 'audio' | 'cuts' | 'captions' | 'suggestions' | 'xposts' | 'feeds' | null;
 
 interface XPost {
   id: string;
@@ -269,6 +270,14 @@ export function Sidebar({
             active={activePanel === 'xposts'}
           />
 
+          {/* Feeds */}
+          <NavButton
+            icon={<FeedsIcon />}
+            label="Feeds"
+            onClick={() => togglePanel('feeds')}
+            active={activePanel === 'feeds'}
+          />
+
         </nav>
 
         {/* Feedback and Light Mode at bottom */}
@@ -357,6 +366,13 @@ export function Sidebar({
           onRefresh={fetchXPosts}
           onClose={() => setActivePanel(null)}
         />
+      )}
+
+      {/* Feeds Panel */}
+      {activePanel === 'feeds' && (
+        <div className="hidden md:block fixed left-[72px] top-0 bottom-0 w-[320px] border-r border-[var(--border-subtle)] z-40 animate-slide-right">
+          <FeedsPanel onClose={() => setActivePanel(null)} />
+        </div>
       )}
 
       {/* Mobile Bottom Bar - only for feed view */}
@@ -1678,6 +1694,14 @@ function XIcon() {
   return (
     <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
       <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  )
+}
+
+function FeedsIcon() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
     </svg>
   )
 }
