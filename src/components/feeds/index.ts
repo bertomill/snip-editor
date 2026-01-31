@@ -9,3 +9,4 @@ export { TagInput } from './TagInput';
 export { EntityList } from './EntityList';
 export { EntityForm } from './EntityForm';
 export { Library } from './Library';
+export { Stats } from './Stats';

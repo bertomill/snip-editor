@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { FeedsProvider, useFeeds } from '@/contexts/FeedsContext';
 import { Channel, Idea, CreateChannelInput, CreateIdeaInput, UpdateIdeaInput, IdeaStatus, CreateEntityInput, SocialPlatform } from '@/types/feeds';
-import { ChannelList, ChannelForm, IdeaCard, IdeaForm, EntityList, EntityForm, Library } from '@/components/feeds';
+import { ChannelList, ChannelForm, IdeaCard, IdeaForm, EntityList, EntityForm, Library, Stats } from '@/components/feeds';
 import { useState } from 'react';
 
 // Kanban columns configuration
@@ -45,7 +45,7 @@ function FeedsPageContent() {
   const [showEntityForm, setShowEntityForm] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [viewMode, setViewMode] = useState<'kanban' | 'library'>('kanban');
+  const [viewMode, setViewMode] = useState<'kanban' | 'library' | 'stats'>('kanban');
 
   // Drag and drop state
   const [draggingIdeaId, setDraggingIdeaId] = useState<string | null>(null);
@@ -275,6 +275,16 @@ function FeedsPageContent() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
               </button>
+              {/* Stats */}
+              <button
+                onClick={() => setViewMode('stats')}
+                className={`p-2.5 rounded-lg transition-colors ${viewMode === 'stats' ? 'bg-blue-500/20 text-blue-400' : 'text-[#8E8E93] hover:bg-white/5 hover:text-white'}`}
+                title="Stats"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </button>
               {/* Divider */}
               <div className="w-8 border-t border-[var(--border)] my-1" />
               {/* Channel icons */}
@@ -298,7 +308,7 @@ function FeedsPageContent() {
             {/* Library Quick Link */}
             <button
               onClick={() => setViewMode('library')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors mb-4 ${
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors mb-2 ${
                 viewMode === 'library'
                   ? 'bg-purple-500/20 text-purple-400'
                   : 'text-[#8E8E93] hover:bg-white/5 hover:text-white'
@@ -309,6 +319,22 @@ function FeedsPageContent() {
               </svg>
               <span className="text-sm font-medium">Library</span>
               <span className="ml-auto text-xs text-purple-400/70">AI Context</span>
+            </button>
+
+            {/* Stats Quick Link */}
+            <button
+              onClick={() => setViewMode('stats')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors mb-4 ${
+                viewMode === 'stats'
+                  ? 'bg-blue-500/20 text-blue-400'
+                  : 'text-[#8E8E93] hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              <span className="text-sm font-medium">Stats</span>
+              <span className="ml-auto text-xs text-blue-400/70">Analytics</span>
             </button>
 
             {/* Entities Section */}
@@ -381,7 +407,7 @@ function FeedsPageContent() {
               </svg>
             </button>
             <h2 className="text-sm font-medium text-white">
-              {viewMode === 'library' ? 'Library' : selectedChannelId === null ? 'All Ideas' : selectedChannelId === 'uncategorized' ? 'Uncategorized' : channels.find(c => c.id === selectedChannelId)?.name || 'Ideas'}
+              {viewMode === 'library' ? 'Library' : viewMode === 'stats' ? 'Stats' : selectedChannelId === null ? 'All Ideas' : selectedChannelId === 'uncategorized' ? 'Uncategorized' : channels.find(c => c.id === selectedChannelId)?.name || 'Ideas'}
             </h2>
           </div>
           <div className="flex items-center gap-3">
@@ -417,6 +443,21 @@ function FeedsPageContent() {
                   <span className="hidden sm:inline">Library</span>
                 </span>
               </button>
+              <button
+                onClick={() => setViewMode('stats')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  viewMode === 'stats'
+                    ? 'bg-blue-500 text-white'
+                    : 'text-[#8E8E93] hover:text-white'
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  <span className="hidden sm:inline">Stats</span>
+                </span>
+              </button>
             </div>
             {viewMode === 'kanban' && (
               <span className="text-sm text-[#636366]">{filteredIdeas.length} ideas</span>
@@ -428,6 +469,8 @@ function FeedsPageContent() {
         <div className="flex-1 overflow-auto p-4 md:p-6">
           {viewMode === 'library' ? (
             <Library />
+          ) : viewMode === 'stats' ? (
+            <Stats ideas={ideas} />
           ) : ideasLoading ? (
             <div className="flex items-center justify-center py-20">
               <div className="w-8 h-8 border-2 border-[#10B981] border-t-transparent rounded-full animate-spin" />
