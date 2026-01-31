@@ -219,6 +219,16 @@ function FeedsPageContent() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
             </svg>
           </button>
+          {/* Sidebar collapse toggle - Desktop only */}
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className={`hidden md:block p-1.5 rounded-lg hover:bg-white/10 transition-colors ${sidebarCollapsed ? 'md:hidden' : ''}`}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <svg className="w-5 h-5 text-[#8E8E93]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 6h18M3 6v12a2 2 0 002 2h14a2 2 0 002-2V6M3 6a2 2 0 012-2h14a2 2 0 012 2M9 4v16" />
+            </svg>
+          </button>
           {/* Close button for mobile */}
           <button
             onClick={() => setSidebarOpen(false)}
@@ -352,22 +362,6 @@ function FeedsPageContent() {
             <span className={sidebarCollapsed ? 'md:hidden' : ''}>New Idea</span>
           </button>
 
-          {/* Collapse Toggle Button - Desktop only */}
-          <button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className={`hidden md:flex w-full items-center justify-center gap-2 mt-2 px-4 py-2 text-[#8E8E93] hover:text-white hover:bg-white/5 rounded-lg transition-colors text-sm ${sidebarCollapsed ? 'md:px-2' : ''}`}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <svg
-              className={`w-4 h-4 transition-transform duration-300 ${sidebarCollapsed ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-            </svg>
-            <span className={sidebarCollapsed ? 'md:hidden' : ''}>Collapse</span>
-          </button>
         </div>
       </aside>
 
