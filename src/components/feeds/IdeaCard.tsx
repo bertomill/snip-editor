@@ -6,9 +6,10 @@ interface IdeaCardProps {
   idea: Idea;
   onClick: () => void;
   onDelete?: () => void;
+  compact?: boolean;
 }
 
-export function IdeaCard({ idea, onClick, onDelete }: IdeaCardProps) {
+export function IdeaCard({ idea, onClick, onDelete, compact = false }: IdeaCardProps) {
   const statusConfig = IDEA_STATUS_CONFIG[idea.status];
 
   const formatDate = (dateStr: string) => {
@@ -18,6 +19,65 @@ export function IdeaCard({ idea, onClick, onDelete }: IdeaCardProps) {
       day: 'numeric',
     });
   };
+
+  if (compact) {
+    return (
+      <div
+        onClick={onClick}
+        className="group p-3 rounded-xl cursor-pointer transition-all duration-200
+          bg-white/[0.03] backdrop-blur-xl
+          border border-white/[0.08]
+          hover:bg-white/[0.06] hover:border-white/[0.12]"
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <h3 className="text-sm font-medium text-white flex-1 leading-snug">{idea.title}</h3>
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all flex-shrink-0"
+            >
+              <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Description */}
+        {idea.description && (
+          <p className="text-xs text-[#8E8E93] mb-2 whitespace-pre-wrap">{idea.description}</p>
+        )}
+
+        {/* Tags (only show 2 in compact mode) */}
+        {idea.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {idea.tags.slice(0, 2).map((tag, index) => (
+              <span
+                key={index}
+                className="px-2 py-0.5 bg-[#10B981]/15 text-[#10B981] text-[10px] font-medium rounded-full"
+              >
+                {tag}
+              </span>
+            ))}
+            {idea.tags.length > 2 && (
+              <span className="px-2 py-0.5 bg-white/5 text-[#636366] text-[10px] font-medium rounded-full">
+                +{idea.tags.length - 2}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-end">
+          <span className="text-[10px] text-[#636366]">{formatDate(idea.createdAt)}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

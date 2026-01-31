@@ -28,7 +28,7 @@ import { TextOverlayPreview } from "@/components/TextOverlayPreview";
 import { StickerOverlayPreview } from "@/components/StickerOverlayPreview";
 import { ProjectsProvider, useProjects } from "@/contexts/ProjectsContext";
 import { FeedsProvider } from "@/contexts/FeedsContext";
-import { FeedsPanel, FeedsPage } from "@/components/feeds";
+import { FeedsPanel } from "@/components/feeds";
 import { ProjectFeed } from "@/components/projects";
 import { ProjectData } from "@/types/project";
 import { ResizableBottomPanel } from "@/components/ResizableBottomPanel";
@@ -43,7 +43,7 @@ import SwooshText from "@/components/ui/swoosh-text";
 import SwooshButton from "@/components/ui/swoosh-button";
 import ExportLoadingState from "@/components/ExportLoadingState";
 
-type AppView = "feed" | "editor" | "feeds";
+type AppView = "feed" | "editor";
 type EditorStep = "upload" | "edit" | "export";
 
 // Generate a smart project name from video filename
@@ -1274,11 +1274,6 @@ function HomeContent() {
     return pausesToDelete.size;
   }, [allWords]);
 
-  // Feeds view - full page
-  if (view === "feeds") {
-    return <FeedsPage onBack={() => setView("editor")} />;
-  }
-
   // Main editor view (upload is the landing page)
   return (
     <MediaLibraryProvider>
@@ -1587,7 +1582,7 @@ function HomeContent() {
                   <button
                     onClick={() => {
                       setShowProjectsDrawer(false);
-                      setView("feeds");
+                      router.push('/feeds');
                     }}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--background-elevated)] transition-colors group"
                   >

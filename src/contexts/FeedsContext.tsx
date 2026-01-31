@@ -1,7 +1,10 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import { Channel, Idea, CreateChannelInput, UpdateChannelInput, CreateIdeaInput, UpdateIdeaInput, IdeaStatus } from '@/types/feeds';
+import {
+  Channel, Idea, CreateChannelInput, UpdateChannelInput, CreateIdeaInput, UpdateIdeaInput, IdeaStatus,
+  Entity, SocialAccount, CreateEntityInput, UpdateEntityInput, CreateSocialAccountInput, SocialPlatform
+} from '@/types/feeds';
 import { useUser } from '@/lib/supabase/hooks';
 
 interface FeedsContextValue {
@@ -13,6 +16,19 @@ interface FeedsContextValue {
   createChannel: (input: CreateChannelInput) => Promise<Channel | null>;
   updateChannel: (id: string, input: UpdateChannelInput) => Promise<boolean>;
   deleteChannel: (id: string) => Promise<boolean>;
+
+  // Entities (people/companies)
+  entities: Entity[];
+  entitiesLoading: boolean;
+  entitiesError: string | null;
+  refreshEntities: () => Promise<void>;
+  createEntity: (input: CreateEntityInput) => Promise<Entity | null>;
+  updateEntity: (id: string, input: UpdateEntityInput) => Promise<boolean>;
+  deleteEntity: (id: string) => Promise<boolean>;
+
+  // Social Accounts
+  createSocialAccount: (input: CreateSocialAccountInput) => Promise<SocialAccount | null>;
+  deleteSocialAccount: (id: string) => Promise<boolean>;
 
   // Ideas
   ideas: Idea[];
@@ -28,6 +44,9 @@ interface FeedsContextValue {
   setSelectedChannelId: (id: string | null) => void;
   statusFilter: IdeaStatus | null;
   setStatusFilter: (status: IdeaStatus | null) => void;
+
+  // Helper to get all social accounts flattened
+  allSocialAccounts: SocialAccount[];
 }
 
 const FeedsContext = createContext<FeedsContextValue | null>(null);
@@ -40,6 +59,11 @@ export function FeedsProvider({ children }: { children: ReactNode }) {
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [channelsError, setChannelsError] = useState<string | null>(null);
 
+  // Entities state
+  const [entities, setEntities] = useState<Entity[]>([]);
+  const [entitiesLoading, setEntitiesLoading] = useState(false);
+  const [entitiesError, setEntitiesError] = useState<string | null>(null);
+
   // Ideas state
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [ideasLoading, setIdeasLoading] = useState(false);
@@ -48,6 +72,9 @@ export function FeedsProvider({ children }: { children: ReactNode }) {
   // UI state
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<IdeaStatus | null>(null);
+
+  // Computed: all social accounts flattened
+  const allSocialAccounts = entities.flatMap(e => e.socialAccounts || []);
 
   // Fetch channels
   const refreshChannels = useCallback(async () => {
@@ -156,6 +183,170 @@ export function FeedsProvider({ children }: { children: ReactNode }) {
       return false;
     }
   }, [selectedChannelId]);
+
+  // Fetch entities
+  const refreshEntities = useCallback(async () => {
+    if (!user?.id) {
+      setEntities([]);
+      return;
+    }
+
+    setEntitiesLoading(true);
+    setEntitiesError(null);
+
+    try {
+      const response = await fetch('/api/entities');
+      const data = await response.json();
+
+      if (response.ok) {
+        setEntities(data.entities || []);
+      } else {
+        setEntitiesError(data.error || 'Failed to fetch entities');
+      }
+    } catch (err) {
+      setEntitiesError('Failed to fetch entities');
+      console.error('Error fetching entities:', err);
+    } finally {
+      setEntitiesLoading(false);
+    }
+  }, [user?.id]);
+
+  // Create entity
+  const createEntity = useCallback(async (input: CreateEntityInput): Promise<Entity | null> => {
+    if (!user?.id) {
+      setEntitiesError('You must be logged in');
+      return null;
+    }
+
+    try {
+      const response = await fetch('/api/entities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.entity) {
+        setEntities(prev => [...prev, data.entity]);
+        return data.entity;
+      } else {
+        setEntitiesError(data.error || 'Failed to create entity');
+        return null;
+      }
+    } catch (err) {
+      setEntitiesError('Failed to create entity');
+      console.error('Error creating entity:', err);
+      return null;
+    }
+  }, [user?.id]);
+
+  // Update entity
+  const updateEntity = useCallback(async (id: string, input: UpdateEntityInput): Promise<boolean> => {
+    try {
+      const response = await fetch(`/api/entities/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setEntities(prev => prev.map(e => e.id === id ? { ...e, ...result.entity } : e));
+        return true;
+      } else {
+        const result = await response.json();
+        setEntitiesError(result.error || 'Failed to update entity');
+        return false;
+      }
+    } catch (err) {
+      setEntitiesError('Failed to update entity');
+      console.error('Error updating entity:', err);
+      return false;
+    }
+  }, []);
+
+  // Delete entity
+  const deleteEntity = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`/api/entities/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setEntities(prev => prev.filter(e => e.id !== id));
+        return true;
+      } else {
+        const data = await response.json();
+        setEntitiesError(data.error || 'Failed to delete entity');
+        return false;
+      }
+    } catch (err) {
+      setEntitiesError('Failed to delete entity');
+      console.error('Error deleting entity:', err);
+      return false;
+    }
+  }, []);
+
+  // Create social account
+  const createSocialAccount = useCallback(async (input: CreateSocialAccountInput): Promise<SocialAccount | null> => {
+    if (!user?.id) {
+      return null;
+    }
+
+    try {
+      const response = await fetch('/api/social-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.socialAccount) {
+        // Add to the entity's social accounts
+        setEntities(prev => prev.map(e => {
+          if (e.id === input.entityId) {
+            return {
+              ...e,
+              socialAccounts: [...(e.socialAccounts || []), data.socialAccount],
+            };
+          }
+          return e;
+        }));
+        return data.socialAccount;
+      } else {
+        console.error('Failed to create social account:', data.error);
+        return null;
+      }
+    } catch (err) {
+      console.error('Error creating social account:', err);
+      return null;
+    }
+  }, [user?.id]);
+
+  // Delete social account
+  const deleteSocialAccount = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`/api/social-accounts/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Remove from entities
+        setEntities(prev => prev.map(e => ({
+          ...e,
+          socialAccounts: (e.socialAccounts || []).filter(sa => sa.id !== id),
+        })));
+        return true;
+      } else {
+        return false;
+      }
+    } catch (err) {
+      console.error('Error deleting social account:', err);
+      return false;
+    }
+  }, []);
 
   // Fetch ideas
   const refreshIdeas = useCallback(async (channelId?: string | null, status?: IdeaStatus | null) => {
@@ -273,6 +464,13 @@ export function FeedsProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id, refreshChannels]);
 
+  // Load entities on mount and when user changes
+  useEffect(() => {
+    if (user?.id) {
+      refreshEntities();
+    }
+  }, [user?.id, refreshEntities]);
+
   // Load ideas when user, selected channel, or status filter changes
   useEffect(() => {
     if (user?.id) {
@@ -290,6 +488,15 @@ export function FeedsProvider({ children }: { children: ReactNode }) {
         createChannel,
         updateChannel,
         deleteChannel,
+        entities,
+        entitiesLoading,
+        entitiesError,
+        refreshEntities,
+        createEntity,
+        updateEntity,
+        deleteEntity,
+        createSocialAccount,
+        deleteSocialAccount,
         ideas,
         ideasLoading,
         ideasError,
@@ -301,6 +508,7 @@ export function FeedsProvider({ children }: { children: ReactNode }) {
         setSelectedChannelId,
         statusFilter,
         setStatusFilter,
+        allSocialAccounts,
       }}
     >
       {children}

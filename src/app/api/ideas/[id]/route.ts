@@ -40,10 +40,13 @@ export async function GET(
       channelId: idea.channel_id,
       title: idea.title,
       description: idea.description,
+      draftContent: idea.draft_content,
+      platformDrafts: idea.platform_drafts,
       tags: idea.tags || [],
       imageUrl: idea.image_url,
       videoUrl: idea.video_url,
       status: idea.status,
+      targetPlatforms: idea.target_platforms || [],
       metadata: idea.metadata || {},
       createdAt: idea.created_at,
       updatedAt: idea.updated_at,
@@ -79,12 +82,14 @@ export async function PATCH(
     }
 
     const body: UpdateIdeaInput = await request.json();
-    const { title, description, channelId, tags, imageUrl, videoUrl, status, metadata } = body;
+    const { title, description, draftContent, platformDrafts, channelId, tags, imageUrl, videoUrl, status, targetPlatforms, metadata } = body;
 
     const updates: Record<string, unknown> = {};
 
     if (title !== undefined) updates.title = title.trim();
     if (description !== undefined) updates.description = description?.trim() || null;
+    if (draftContent !== undefined) updates.draft_content = draftContent?.trim() || null;
+    if (platformDrafts !== undefined) updates.platform_drafts = platformDrafts;
     if (channelId !== undefined) {
       // Verify channel belongs to user if provided
       if (channelId !== null) {
@@ -108,6 +113,7 @@ export async function PATCH(
     if (imageUrl !== undefined) updates.image_url = imageUrl;
     if (videoUrl !== undefined) updates.video_url = videoUrl;
     if (status !== undefined) updates.status = status;
+    if (targetPlatforms !== undefined) updates.target_platforms = targetPlatforms;
     if (metadata !== undefined) updates.metadata = metadata;
 
     if (Object.keys(updates).length === 0) {
@@ -139,10 +145,13 @@ export async function PATCH(
       channelId: idea.channel_id,
       title: idea.title,
       description: idea.description,
+      draftContent: idea.draft_content,
+      platformDrafts: idea.platform_drafts,
       tags: idea.tags || [],
       imageUrl: idea.image_url,
       videoUrl: idea.video_url,
       status: idea.status,
+      targetPlatforms: idea.target_platforms || [],
       metadata: idea.metadata || {},
       createdAt: idea.created_at,
       updatedAt: idea.updated_at,

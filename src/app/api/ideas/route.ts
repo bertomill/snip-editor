@@ -55,10 +55,13 @@ export async function GET(request: NextRequest) {
       channelId: i.channel_id,
       title: i.title,
       description: i.description,
+      draftContent: i.draft_content,
+      platformDrafts: i.platform_drafts,
       tags: i.tags || [],
       imageUrl: i.image_url,
       videoUrl: i.video_url,
       status: i.status,
+      targetPlatforms: i.target_platforms || [],
       metadata: i.metadata || {},
       createdAt: i.created_at,
       updatedAt: i.updated_at,
@@ -90,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: CreateIdeaInput = await request.json();
-    const { title, description, channelId, tags, imageUrl, videoUrl, status, metadata } = body;
+    const { title, description, draftContent, platformDrafts, channelId, tags, imageUrl, videoUrl, status, targetPlatforms, metadata } = body;
 
     if (!title || typeof title !== 'string' || !title.trim()) {
       return NextResponse.json(
@@ -121,11 +124,14 @@ export async function POST(request: NextRequest) {
       .insert({
         title: title.trim(),
         description: description?.trim() || null,
+        draft_content: draftContent?.trim() || null,
+        platform_drafts: platformDrafts || null,
         channel_id: channelId || null,
         tags: tags || [],
         image_url: imageUrl || null,
         video_url: videoUrl || null,
         status: status || 'draft',
+        target_platforms: targetPlatforms || [],
         metadata: metadata || {},
         user_id: user.id,
       })
@@ -146,10 +152,13 @@ export async function POST(request: NextRequest) {
       channelId: idea.channel_id,
       title: idea.title,
       description: idea.description,
+      draftContent: idea.draft_content,
+      platformDrafts: idea.platform_drafts,
       tags: idea.tags || [],
       imageUrl: idea.image_url,
       videoUrl: idea.video_url,
       status: idea.status,
+      targetPlatforms: idea.target_platforms || [],
       metadata: idea.metadata || {},
       createdAt: idea.created_at,
       updatedAt: idea.updated_at,
