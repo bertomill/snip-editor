@@ -482,60 +482,116 @@ export function IdeaForm({
                 </div>
               )}
 
-              {/* Platform-specific drafts */}
+              {/* Platform-specific draft cards */}
               {Object.keys(platformDrafts).length > 0 && (
-                <div className="mt-4">
-                  <p className="text-xs text-[#8E8E93] mb-2">Platform versions:</p>
-                  {/* Tabs */}
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {Object.keys(platformDrafts).map((platform) => {
-                      const platformConfig = SOCIAL_PLATFORMS.find(p => p.name === platform);
-                      const isActive = activePlatformTab === platform;
-                      return (
-                        <button
-                          key={platform}
-                          type="button"
-                          onClick={() => setActivePlatformTab(isActive ? null : platform)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                            isActive
-                              ? 'text-white'
-                              : 'bg-[#2C2C2E] text-[#8E8E93] hover:bg-[#3C3C3E]'
-                          }`}
-                          style={isActive ? { backgroundColor: platformConfig?.color || '#4A8FE7' } : undefined}
-                        >
-                          {platform}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {/* Active platform content */}
-                  {activePlatformTab && platformDrafts[activePlatformTab] && (
-                    <div className="relative">
-                      <textarea
-                        value={platformDrafts[activePlatformTab]}
-                        onChange={(e) => setPlatformDrafts(prev => ({ ...prev, [activePlatformTab]: e.target.value }))}
-                        rows={4}
-                        className="w-full bg-[#2C2C2E] border border-[#3C3C3E] rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-[#4A8FE7] transition-colors resize-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPlatformDrafts(prev => {
-                            const newDrafts = { ...prev };
-                            delete newDrafts[activePlatformTab];
-                            return newDrafts;
-                          });
-                          setActivePlatformTab(null);
+                <div className="mt-4 space-y-3">
+                  <p className="text-xs text-[#8E8E93]">Platform versions:</p>
+                  {Object.entries(platformDrafts).map(([platform, content]) => {
+                    const platformConfig = SOCIAL_PLATFORMS.find(p => p.name === platform);
+                    const isExpanded = activePlatformTab === platform;
+                    return (
+                      <div
+                        key={platform}
+                        className="rounded-xl border overflow-hidden transition-all"
+                        style={{
+                          borderColor: `${platformConfig?.color || '#4A8FE7'}40`,
+                          backgroundColor: `${platformConfig?.color || '#4A8FE7'}08`
                         }}
-                        className="absolute top-2 right-2 p-1 rounded hover:bg-white/10 text-[#636366] hover:text-red-400 transition-colors"
-                        title="Remove this version"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
+                        {/* Card Header */}
+                        <div
+                          className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-white/5 transition-colors"
+                          onClick={() => setActivePlatformTab(isExpanded ? null : platform)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
+                              style={{ backgroundColor: platformConfig?.color || '#4A8FE7' }}
+                            >
+                              {platform.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-sm font-medium text-white">{platform}</span>
+                            <span className="text-[10px] text-[#636366]">
+                              {content.length} chars
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(content);
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-white/10 text-[#8E8E93] hover:text-white transition-colors"
+                              title="Copy to clipboard"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPlatformDrafts(prev => {
+                                  const newDrafts = { ...prev };
+                                  delete newDrafts[platform];
+                                  return newDrafts;
+                                });
+                                if (activePlatformTab === platform) {
+                                  setActivePlatformTab(null);
+                                }
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-white/10 text-[#8E8E93] hover:text-red-400 transition-colors"
+                              title="Remove"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                            <svg
+                              className={`w-4 h-4 text-[#636366] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </div>
+
+                        {/* Preview (always visible) */}
+                        {!isExpanded && (
+                          <div className="px-3 pb-3">
+                            <p className="text-xs text-[#8E8E93] line-clamp-2 whitespace-pre-wrap">
+                              {content}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Expanded Edit View */}
+                        {isExpanded && (
+                          <div className="px-3 pb-3">
+                            <textarea
+                              value={content}
+                              onChange={(e) => setPlatformDrafts(prev => ({ ...prev, [platform]: e.target.value }))}
+                              rows={5}
+                              className="w-full bg-[#1C1C1E] border border-[#3C3C3E] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#4A8FE7] transition-colors resize-none"
+                              style={{ borderColor: `${platformConfig?.color || '#4A8FE7'}40` }}
+                            />
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-[10px] text-[#636366]">
+                                {content.length} characters
+                                {platform === 'X (Twitter)' && content.length > 280 && (
+                                  <span className="text-red-400 ml-1">({content.length - 280} over limit)</span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
