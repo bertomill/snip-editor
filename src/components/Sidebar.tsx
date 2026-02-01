@@ -418,42 +418,149 @@ function MobileProjectsBottomBar({
   searchQuery?: string
   onSearchChange?: (query: string) => void
 }) {
+  const { user, loading } = useUser()
+  const signOut = useSignOut()
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
+
   return (
-    <div className="md:hidden fixed bottom-10 left-4 right-4 z-50 safe-area-pb">
-      <div className="flex items-center gap-4">
-        {/* Search Input - Floating pill style */}
-        <div className="flex-1">
-          <div className="flex items-center bg-[#2C2C2E] backdrop-blur-xl border border-white/15 rounded-full px-5 py-4 shadow-2xl shadow-black/50">
-            <svg
-              className="w-6 h-6 text-[#8E8E93] mr-3 flex-shrink-0"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              viewBox="0 0 24 24"
+    <>
+      <div className="md:hidden fixed bottom-10 left-4 right-4 z-50 safe-area-pb">
+        <div className="flex items-center gap-3">
+          {/* Profile Button */}
+          {!loading && user && (
+            <button
+              onClick={() => setShowProfileMenu(true)}
+              className="w-14 h-14 flex items-center justify-center bg-[#2C2C2E] backdrop-blur-xl border border-white/15 rounded-full shadow-2xl shadow-black/50 overflow-hidden"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              {user.user_metadata?.avatar_url ? (
+                <img
+                  src={user.user_metadata.avatar_url}
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-white font-semibold text-lg">
+                  {user.email?.[0].toUpperCase()}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Search Input - Floating pill style */}
+          <div className="flex-1">
+            <div className="flex items-center bg-[#2C2C2E] backdrop-blur-xl border border-white/15 rounded-full px-5 py-4 shadow-2xl shadow-black/50">
+              <svg
+                className="w-6 h-6 text-[#8E8E93] mr-3 flex-shrink-0"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search"
+                value={searchQuery || ''}
+                onChange={(e) => onSearchChange?.(e.target.value)}
+                className="flex-1 bg-transparent text-white placeholder-[#8E8E93] text-base focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Create Button - Plus icon */}
+          <button
+            onClick={onCreateProject}
+            className="w-14 h-14 flex items-center justify-center bg-[#4A8FE7] hover:bg-[#5A9FF7] active:bg-[#3A7FD7] rounded-full transition-all active:scale-95 shadow-2xl shadow-[#4A8FE7]/50"
+          >
+            <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            <input
-              type="text"
-              placeholder="Search"
-              value={searchQuery || ''}
-              onChange={(e) => onSearchChange?.(e.target.value)}
-              className="flex-1 bg-transparent text-white placeholder-[#8E8E93] text-base focus:outline-none"
-            />
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Profile Menu Modal */}
+      {showProfileMenu && user && (
+        <div className="md:hidden fixed inset-0 z-[100]">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowProfileMenu(false)}
+          />
+
+          {/* Bottom Sheet */}
+          <div className="absolute bottom-0 left-0 right-0 bg-[#1C1C1E] rounded-t-3xl safe-area-pb animate-slide-up">
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 bg-white/20 rounded-full" />
+            </div>
+
+            {/* Profile Header */}
+            <div className="px-6 py-4 border-b border-[#2C2C2E]">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-full overflow-hidden bg-gradient-to-br from-[#3b82f6] to-[#1e3a8a] flex items-center justify-center text-white font-semibold text-xl">
+                  {user.user_metadata?.avatar_url ? (
+                    <img
+                      src={user.user_metadata.avatar_url}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    user.email?.[0].toUpperCase()
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-semibold text-lg truncate">
+                    {user.user_metadata?.full_name || 'User'}
+                  </p>
+                  <p className="text-[#8E8E93] text-sm truncate">
+                    {user.email}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Menu Items */}
+            <div className="px-4 py-3 space-y-1">
+              <button
+                className="w-full flex items-center gap-4 px-4 py-3.5 text-white hover:bg-[#2C2C2E] active:bg-[#3C3C3E] rounded-xl transition-colors"
+              >
+                <ProfileIcon />
+                <span className="text-base">View profile</span>
+              </button>
+              <button
+                className="w-full flex items-center gap-4 px-4 py-3.5 text-white hover:bg-[#2C2C2E] active:bg-[#3C3C3E] rounded-xl transition-colors"
+              >
+                <SettingsIcon />
+                <span className="text-base">Settings</span>
+              </button>
+              <div className="h-px bg-[#2C2C2E] my-2" />
+              <button
+                onClick={() => {
+                  setShowProfileMenu(false)
+                  signOut()
+                }}
+                className="w-full flex items-center gap-4 px-4 py-3.5 text-red-400 hover:bg-red-400/10 active:bg-red-400/20 rounded-xl transition-colors"
+              >
+                <LogoutIcon />
+                <span className="text-base">Log out</span>
+              </button>
+            </div>
+
+            {/* Cancel Button */}
+            <div className="px-4 pb-4 pt-2">
+              <button
+                onClick={() => setShowProfileMenu(false)}
+                className="w-full py-3.5 bg-[#2C2C2E] hover:bg-[#3C3C3E] active:bg-[#444] text-white font-medium rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
-
-        {/* Create Button - Plus icon */}
-        <button
-          onClick={onCreateProject}
-          className="w-14 h-14 flex items-center justify-center bg-[#4A8FE7] hover:bg-[#5A9FF7] active:bg-[#3A7FD7] rounded-full transition-all active:scale-95 shadow-2xl shadow-[#4A8FE7]/50"
-        >
-          <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-        </button>
-      </div>
-    </div>
+      )}
+    </>
   )
 }
 
